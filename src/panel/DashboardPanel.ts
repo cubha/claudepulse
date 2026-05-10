@@ -53,7 +53,7 @@ export class DashboardPanel {
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <link rel="stylesheet" href="${cssUri}">
 <title>Claudepulse Dashboard</title>
-</head><body class="theme-dark">
+</head><body class="theme-dark" data-mode="panel">
 <div id="root">Loading…</div>
 <script nonce="${nonce}" src="${jsUri}"></script>
 </body></html>`;
