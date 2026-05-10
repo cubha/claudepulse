@@ -46,9 +46,9 @@ step "package.json publisher=cubha" bash -c "grep -q '\"publisher\": \"cubha\"' 
 step "package.json name=claudepulse" bash -c "grep -q '\"name\": \"claudepulse\"' package.json"
 
 # 7. CRITICAL 코드 패턴 — chokidar import 확인 (vscode.FileSystemWatcher 사용 시 경고)
-if grep -rE "createFileSystemWatcher|workspace\.createFileSystemWatcher" src/ 2>/dev/null; then
+if grep -rEn "createFileSystemWatcher\s*\(" src/ 2>/dev/null; then
   echo ""
-  echo "⚠️  vscode.workspace.createFileSystemWatcher 사용이 감지됨 — chokidar로 교체 필요 (CLAUDE.md §3)"
+  echo "⚠️  vscode.workspace.createFileSystemWatcher() 호출 감지 — chokidar로 교체 필요 (CLAUDE.md §3)"
   FAIL=$((FAIL + 1))
 fi
 
