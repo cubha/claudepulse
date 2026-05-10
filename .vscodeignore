@@ -1,5 +1,9 @@
 .env
 .env.*
+.playwright-mcp/**
+pricing/**
+CLAUDE.md
+scratch.md
 .vscode/**
 .vscode-test/**
 .github/**
