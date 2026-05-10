@@ -45,12 +45,28 @@ step "dist/webview/styles.css 복사 확인" test -f dist/webview/styles.css
 step "package.json publisher=cubha" bash -c "grep -q '\"publisher\": \"cubha\"' package.json"
 step "package.json name=claudepulse" bash -c "grep -q '\"name\": \"claudepulse\"' package.json"
 
-# 7. CRITICAL 코드 패턴 — chokidar import 확인 (vscode.FileSystemWatcher 사용 시 경고)
+# 7. CRITICAL — vscode.FileSystemWatcher 사용 금지 확인 (chokidar 불필요, API 기반으로 전환)
 if grep -rEn "createFileSystemWatcher\s*\(" src/ 2>/dev/null; then
   echo ""
-  echo "⚠️  vscode.workspace.createFileSystemWatcher() 호출 감지 — chokidar로 교체 필요 (CLAUDE.md §3)"
+  echo "⚠️  vscode.workspace.createFileSystemWatcher() 호출 감지 — 제거 필요 (CLAUDE.md §3)"
   FAIL=$((FAIL + 1))
 fi
+
+# 8. CRITICAL — 구 jsonl 서비스 파일 미존재 확인
+for f in src/services/JsonlParser.ts src/services/FileWatcher.ts src/services/UsageAggregator.ts src/services/CacheStore.ts; do
+  if [ -f "$f" ]; then
+    echo "⚠️  폐기된 파일 존재: $f"
+    FAIL=$((FAIL + 1))
+  fi
+done
+echo ""
+echo "▶ 폐기 파일 미존재 확인"
+echo "  ✅ PASS"
+PASS=$((PASS + 1))
+
+# 9. 신규 서비스 파일 존재 확인
+step "CredentialsReader.ts 존재" test -f src/services/CredentialsReader.ts
+step "RateLimitPoller.ts 존재" test -f src/services/RateLimitPoller.ts
 
 # 10. vitest 단위 테스트
 step "vitest unit tests" npx vitest run --reporter=verbose

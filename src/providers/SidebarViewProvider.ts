@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { VIEW_IDS } from '../constants';
-import { PushSnapshot } from '../messaging/contracts';
+import { PushRateLimit } from '../messaging/contracts';
 
 export class SidebarViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = VIEW_IDS.sidebar;
@@ -21,7 +21,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')]
     };
     webviewView.webview.html = this.getHtml(webviewView.webview);
-    this.messenger.registerWebviewView(webviewView, { broadcastMethods: [PushSnapshot.method] });
+    this.messenger.registerWebviewView(webviewView, { broadcastMethods: [PushRateLimit.method] });
   }
 
   private getHtml(webview: vscode.Webview): string {

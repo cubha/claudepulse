@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { EXTENSION_NAME } from '../constants';
-import { PushSnapshot } from '../messaging/contracts';
+import { PushRateLimit } from '../messaging/contracts';
 
 export class DashboardPanel {
   private static current: DashboardPanel | null = null;
@@ -31,7 +31,7 @@ export class DashboardPanel {
     this.panel.onDidDispose(() => {
       DashboardPanel.current = null;
     });
-    messenger.registerWebviewPanel(panel, { broadcastMethods: [PushSnapshot.method] });
+    messenger.registerWebviewPanel(panel, { broadcastMethods: [PushRateLimit.method] });
   }
 
   private getHtml(extensionUri: vscode.Uri): string {

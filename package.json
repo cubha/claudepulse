@@ -1,8 +1,8 @@
 {
   "name": "claudepulse",
-  "displayName": "Claudepulse — Claude Code Usage Dashboard",
-  "description": "Claude Code 사용량을 IDE 안에서 실시간으로 시각화. 워크스페이스별 비용·5h 윈도우·세션 드릴다운.",
-  "version": "0.0.3",
+  "displayName": "Claudepulse — Claude Rate Limit Dashboard",
+  "description": "Claude Max 플랜 Rate Limit을 IDE 안에서 실시간 모니터링. 세션(5h)·주간(7d) 사용률 + 재설정 카운트다운을 StatusBar와 Sidebar에 표시.",
+  "version": "0.1.0",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -26,11 +26,9 @@
     "claude",
     "claude-code",
     "anthropic",
-    "ccusage",
+    "rate-limit",
     "usage",
     "dashboard",
-    "tokens",
-    "cost",
     "monitor"
   ],
   "main": "./dist/extension.js",
@@ -52,7 +50,7 @@
         {
           "type": "webview",
           "id": "claudepulse.sidebar",
-          "name": "Usage"
+          "name": "Rate Limits"
         }
       ]
     },
@@ -69,20 +67,22 @@
     "configuration": {
       "title": "Claudepulse",
       "properties": {
-        "claudepulse.claudeProjectsPath": {
+        "claudepulse.credentialsPath": {
           "type": "string",
           "default": "",
-          "description": "Override path to ~/.claude/projects (leave empty for auto-detect)."
+          "description": "Path to Claude Code credentials file. Leave empty to use default (~/.claude/.credentials.json)."
         },
-        "claudepulse.costAlertThresholdUsd": {
+        "claudepulse.pollIntervalMs": {
           "type": "number",
-          "default": 10,
-          "description": "Show a warning notification when month-to-date cost exceeds this USD value."
+          "default": 300000,
+          "description": "How often to poll the Anthropic API for rate limit data (ms). Default: 300000 (5 min)."
         },
-        "claudepulse.refreshDebounceMs": {
+        "claudepulse.utilizationWarnThreshold": {
           "type": "number",
-          "default": 300,
-          "description": "Debounce window for file watcher events (ms)."
+          "default": 0.8,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Show a warning when utilization exceeds this value (0–1). Default: 0.8 (80%)."
         }
       }
     }
@@ -100,7 +100,6 @@
   },
   "dependencies": {
     "chart.js": "^4.4.0",
-    "chokidar": "^4.0.0",
     "vscode-messenger": "^0.5.0",
     "vscode-messenger-common": "^0.5.0",
     "vscode-messenger-webview": "^0.5.0"
