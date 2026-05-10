@@ -2,7 +2,7 @@
   "name": "claudepulse",
   "displayName": "Claudepulse — Claude Code Usage Dashboard",
   "description": "Claude Code 사용량을 IDE 안에서 실시간으로 시각화. 워크스페이스별 비용·5h 윈도우·세션 드릴다운.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
