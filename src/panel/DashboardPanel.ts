@@ -1,11 +1,13 @@
 import * as vscode from 'vscode';
+import { Messenger } from 'vscode-messenger';
 import { EXTENSION_NAME } from '../constants';
+import { PushSnapshot } from '../messaging/contracts';
 
 export class DashboardPanel {
   private static current: DashboardPanel | null = null;
   private panel: vscode.WebviewPanel;
 
-  static createOrShow(extensionUri: vscode.Uri): void {
+  static createOrShow(extensionUri: vscode.Uri, messenger: Messenger): void {
     if (DashboardPanel.current) {
       DashboardPanel.current.panel.reveal();
       return;
@@ -20,16 +22,16 @@ export class DashboardPanel {
         localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'dist', 'webview')]
       }
     );
-    DashboardPanel.current = new DashboardPanel(panel, extensionUri);
+    DashboardPanel.current = new DashboardPanel(panel, extensionUri, messenger);
   }
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, messenger: Messenger) {
     this.panel = panel;
     this.panel.webview.html = this.getHtml(extensionUri);
     this.panel.onDidDispose(() => {
       DashboardPanel.current = null;
     });
-    // TODO: vscode-messenger 연결 + snapshot push
+    messenger.registerWebviewPanel(panel, { broadcastMethods: [PushSnapshot.method] });
   }
 
   private getHtml(extensionUri: vscode.Uri): string {

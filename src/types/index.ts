@@ -51,6 +51,32 @@ export interface ProjectSummary {
   lastActivity: Date;
 }
 
+/** 날짜별 집계 (30일 stacked area용). */
+export interface DailyStats {
+  date: string; // 'YYYY-MM-DD'
+  byModel: Record<string, number>; // model → totalTokens
+  totalTokens: number;
+  cost: number;
+}
+
+/** 세션 목록 항목 (Panel Sessions 탭용). */
+export interface SessionSummary {
+  sessionId: string;
+  projectPath: string;
+  displayName: string;
+  startedAt: Date;
+  endedAt: Date;
+  durationMs: number;
+  totalTokens: number;
+  costUSD: number;
+  modelBreakdown: Record<string, number>;
+}
+
+/** 세션 상세 (드릴다운 차트용). */
+export interface SessionDetail extends SessionSummary {
+  timeSeries: Array<{ bucketStart: Date; tokens: number; costUSD: number }>;
+}
+
 /** 5h 빌링 윈도우 상태. */
 export interface BillingWindow {
   windowStart: Date;
@@ -68,4 +94,8 @@ export interface SnapshotPayload {
   topProjects: ProjectSummary[];
   billingWindow: BillingWindow;
   generatedAt: Date;
+  /** 차별점 1 — 현재 열린 워크스페이스 집계 (없으면 undefined) */
+  currentWorkspaceProject?: ProjectSummary;
+  /** Panel 30일 stacked area용 날짜별 집계 */
+  dailyBreakdown?: DailyStats[];
 }

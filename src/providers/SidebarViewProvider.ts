@@ -1,10 +1,15 @@
 import * as vscode from 'vscode';
+import { Messenger } from 'vscode-messenger';
 import { VIEW_IDS } from '../constants';
+import { PushSnapshot } from '../messaging/contracts';
 
 export class SidebarViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = VIEW_IDS.sidebar;
 
-  constructor(private readonly extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly extensionUri: vscode.Uri,
+    private readonly messenger: Messenger
+  ) {}
 
   resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -16,7 +21,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
       localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')]
     };
     webviewView.webview.html = this.getHtml(webviewView.webview);
-    // TODO: vscode-messenger 연결 + snapshot push
+    this.messenger.registerWebviewView(webviewView, { broadcastMethods: [PushSnapshot.method] });
   }
 
   private getHtml(webview: vscode.Webview): string {

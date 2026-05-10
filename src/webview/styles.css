@@ -381,3 +381,443 @@
   scrollbar-width: thin;
   scrollbar-color: var(--vscode-divider) transparent;
 }
+
+/* ─────────────────────────────────────────────
+   Sidebar Webview View — sb-* 스코프
+   (screen-sidebar 프로토타입 1:1 대응)
+────────────────────────────────────────────── */
+
+/* 전체 레이아웃 컬럼 */
+.sb-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--vscode-sideBar-background);
+}
+
+/* 로딩 중 */
+.sb-loading {
+  padding: var(--sp-3);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+}
+
+/* 헤더 — VS Code view-container header 모방 */
+.sb-header {
+  height: 35px;
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex-shrink: 0;
+}
+.sb-header-title {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--vscode-foreground);
+}
+.sb-header-spacer {
+  flex: 1;
+}
+.sb-icon-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: background 120ms ease;
+}
+.sb-icon-btn:hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+}
+.sb-ico-refresh {
+  display: inline-block;
+  font-style: normal;
+}
+
+/* 현재 워크스페이스 마이크로 카드 */
+.sb-ws-card {
+  margin: var(--sp-2) var(--sp-2) 0;
+  padding: var(--sp-2) var(--sp-2);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sb-ws-accent-bar {
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--c-sonnet);
+  flex-shrink: 0;
+}
+.sb-ws-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.sb-ws-cost {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 섹션 헤더 */
+.sb-section-hdr {
+  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+.sb-section-arrow {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+}
+.sb-section-label {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vscode-foreground);
+}
+.sb-section-right {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+}
+
+/* KPI 2x2 그리드 */
+.sb-kpi-grid {
+  padding: 0 var(--sp-2);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+.sb-kpi-card {
+  padding: var(--sp-2) var(--sp-2) var(--sp-2);
+}
+.sb-kpi-row-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.sb-kpi-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.sb-kpi-value {
+  font-size: 20px;
+  margin-top: var(--sp-1);
+  color: var(--vscode-foreground);
+}
+
+/* 5h Window 카드 */
+.sb-window-wrap {
+  padding: var(--sp-2) var(--sp-3) var(--sp-2);
+  flex-shrink: 0;
+}
+.sb-window-card {
+  padding: var(--sp-3);
+}
+.sb-window-row-top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-2);
+}
+.sb-window-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.sb-window-reset-label {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+}
+.sb-window-row-mid {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-1);
+}
+.sb-window-pct {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+}
+.sb-window-rem-label {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+.sb-window-duration {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--vscode-foreground);
+}
+.sb-window-progress {
+  margin-top: var(--sp-2);
+}
+.sb-window-expired {
+  font-size: var(--fs-label);
+  color: var(--c-danger);
+  font-family: var(--ff-mono);
+  margin-bottom: var(--sp-2);
+}
+
+/* Top Projects 목록 */
+.sb-projects {
+  padding: 0 var(--sp-1);
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+.sb-proj-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sb-proj-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sb-proj-info {
+  flex: 1;
+  min-width: 0;
+}
+.sb-proj-name {
+  font-size: 12px;
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sb-proj-meta {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 1px;
+}
+
+/* No data empty state */
+.sb-no-data {
+  padding: var(--sp-3) var(--sp-2);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+}
+
+/* Footer */
+.sb-footer {
+  padding: var(--sp-2) var(--sp-2) var(--sp-2);
+  border-top: 1px solid var(--vscode-panel-border);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+.sb-refresh-btn {
+  flex: 1;
+  justify-content: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-label);
+}
+
+/* ──────────────────────────────
+   PANEL — Overview + Charts
+   ────────────────────────────── */
+.panel-root {
+  padding: var(--sp-4) var(--sp-4) var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.panel-title {
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  font-family: var(--ff-display);
+}
+.panel-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-3);
+}
+.kpi-big {
+  display: grid;
+  grid-template-areas: "dot label" "val val" "sub sub";
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-1) var(--sp-1);
+  padding: var(--sp-3);
+  border-radius: var(--radius-md);
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--vscode-panel-border);
+}
+.kpi-big-dot {
+  grid-area: dot;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  align-self: center;
+}
+.kpi-big-label {
+  grid-area: label;
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  align-self: center;
+}
+.kpi-big-value {
+  grid-area: val;
+  font-size: 28px;
+  font-weight: 600;
+  font-family: var(--ff-mono);
+  color: var(--vscode-foreground);
+  letter-spacing: -.02em;
+  line-height: 1;
+  padding-top: var(--sp-1);
+}
+.kpi-big-sub {
+  grid-area: sub;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+}
+.panel-tabs-bar {
+  display: flex;
+  gap: var(--sp-1);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.panel-tab {
+  padding: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  margin-bottom: -1px;
+}
+.panel-tab:hover { color: var(--vscode-foreground); }
+.panel-tab.active {
+  color: var(--vscode-foreground);
+  border-bottom-color: var(--c-sonnet);
+}
+.panel-tab-content { display: flex; flex-direction: column; gap: var(--sp-3); }
+.panel-tab-content.hidden { display: none; }
+.panel-charts-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: var(--sp-3);
+}
+.panel-chart-card { padding: var(--sp-4); }
+.panel-chart-header {
+  font-size: var(--fs-body);
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  margin-bottom: var(--sp-3);
+}
+.panel-chart-wrap {
+  position: relative;
+  height: 240px;
+}
+.panel-chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+.panel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+}
+/* Sessions tab */
+.sessions-list { display: flex; flex-direction: column; overflow-y: auto; max-height: 60vh; }
+.session-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  cursor: pointer;
+  transition: background .1s;
+}
+.session-row:hover, .session-row:focus { background: var(--vscode-list-hoverBackground); outline: none; }
+.session-row-left { flex: 0 0 150px; min-width: 0; }
+.session-time { font-size: var(--fs-body); color: var(--vscode-foreground); }
+.session-proj { font-size: var(--fs-label); color: var(--vscode-descriptionForeground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.session-row-mid { flex: 1; min-width: 0; display: flex; align-items: center; }
+.model-mini-bar { display: flex; width: 100%; height: 6px; border-radius: 3px; overflow: hidden; gap: 1px; }
+.model-mini-bar-seg { height: 100%; min-width: 2px; border-radius: 2px; }
+.session-row-right { flex: 0 0 90px; text-align: right; display: flex; flex-direction: column; gap: 2px; }
+.session-tokens { font-size: var(--fs-body); color: var(--vscode-foreground); }
+.session-cost { font-size: var(--fs-label); color: var(--vscode-descriptionForeground); }
+.session-duration { font-size: var(--fs-label); color: var(--vscode-descriptionForeground); }
+/* Session detail */
+.session-detail { display: flex; flex-direction: column; }
+.session-detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  flex-wrap: wrap;
+}
+.session-back-btn {
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--r-sm);
+  color: var(--vscode-foreground);
+  font-size: var(--fs-label);
+  padding: 2px var(--sp-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.session-back-btn:hover { background: var(--vscode-list-hoverBackground); }
+.session-detail-meta { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.session-detail-proj { font-size: var(--fs-body); font-weight: 600; color: var(--vscode-foreground); }
+.session-detail-time { font-size: var(--fs-label); color: var(--vscode-descriptionForeground); }
+.session-detail-cost { font-size: var(--fs-body); color: var(--c-warn); }
+.session-detail-tokens { font-size: var(--fs-label); color: var(--vscode-descriptionForeground); }
+.session-detail-loading { font-size: var(--fs-label); color: var(--vscode-descriptionForeground); font-style: italic; }
+.session-detail-canvas-wrap { padding: var(--sp-4); height: 220px; position: relative; }
+.session-detail-canvas-wrap canvas { width: 100% !important; height: 100% !important; }

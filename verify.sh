@@ -52,6 +52,9 @@ if grep -rEn "createFileSystemWatcher\s*\(" src/ 2>/dev/null; then
   FAIL=$((FAIL + 1))
 fi
 
+# 10. vitest 단위 테스트
+step "vitest unit tests" npx vitest run --reporter=verbose
+
 echo ""
 echo "═══════════════════════════════════════"
 echo "  Verify 결과: PASS=$PASS · FAIL=$FAIL"
