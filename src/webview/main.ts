@@ -5,9 +5,8 @@ Chart.register(...registerables);
 
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { GetSnapshot, GetSessionDetail, GetSessions, PushSnapshot, RequestRefresh } from '../messaging/contracts';
-import type { SessionDetail, SessionSummary, SnapshotPayload } from '../types';
-import { fmtTokens, fmtUsd, fmtDuration } from '../utils/format';
+import { GetRateLimit, PushRateLimit, RequestRefresh } from '../messaging/contracts';
+import type { RateLimitSnapshot, UnifiedWindow } from '../types';
 
 const mode = (document.body.dataset.mode ?? 'panel') as 'sidebar' | 'panel';
 const root = document.getElementById('root');
@@ -19,67 +18,99 @@ if (mode === 'sidebar') {
 }
 
 // ──────────────────────────────────────────────
-// SIDEBAR — messenger 연결 + 렌더링
+// 공통 유틸
+// ──────────────────────────────────────────────
+
+function fmtPct(utilization: number): string {
+  return `${(utilization * 100).toFixed(0)}%`;
+}
+
+function fmtReset(ms: number): string {
+  if (ms <= 0) return 'now';
+  const totalMin = Math.floor(ms / 60000);
+  const days = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+function statusColor(status: UnifiedWindow['status']): string {
+  if (status === 'blocked') return 'var(--c-danger)';
+  if (status === 'allowed_warning') return 'var(--c-warn)';
+  return 'var(--c-haiku)';
+}
+
+function statusLabel(status: UnifiedWindow['status']): string {
+  if (status === 'blocked') return 'Blocked';
+  if (status === 'allowed_warning') return 'Warning';
+  return 'OK';
+}
+
+function barFillStyle(utilization: number, status: UnifiedWindow['status']): string {
+  const color = statusColor(status);
+  const pct = Math.min(100, Math.max(0, utilization * 100));
+  return `width:${pct}%;background:${color};`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ──────────────────────────────────────────────
+// SIDEBAR
 // ──────────────────────────────────────────────
 
 function initSidebar(): void {
   if (!root) return;
-
   const messenger = new Messenger();
 
-  // 실시간 push 수신 등록 (start() 전에 등록해야 함)
-  messenger.onNotification(PushSnapshot, (snapshot: SnapshotPayload) => {
+  messenger.onNotification(PushRateLimit, (snapshot) => {
     renderSidebar(snapshot);
   });
-
-  // messenger 시작
   messenger.start();
 
-  // 초기 로딩 placeholder
-  root.innerHTML = renderSidebarSkeleton();
+  root.innerHTML = `<div class="sb-layout"><div class="sb-loading">Connecting to Anthropic API…</div></div>`;
 
-  // 초기 snapshot 요청
-  messenger.sendRequest(GetSnapshot, HOST_EXTENSION, { range: 'today' })
-    .then((snapshot: SnapshotPayload) => {
-      renderSidebar(snapshot);
-    })
+  messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
+    .then((snapshot) => renderSidebar(snapshot))
     .catch(() => {
+      // 첫 폴링 완료 전(not_ready) 또는 credentials 오류 — null 전달로 에러 UI 표시
       renderSidebar(null);
     });
 
-  function renderSidebar(snapshot: SnapshotPayload | null): void {
+  function renderSidebar(snapshot: RateLimitSnapshot | null): void {
     root!.innerHTML = buildSidebarHtml(snapshot);
-
-    // 새로고침 버튼 이벤트 바인딩 (헤더 + footer 두 버튼 모두)
     root!.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
       btn.addEventListener('click', () => {
-        console.log('[Claudepulse] RequestRefresh sent');
         messenger.sendNotification(RequestRefresh, HOST_EXTENSION);
       });
     });
   }
 }
 
-function buildSidebarHtml(snapshot: SnapshotPayload | null): string {
-  const today = snapshot?.today;
-  const mtd = snapshot?.monthToDate;
-  const billing = snapshot?.billingWindow;
-  const topProjects = snapshot?.topProjects ?? [];
-  const currentWs = snapshot?.currentWorkspaceProject;
+function buildSidebarHtml(snapshot: RateLimitSnapshot | null): string {
+  if (!snapshot) {
+    return `
+      <div class="sb-layout">
+        <div class="sb-header">
+          <span class="sb-header-title">Clausight</span>
+          <div class="sb-header-spacer"></div>
+          <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
+        </div>
+        <div class="sb-error-card card">
+          <div class="sb-error-icon">⚠</div>
+          <div class="sb-error-msg">Connecting…</div>
+          <div class="sb-error-sub">Polling Anthropic API for rate limit data.<br>If this persists, ensure Claude Code CLI is installed and you are logged in.<br>Required: ~/.claude/.credentials.json</div>
+        </div>
+      </div>`;
+  }
 
-  // 5h Window 계산
-  const pctRemaining = billing?.pctTimeRemaining ?? 0;
-  const msRemaining = billing?.msRemaining ?? 0;
-  const windowExpired = pctRemaining === 0;
-
-  // KPI 값
-  const tokensVal = today ? fmtTokens(today.totalTokens) : '—';
-  const sessionCostVal = today ? fmtUsd(today.cost) : '—';
-  const monthCostVal = mtd ? fmtUsd(mtd.cost) : '—';
-  const sessionCountVal = today ? String(today.sessionCount) : '—';
-
-  // 날짜 표시 (Date 직렬화 방지 — generatedAt은 postMessage 후 string이 될 수 있음)
-  const todayLabel = formatTodayLabel();
+  const fh = snapshot.fiveHour;
+  const sd = snapshot.sevenDay;
+  const overall = snapshot.overallStatus;
+  const overallColor = statusColor(overall);
 
   return `
     <div class="sb-layout">
@@ -87,162 +118,103 @@ function buildSidebarHtml(snapshot: SnapshotPayload | null): string {
       <div class="sb-header">
         <span class="sb-header-title">Clausight</span>
         <div class="sb-header-spacer"></div>
-        <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">
-          <span class="sb-ico-refresh">↻</span>
-        </button>
+        <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
       </div>
 
-      <!-- 현재 워크스페이스 마이크로 카드 -->
-      ${currentWs ? buildWorkspaceCard(currentWs) : ''}
+      <!-- 상태 뱃지 -->
+      <div class="sb-status-row">
+        <span class="status-badge" style="background:${overallColor}22;color:${overallColor};border-color:${overallColor}44;">
+          ${statusLabel(overall)}
+        </span>
+        <span class="sb-gen-time">updated just now</span>
+      </div>
 
-      <!-- Today 섹션 헤더 -->
+      <!-- 5h 세션 섹션 -->
       <div class="sb-section-hdr">
-        <span class="sb-section-arrow">›</span>
-        <span class="sb-section-label">Today</span>
-        <span class="sb-section-right">${todayLabel}</span>
+        <span class="sb-section-dot" style="background:var(--c-sonnet);"></span>
+        <span class="sb-section-label">Session (5h)</span>
+        <span class="sb-section-right mono">${fmtPct(fh.utilization)}</span>
       </div>
-
-      <!-- KPI 2x2 그리드 -->
-      <div class="sb-kpi-grid">
-        ${buildKpiCard('Tokens', tokensVal, 'var(--c-sonnet)')}
-        ${buildKpiCard('Session $', sessionCostVal, 'var(--c-warn)')}
-        ${buildKpiCard('Month $', monthCostVal, 'var(--c-opus)')}
-        ${buildKpiCard('Sessions', sessionCountVal, 'var(--c-haiku)')}
-      </div>
-
-      <!-- 5h Window 카드 -->
-      <div class="sb-window-wrap">
-        <div class="card sb-window-card">
-          <div class="sb-window-row-top">
-            <span class="sb-window-dot" style="background:var(--c-sonnet);"></span>
-            <span class="kpi-label">5h Window</span>
-            <span class="sb-window-reset-label">${windowExpired ? 'expired' : 'resets in'}</span>
-          </div>
-          ${windowExpired
-            ? `<div class="sb-window-expired">Window expired</div>`
-            : `<div class="sb-window-row-mid">
-                <span class="mono sb-window-pct">${pctRemaining.toFixed(1)}%</span>
-                <span class="sb-window-rem-label">remaining</span>
-                <span class="mono sb-window-duration">${fmtDuration(msRemaining)}</span>
-              </div>`
-          }
-          <div class="progress sb-window-progress">
-            <div style="width:${Math.min(100, Math.max(0, pctRemaining))}%;"></div>
-          </div>
+      <div class="sb-rate-card card">
+        <div class="rate-bar">
+          <div class="rate-bar-fill" style="${barFillStyle(fh.utilization, fh.status)}"></div>
+        </div>
+        <div class="rate-meta-row">
+          <span class="rate-status-chip" style="background:${statusColor(fh.status)}22;color:${statusColor(fh.status)};">${statusLabel(fh.status)}</span>
+          <span class="rate-reset-label">resets in <span class="mono">${fmtReset(fh.msUntilReset)}</span></span>
         </div>
       </div>
 
-      <!-- Top Projects 섹션 헤더 -->
+      <!-- 7d 주간 섹션 -->
       <div class="sb-section-hdr">
-        <span class="sb-section-arrow">›</span>
-        <span class="sb-section-label">Top Projects</span>
-        <span class="sb-section-right">today</span>
+        <span class="sb-section-dot" style="background:var(--c-opus);"></span>
+        <span class="sb-section-label">Weekly (7d)</span>
+        <span class="sb-section-right mono">${fmtPct(sd.utilization)}</span>
       </div>
-
-      <!-- Top Projects 목록 -->
-      <div class="sb-projects">
-        ${buildProjectsList(topProjects)}
+      <div class="sb-rate-card card">
+        <div class="rate-bar">
+          <div class="rate-bar-fill" style="${barFillStyle(sd.utilization, sd.status)}"></div>
+        </div>
+        <div class="rate-meta-row">
+          <span class="rate-status-chip" style="background:${statusColor(sd.status)}22;color:${statusColor(sd.status)};">${statusLabel(sd.status)}</span>
+          <span class="rate-reset-label">resets in <span class="mono">${fmtReset(sd.msUntilReset)}</span></span>
+        </div>
       </div>
 
       <!-- Footer -->
       <div class="sb-footer">
         <button class="btn-ghost sb-refresh-btn js-refresh" aria-label="Refresh data">
-          <span>↻</span>
-          <span>Refresh</span>
+          <span>↻</span><span>Refresh</span>
         </button>
       </div>
-    </div>
-  `;
-}
-
-function buildWorkspaceCard(ws: { displayName: string; cost: number }): string {
-  return `
-    <div class="sb-ws-card card">
-      <span class="sb-ws-accent-bar"></span>
-      <span class="sb-ws-name" title="${escapeHtml(ws.displayName)}">${escapeHtml(ws.displayName)}</span>
-      <span class="mono sb-ws-cost">${fmtUsd(ws.cost)} this month</span>
-    </div>
-  `;
-}
-
-function buildKpiCard(label: string, value: string, accent: string): string {
-  return `
-    <div class="card sb-kpi-card">
-      <div class="sb-kpi-row-top">
-        <span class="sb-kpi-dot" style="background:${accent};"></span>
-        <span class="kpi-label">${label}</span>
-      </div>
-      <div class="mono kpi-value sb-kpi-value">${value}</div>
-    </div>
-  `;
-}
-
-function buildProjectsList(projects: Array<{ displayName: string; cost: number; totalTokens: number }>): string {
-  if (projects.length === 0) {
-    return `<div class="sb-no-data">No data yet</div>`;
-  }
-
-  const accentColors = ['var(--c-sonnet)', 'var(--c-opus)', 'var(--c-haiku)'];
-
-  return projects.slice(0, 3).map((p, i) => {
-    const color = accentColors[i] ?? 'var(--c-slate)';
-    return `
-      <div class="row-strip sb-proj-row">
-        <span class="sb-proj-dot" style="background:${color};"></span>
-        <div class="sb-proj-info">
-          <div class="sb-proj-name" title="${escapeHtml(p.displayName)}">${escapeHtml(p.displayName)}</div>
-          <div class="mono sb-proj-meta">${fmtTokens(p.totalTokens)} · ${fmtUsd(p.cost)}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function renderSidebarSkeleton(): string {
-  return `<div class="sb-layout"><div class="sb-loading">Loading…</div></div>`;
-}
-
-function formatTodayLabel(): string {
-  const d = new Date();
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    </div>`;
 }
 
 // ──────────────────────────────────────────────
-// PANEL (기존 코드 — 건드리지 않음)
+// PANEL
 // ──────────────────────────────────────────────
 
-// ──────────────────────────────────────────────
-// PANEL — messenger 연결 + Chart.js 렌더링
-// ──────────────────────────────────────────────
+// 폴링 이력 (메모리 내, 최대 288포인트 = 5분 × 288 = 24h)
+const MAX_HISTORY = 288;
+const fhHistory: Array<{ t: Date; v: number }> = [];
+const sdHistory: Array<{ t: Date; v: number }> = [];
 
-let stackedChart: Chart | null = null;
-let donutChart: Chart | null = null;
-
-function getCssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
+let fhGauge: Chart | null = null;
+let sdGauge: Chart | null = null;
+let trendChart: Chart | null = null;
 
 function initPanel(): void {
   if (!root) return;
   root.innerHTML = buildPanelShell();
 
   const messenger = new Messenger();
-  messenger.onNotification(PushSnapshot, (snapshot) => updatePanelData(snapshot));
+  messenger.onNotification(PushRateLimit, (snapshot) => {
+    recordHistory(snapshot);
+    updatePanel(snapshot);
+  });
   messenger.start();
 
-  bindPanelTabs(messenger);
+  messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
+    .then((snapshot) => {
+      recordHistory(snapshot);
+      updatePanel(snapshot);
+    })
+    .catch(() => {
+      const el = document.getElementById('panel-status');
+      if (el) el.textContent = 'Unable to load — check credentials';
+    });
 
-  messenger.sendRequest(GetSnapshot, HOST_EXTENSION, { range: '30d' })
-    .then(snapshot => updatePanelData(snapshot))
-    .catch(() => { /* no initial data */ });
+  document.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
+    btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
+  });
+}
+
+function recordHistory(snapshot: RateLimitSnapshot): void {
+  const t = new Date(snapshot.generatedAt);
+  fhHistory.push({ t, v: snapshot.fiveHour.utilization });
+  sdHistory.push({ t, v: snapshot.sevenDay.utilization });
+  if (fhHistory.length > MAX_HISTORY) fhHistory.shift();
+  if (sdHistory.length > MAX_HISTORY) sdHistory.shift();
 }
 
 function buildPanelShell(): string {
@@ -250,161 +222,165 @@ function buildPanelShell(): string {
     <div class="panel-root">
       <div class="panel-header">
         <span class="panel-title">Claudepulse</span>
+        <div class="panel-header-spacer"></div>
+        <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
       </div>
-      <div class="panel-kpi-grid">
-        <div class="kpi-big" id="p-tokens">
-          <span class="kpi-big-dot" style="background:var(--c-sonnet)"></span>
-          <span class="kpi-big-label">Tokens · Today</span>
-          <span class="kpi-big-value" id="p-tokens-val">—</span>
-          <span class="kpi-big-sub" id="p-tokens-sub">in / out / cache</span>
-        </div>
-        <div class="kpi-big" id="p-mtd">
-          <span class="kpi-big-dot" style="background:var(--c-opus)"></span>
-          <span class="kpi-big-label">Month-to-date</span>
-          <span class="kpi-big-value" id="p-mtd-val">—</span>
-          <span class="kpi-big-sub" id="p-mtd-sub">cost</span>
-        </div>
-        <div class="kpi-big" id="p-sessions">
-          <span class="kpi-big-dot" style="background:var(--c-haiku)"></span>
-          <span class="kpi-big-label">Sessions · 30d</span>
-          <span class="kpi-big-value" id="p-sessions-val">—</span>
-          <span class="kpi-big-sub">unique sessions</span>
-        </div>
-        <div class="kpi-big" id="p-window">
-          <span class="kpi-big-dot" style="background:var(--c-warn)"></span>
-          <span class="kpi-big-label">5h Window</span>
-          <span class="kpi-big-value" id="p-window-val">—%</span>
-          <span class="kpi-big-sub" id="p-window-sub">resets in --:--:--</span>
-        </div>
-      </div>
-      <div class="panel-tabs-bar">
-        <button class="panel-tab active" data-tab="overview">Overview</button>
-        <button class="panel-tab" data-tab="sessions">Sessions</button>
-      </div>
-      <div class="panel-tab-content" id="tab-overview">
-        <div class="panel-charts-grid">
-          <div class="card panel-chart-card">
-            <div class="panel-chart-header">Token usage · 30 days</div>
-            <div class="panel-chart-wrap" id="stacked-wrap">
-              <canvas id="chart-stacked"></canvas>
-              <div class="panel-empty" id="stacked-empty" style="display:none">No data yet</div>
-            </div>
+
+      <div id="panel-status" class="panel-status-row"></div>
+
+      <!-- 게이지 그리드 -->
+      <div class="panel-gauge-grid">
+        <div class="card panel-gauge-card">
+          <div class="panel-gauge-label">Session (5h)</div>
+          <div class="panel-gauge-wrap">
+            <canvas id="chart-fh-gauge"></canvas>
+            <div class="panel-gauge-center" id="fh-pct">—</div>
           </div>
-          <div class="card panel-chart-card">
-            <div class="panel-chart-header">Projects · 30d</div>
-            <div class="panel-chart-wrap" id="donut-wrap">
-              <canvas id="chart-donut"></canvas>
-              <div class="panel-empty" id="donut-empty" style="display:none">No data yet</div>
-            </div>
+          <div class="panel-gauge-sub" id="fh-reset">—</div>
+        </div>
+        <div class="card panel-gauge-card">
+          <div class="panel-gauge-label">Weekly (7d)</div>
+          <div class="panel-gauge-wrap">
+            <canvas id="chart-sd-gauge"></canvas>
+            <div class="panel-gauge-center" id="sd-pct">—</div>
           </div>
+          <div class="panel-gauge-sub" id="sd-reset">—</div>
         </div>
       </div>
-      <div class="panel-tab-content hidden" id="tab-sessions">
-        <div id="sessions-list" class="sessions-list">
-          <div class="panel-empty" style="padding:40px 0">Loading sessions…</div>
-        </div>
-        <div id="session-detail" class="session-detail" style="display:none">
-          <div id="session-detail-header" class="session-detail-header"></div>
-          <div class="session-detail-canvas-wrap">
-            <canvas id="chart-session-detail"></canvas>
-            <div class="panel-empty" id="session-detail-empty" style="display:none">No data</div>
-          </div>
+
+      <!-- 추세 차트 -->
+      <div class="card panel-trend-card">
+        <div class="panel-chart-header">Utilization Trend</div>
+        <div class="panel-trend-wrap">
+          <canvas id="chart-trend"></canvas>
+          <div class="panel-empty" id="trend-empty" style="display:none">Collecting data…</div>
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-let sessionsLoaded = false;
-let sessionDetailChart: Chart | null = null;
-
-function bindPanelTabs(messenger: Messenger): void {
-  document.querySelectorAll('.panel-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tab = (btn as HTMLElement).dataset.tab ?? '';
-      document.querySelectorAll('.panel-tab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.panel-tab-content').forEach(c => c.classList.add('hidden'));
-      const target = document.getElementById(`tab-${tab}`);
-      if (target) target.classList.remove('hidden');
-      if (tab === 'sessions' && !sessionsLoaded) {
-        loadSessions(messenger);
-      }
-    });
-  });
+function getCssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-function updatePanelData(snapshot: SnapshotPayload): void {
-  // KPI
-  const tokensEl = document.getElementById('p-tokens-val');
-  const tokensSub = document.getElementById('p-tokens-sub');
-  if (tokensEl) tokensEl.textContent = fmtTokens(snapshot.today.totalTokens);
-  if (tokensSub) {
-    const m = snapshot.today.byModel;
-    const models = Object.keys(m).map(k => `${k.split('-')[1] ?? k}: ${fmtTokens(m[k])}`).join(' · ');
-    tokensSub.textContent = models || 'no usage today';
+function updatePanel(snapshot: RateLimitSnapshot): void {
+  const fh = snapshot.fiveHour;
+  const sd = snapshot.sevenDay;
+
+  // 상태 표시
+  const statusEl = document.getElementById('panel-status');
+  if (statusEl) {
+    const color = statusColor(snapshot.overallStatus);
+    statusEl.innerHTML = `<span class="status-badge" style="background:${color}22;color:${color};border-color:${color}44;">${statusLabel(snapshot.overallStatus)}</span>`;
   }
 
-  const mtdEl = document.getElementById('p-mtd-val');
-  if (mtdEl) mtdEl.textContent = fmtUsd(snapshot.monthToDate.cost);
+  // 5h 게이지
+  document.getElementById('fh-pct')!.textContent = fmtPct(fh.utilization);
+  document.getElementById('fh-reset')!.textContent = `resets in ${fmtReset(fh.msUntilReset)}`;
+  updateGauge('chart-fh-gauge', fh, 'fhGauge');
 
-  const sessEl = document.getElementById('p-sessions-val');
-  if (sessEl) sessEl.textContent = String(snapshot.monthToDate.sessionCount);
+  // 7d 게이지
+  document.getElementById('sd-pct')!.textContent = fmtPct(sd.utilization);
+  document.getElementById('sd-reset')!.textContent = `resets in ${fmtReset(sd.msUntilReset)}`;
+  updateGauge('chart-sd-gauge', sd, 'sdGauge');
 
-  const winEl = document.getElementById('p-window-val');
-  const winSub = document.getElementById('p-window-sub');
-  if (winEl) winEl.textContent = `${snapshot.billingWindow.pctTimeRemaining.toFixed(1)}%`;
-  if (winSub) winSub.textContent = `resets in ${fmtDuration(snapshot.billingWindow.msRemaining)}`;
-
-  // Charts
-  updateStackedChart(snapshot.dailyBreakdown ?? []);
-  updateDonutChart(snapshot.topProjects);
+  // 추세 차트
+  updateTrendChart();
 }
 
-function updateStackedChart(daily: import('../types').DailyStats[]): void {
-  const canvas = document.getElementById('chart-stacked') as HTMLCanvasElement | null;
-  const emptyEl = document.getElementById('stacked-empty');
+function updateGauge(canvasId: string, window: UnifiedWindow, chartVar: 'fhGauge' | 'sdGauge'): void {
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
   if (!canvas) return;
 
-  if (daily.length === 0) {
+  const used = window.utilization;
+  const remaining = Math.max(0, 1 - used);
+  const color = statusColor(window.status);
+  const trackColor = getCssVar('--vscode-panel-border') || '#333';
+
+  const data = {
+    datasets: [{
+      data: [used, remaining],
+      backgroundColor: [color, trackColor],
+      borderWidth: 0,
+      circumference: 270,
+      rotation: -135,
+    }],
+  };
+
+  const existing = chartVar === 'fhGauge' ? fhGauge : sdGauge;
+  if (existing) {
+    existing.data = data;
+    existing.update();
+  } else {
+    const chart = new Chart(canvas, {
+      type: 'doughnut',
+      data,
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        cutout: '75%',
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        animation: { duration: 400 },
+      },
+    });
+    if (chartVar === 'fhGauge') fhGauge = chart;
+    else sdGauge = chart;
+  }
+}
+
+function updateTrendChart(): void {
+  const canvas = document.getElementById('chart-trend') as HTMLCanvasElement | null;
+  const emptyEl = document.getElementById('trend-empty');
+  if (!canvas) return;
+
+  if (fhHistory.length < 2) {
     canvas.style.display = 'none';
     if (emptyEl) emptyEl.style.display = '';
-    if (stackedChart) { stackedChart.destroy(); stackedChart = null; }
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
     return;
   }
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
-  const labels = daily.map(d => d.date.slice(5)); // MM-DD
-  const allModels = [...new Set(daily.flatMap(d => Object.keys(d.byModel)))];
-  const modelColors: Record<string, string> = {
-    opus: getCssVar('--c-opus'),
-    sonnet: getCssVar('--c-sonnet'),
-    haiku: getCssVar('--c-haiku'),
-  };
-
-  const datasets = allModels.map(model => {
-    const shortKey = Object.keys(modelColors).find(k => model.includes(k)) ?? 'slate';
-    const color = modelColors[shortKey] ?? getCssVar('--c-slate');
-    return {
-      label: model,
-      data: daily.map(d => d.byModel[model] ?? 0),
-      backgroundColor: color + '66',
-      borderColor: color,
-      borderWidth: 1,
-      fill: true,
-    };
+  const labels = fhHistory.map(p => {
+    const d = new Date(p.t);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   });
 
+  const fhColor = getCssVar('--c-sonnet');
+  const sdColor = getCssVar('--c-opus');
   const axisColor = getCssVar('--vscode-descriptionForeground');
   const gridColor = getCssVar('--vscode-panel-border');
 
-  if (stackedChart) {
-    stackedChart.data.labels = labels;
-    stackedChart.data.datasets = datasets;
-    stackedChart.update();
+  const datasets = [
+    {
+      label: 'Session (5h)',
+      data: fhHistory.map(p => p.v * 100),
+      borderColor: fhColor,
+      backgroundColor: fhColor + '22',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.3,
+      pointRadius: 0,
+    },
+    {
+      label: 'Weekly (7d)',
+      data: sdHistory.map(p => p.v * 100),
+      borderColor: sdColor,
+      backgroundColor: sdColor + '22',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.3,
+      pointRadius: 0,
+    },
+  ];
+
+  if (trendChart) {
+    trendChart.data.labels = labels;
+    trendChart.data.datasets = datasets;
+    trendChart.update();
   } else {
-    stackedChart = new Chart(canvas, {
+    trendChart = new Chart(canvas, {
       type: 'line',
       data: { labels, datasets },
       options: {
@@ -412,260 +388,15 @@ function updateStackedChart(daily: import('../types').DailyStats[]): void {
         maintainAspectRatio: false,
         plugins: { legend: { labels: { color: axisColor, boxWidth: 10, font: { size: 11 } } } },
         scales: {
-          x: { stacked: true, ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
-          y: { stacked: true, ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
+          x: { ticks: { color: axisColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
+          y: {
+            min: 0,
+            max: 100,
+            ticks: { color: axisColor, font: { size: 10 }, callback: (v) => `${v}%` },
+            grid: { color: gridColor },
+          },
         },
       },
     });
   }
-}
-
-function updateDonutChart(projects: import('../types').ProjectSummary[]): void {
-  const canvas = document.getElementById('chart-donut') as HTMLCanvasElement | null;
-  const emptyEl = document.getElementById('donut-empty');
-  if (!canvas) return;
-
-  if (projects.length === 0) {
-    canvas.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = '';
-    if (donutChart) { donutChart.destroy(); donutChart = null; }
-    return;
-  }
-  canvas.style.display = '';
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  const palette = [
-    getCssVar('--c-opus'),
-    getCssVar('--c-sonnet'),
-    getCssVar('--c-haiku'),
-    getCssVar('--c-warn'),
-    getCssVar('--c-slate'),
-    getCssVar('--c-danger'),
-  ];
-
-  const top5 = projects.slice(0, 5);
-  const labels = top5.map(p => p.displayName);
-  const data = top5.map(p => p.cost);
-  const backgroundColor = top5.map((_, i) => palette[i % palette.length]);
-
-  const axisColor = getCssVar('--vscode-descriptionForeground');
-
-  if (donutChart) {
-    donutChart.data.labels = labels;
-    (donutChart.data.datasets[0] as { data: number[]; backgroundColor: string[] }).data = data;
-    (donutChart.data.datasets[0] as { data: number[]; backgroundColor: string[] }).backgroundColor = backgroundColor;
-    donutChart.update();
-  } else {
-    donutChart = new Chart(canvas, {
-      type: 'doughnut',
-      data: { labels, datasets: [{ data, backgroundColor, borderWidth: 0 }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { color: axisColor, boxWidth: 10, font: { size: 11 } } },
-        },
-      },
-    });
-  }
-}
-
-// ──────────────────────────────────────────────
-// SESSIONS — lazy load + drilldown
-// ──────────────────────────────────────────────
-
-function loadSessions(messenger: Messenger): void {
-  sessionsLoaded = true;
-  const listEl = document.getElementById('sessions-list');
-  if (!listEl) return;
-
-  messenger.sendRequest(GetSessions, HOST_EXTENSION, { range: '30d' })
-    .then((sessions: SessionSummary[]) => {
-      listEl.innerHTML = buildSessionsList(sessions);
-      listEl.querySelectorAll<HTMLElement>('[data-session-id]').forEach(row => {
-        row.addEventListener('click', () => {
-          const sid = row.dataset.sessionId ?? '';
-          showSessionDetail(messenger, sid);
-        });
-        row.addEventListener('keydown', (e: KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            const sid = (e.currentTarget as HTMLElement).dataset.sessionId ?? '';
-            showSessionDetail(messenger, sid);
-          }
-        });
-      });
-    })
-    .catch(() => {
-      listEl.innerHTML = '<div class="panel-empty">Failed to load sessions</div>';
-    });
-}
-
-function showSessionDetail(messenger: Messenger, sessionId: string): void {
-  const listEl = document.getElementById('sessions-list');
-  const detailEl = document.getElementById('session-detail');
-  const headerEl = document.getElementById('session-detail-header');
-  if (!listEl || !detailEl || !headerEl) return;
-
-  listEl.style.display = 'none';
-  detailEl.style.display = '';
-  headerEl.innerHTML = `
-    <button class="session-back-btn" id="session-back">← Back</button>
-    <span class="session-detail-loading">Loading…</span>
-  `;
-  document.getElementById('session-back')?.addEventListener('click', () => {
-    detailEl.style.display = 'none';
-    listEl.style.display = '';
-  });
-
-  messenger.sendRequest(GetSessionDetail, HOST_EXTENSION, { sessionId })
-    .then((detail: SessionDetail | null) => {
-      if (!detail) {
-        headerEl.innerHTML = `<button class="session-back-btn" id="session-back2">← Back</button>`;
-        document.getElementById('session-detail-empty')!.style.display = '';
-        document.getElementById('session-back2')?.addEventListener('click', () => {
-          detailEl.style.display = 'none';
-          listEl.style.display = '';
-        });
-        return;
-      }
-      renderSessionDetailHeader(headerEl, detail, listEl, detailEl);
-      renderSessionDetailChart(detail);
-    })
-    .catch(() => {
-      headerEl.innerHTML = `<button class="session-back-btn" id="session-back3">← Back</button><span style="color:var(--vscode-errorForeground)">Failed to load</span>`;
-      document.getElementById('session-back3')?.addEventListener('click', () => {
-        detailEl.style.display = 'none';
-        listEl.style.display = '';
-      });
-    });
-}
-
-function renderSessionDetailHeader(
-  headerEl: HTMLElement,
-  detail: SessionDetail,
-  listEl: HTMLElement,
-  detailEl: HTMLElement
-): void {
-  const start = new Date(detail.startedAt); // may be string after postMessage
-  const timeStr = start.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  headerEl.innerHTML = `
-    <button class="session-back-btn" id="session-back-detail">← Back</button>
-    <div class="session-detail-meta">
-      <span class="session-detail-proj">${escapeHtml(detail.displayName)}</span>
-      <span class="session-detail-time">${timeStr}</span>
-      <span class="mono session-detail-cost">${fmtUsd(detail.costUSD)}</span>
-      <span class="mono session-detail-tokens">${fmtTokens(detail.totalTokens)}</span>
-    </div>
-  `;
-  document.getElementById('session-back-detail')?.addEventListener('click', () => {
-    detailEl.style.display = 'none';
-    listEl.style.display = '';
-  });
-}
-
-function renderSessionDetailChart(detail: SessionDetail): void {
-  const canvas = document.getElementById('chart-session-detail') as HTMLCanvasElement | null;
-  const emptyEl = document.getElementById('session-detail-empty');
-  if (!canvas) return;
-
-  if (sessionDetailChart) { sessionDetailChart.destroy(); sessionDetailChart = null; }
-
-  if (!detail.timeSeries || detail.timeSeries.length === 0) {
-    canvas.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = '';
-    return;
-  }
-  canvas.style.display = '';
-  if (emptyEl) emptyEl.style.display = 'none';
-
-  const labels = detail.timeSeries.map(b => {
-    const d = new Date(b.bucketStart);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  });
-  const data = detail.timeSeries.map(b => b.tokens);
-  const color = getCssVar('--c-sonnet');
-  const axisColor = getCssVar('--vscode-descriptionForeground');
-  const gridColor = getCssVar('--vscode-panel-border');
-
-  sessionDetailChart = new Chart(canvas, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Tokens',
-        data,
-        backgroundColor: color + '33',
-        borderColor: color,
-        borderWidth: 2,
-        fill: true,
-        pointRadius: 3,
-        tension: 0.3,
-      }],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
-        y: { ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
-      },
-    },
-  });
-}
-
-function buildSessionsList(sessions: SessionSummary[]): string {
-  if (sessions.length === 0) {
-    return '<div class="panel-empty" style="padding:40px 0">No sessions in the last 30 days</div>';
-  }
-  return sessions.map(s => {
-    const start = new Date(s.startedAt);
-    const timeStr = start.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    return `
-      <div class="session-row" data-session-id="${escapeHtml(s.sessionId)}" role="button" tabindex="0" aria-label="Session from ${timeStr}">
-        <div class="session-row-left">
-          <div class="session-time">${timeStr}</div>
-          <div class="session-proj">${escapeHtml(s.displayName)}</div>
-        </div>
-        <div class="session-row-mid">
-          ${buildModelMiniBar(s.modelBreakdown, s.totalTokens)}
-        </div>
-        <div class="session-row-right">
-          <div class="mono session-tokens">${fmtTokens(s.totalTokens)}</div>
-          <div class="mono session-cost">${fmtUsd(s.costUSD)}</div>
-          <div class="session-duration">${fmtDuration(s.durationMs)}</div>
-        </div>
-      </div>
-    `;
-  }).join('');
-}
-
-function buildModelMiniBar(modelBreakdown: Record<string, number>, totalTokens: number): string {
-  if (totalTokens === 0) return '<div class="model-mini-bar"></div>';
-  const colorMap: Record<string, string> = {
-    opus: 'var(--c-opus)',
-    sonnet: 'var(--c-sonnet)',
-    haiku: 'var(--c-haiku)',
-  };
-  const segs = Object.entries(modelBreakdown).map(([model, tokens]) => {
-    const pct = (tokens / totalTokens) * 100;
-    const key = Object.keys(colorMap).find(k => model.includes(k)) ?? '';
-    const color = colorMap[key] ?? 'var(--c-slate)';
-    return `<div class="model-mini-bar-seg" style="width:${pct.toFixed(1)}%;background:${color};" title="${model}"></div>`;
-  });
-  return `<div class="model-mini-bar">${segs.join('')}</div>`;
-}
-
-function kpiBigCard(label: string, value: string, sub: string, accent: string): string {
-  return `
-    <div class="card" style="padding:16px;">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span style="width:8px;height:8px;border-radius:50%;background:${accent};display:inline-block;"></span>
-        <span style="font-size:11px;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:.04em;">${label}</span>
-      </div>
-      <div class="mono" style="font-size:28px;margin-top:10px;font-weight:600;color:var(--vscode-foreground);letter-spacing:-.02em;">${value}</div>
-      <div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:4px;font-family:var(--ff-mono);">${sub}</div>
-    </div>
-  `;
 }

@@ -1,23 +1,19 @@
 import { Messenger } from 'vscode-messenger';
-import { SnapshotPayload, AggregatedStats, BillingWindow } from '../types';
-import { GetSnapshot, GetSessionDetail, GetSessions, RequestRefresh } from './contracts';
-import { UsageAggregator } from '../services/UsageAggregator';
-
-function emptySnapshot(): SnapshotPayload {
-  const now = new Date();
-  const empty: AggregatedStats = { bucket: '', totalTokens: 0, byModel: {}, cost: 0, sessionCount: 0 };
-  const window: BillingWindow = { windowStart: now, windowEnd: now, msRemaining: 0, pctTimeRemaining: 0, tokensInWindow: 0 };
-  return { today: empty, monthToDate: empty, topProjects: [], billingWindow: window, generatedAt: now };
-}
+import type { RateLimitSnapshot } from '../types';
+import { GetRateLimit, RequestRefresh } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
-  getSnapshot: () => SnapshotPayload | null,
-  onRefresh: () => Promise<void>,
-  aggregator: UsageAggregator
+  getSnapshot: () => RateLimitSnapshot | null,
+  onRefresh: () => void
 ): void {
-  messenger.onRequest(GetSnapshot, () => getSnapshot() ?? emptySnapshot());
+  messenger.onRequest(GetRateLimit, () => {
+    const snap = getSnapshot();
+    if (!snap) {
+      // 첫 폴링 전 또는 실패 상태 — null을 반환하면 webview가 loading/error UI를 표시
+      throw new Error('not_ready');
+    }
+    return snap;
+  });
   messenger.onNotification(RequestRefresh, () => { void onRefresh(); });
-  messenger.onRequest(GetSessions, ({ range }) => aggregator.listSessions(range));
-  messenger.onRequest(GetSessionDetail, ({ sessionId }) => aggregator.getSessionDetail(sessionId));
 }

@@ -1,101 +1,29 @@
-// Domain model — ccusage 검증 스키마 + DESIGN-TOKENS와 정합
+// Rate Limit 대시보드 도메인 모델 — Anthropic /v1/messages 응답 헤더 기반
 
-/** jsonl raw line (Anthropic Claude Code 기록 포맷). */
-export interface RawJsonlEntry {
-  type: 'user' | 'assistant' | 'summary' | string;
-  sessionId: string;
-  timestamp: string; // ISO 8601
-  costUSD?: number; // present-but-unreliable; 항상 재계산 후 cross-check
-  message?: {
-    id: string; // 🔴 dedup primary key — 누락 시 billing 불일치
-    model: string; // e.g. "claude-sonnet-4-5", "claude-opus-4-..."
-    usage?: {
-      input_tokens: number;
-      output_tokens: number;
-      cache_creation_input_tokens?: number;
-      cache_read_input_tokens?: number;
-    };
-  };
+/** 단일 rate limit 윈도우 (5h 또는 7d) 상태. */
+export interface UnifiedWindow {
+  /** 0.0 ~ 1.0 사용률 */
+  utilization: number;
+  /** 재설정 시각 */
+  resetAt: Date;
+  /** 재설정까지 남은 ms */
+  msUntilReset: number;
+  /** API 상태값 */
+  status: 'allowed' | 'allowed_warning' | 'blocked';
 }
 
-/** 정규화된 사용량 레코드 (cache 토큰 분리). */
-export interface UsageRecord {
-  messageId: string;
-  sessionId: string;
-  projectPath: string; // ~/.claude/projects/<encoded>/ 디코딩된 절대경로
-  timestamp: Date;
-  model: string;
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationTokens: number;
-  cacheReadTokens: number;
-  costUSD: number;
-}
-
-/** 일별/주별/월별 집계 결과. */
-export interface AggregatedStats {
-  bucket: string; // 'YYYY-MM-DD' 또는 'YYYY-MM' 또는 'YYYY-Www'
-  totalTokens: number;
-  byModel: Record<string, number>; // 모델 → 토큰 합
-  cost: number;
-  sessionCount: number;
-}
-
-/** 프로젝트별 합계. */
-export interface ProjectSummary {
-  projectPath: string;
-  displayName: string; // 폴더명 또는 워크스페이스명
-  totalTokens: number;
-  cost: number;
-  sessionCount: number;
-  lastActivity: Date;
-}
-
-/** 날짜별 집계 (30일 stacked area용). */
-export interface DailyStats {
-  date: string; // 'YYYY-MM-DD'
-  byModel: Record<string, number>; // model → totalTokens
-  totalTokens: number;
-  cost: number;
-}
-
-/** 세션 목록 항목 (Panel Sessions 탭용). */
-export interface SessionSummary {
-  sessionId: string;
-  projectPath: string;
-  displayName: string;
-  startedAt: Date;
-  endedAt: Date;
-  durationMs: number;
-  totalTokens: number;
-  costUSD: number;
-  modelBreakdown: Record<string, number>;
-}
-
-/** 세션 상세 (드릴다운 차트용). */
-export interface SessionDetail extends SessionSummary {
-  timeSeries: Array<{ bucketStart: Date; tokens: number; costUSD: number }>;
-}
-
-/** 5h 빌링 윈도우 상태. */
-export interface BillingWindow {
-  windowStart: Date;
-  windowEnd: Date;
-  msRemaining: number;
-  pctTimeRemaining: number; // 시간 기준 (정확)
-  tokensInWindow: number;
-  estimatedPctRemaining?: number; // 토큰 기준 (추정 — Anthropic 공식 한도 비공개)
-}
-
-/** Webview ↔ Extension 메시지 페이로드 공통 타입. */
-export interface SnapshotPayload {
-  today: AggregatedStats;
-  monthToDate: AggregatedStats;
-  topProjects: ProjectSummary[];
-  billingWindow: BillingWindow;
+/** Webview ↔ Extension 메시지 페이로드. */
+export interface RateLimitSnapshot {
+  fiveHour: UnifiedWindow;
+  sevenDay: UnifiedWindow;
+  /** 종합 상태 (worst-case) */
+  overallStatus: 'allowed' | 'allowed_warning' | 'blocked';
   generatedAt: Date;
-  /** 차별점 1 — 현재 열린 워크스페이스 집계 (없으면 undefined) */
-  currentWorkspaceProject?: ProjectSummary;
-  /** Panel 30일 stacked area용 날짜별 집계 */
-  dailyBreakdown?: DailyStats[];
+}
+
+/** ~/.claude/.credentials.json 파싱 결과. */
+export interface ClaudeCredentials {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number; // Unix ms
 }

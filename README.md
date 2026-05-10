@@ -1,42 +1,46 @@
 # Claudepulse
 
-> Claude Code 사용량을 IDE 안에서 실시간으로 시각화하는 대시보드 (VS Code · Cursor).
+> Claude Max 플랜 구독자를 위한 IDE 내 Rate Limit 대시보드 (VS Code · Cursor).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![VS Marketplace](https://img.shields.io/badge/VS%20Marketplace-cubha.claudepulse-blue)](https://marketplace.visualstudio.com/items?itemName=cubha.claudepulse)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-cubha.claudepulse-purple)](https://open-vsx.org/extension/cubha/claudepulse)
 
-ccusage(★14k CLI)의 데이터 정확성 + 실시간 watch — claude.ai 비공개 API 회피, IDE 컨텍스트(현재 워크스페이스) 자동 매핑.
+Claude 계정의 세션 사용률과 주간 사용률을 IDE 안에서 실시간으로 확인. 브라우저 탭 전환 없이 Rate Limit 상태를 한눈에.
 
 ## 핵심 기능
 
-- **At-a-glance StatusBar**: 오늘 토큰 수·세션 비용 상시 표시
-- **Sidebar 대시보드**: 오늘 KPI 4-카드 + 5h 빌링 윈도우 + Top 프로젝트
-- **Dashboard Panel**: 30일 토큰 트렌드 (Opus/Sonnet/Haiku stacked) + 프로젝트 분포 도넛
-- **Sessions 탭**: 세션 목록 + 클릭 시 5분 버킷 토큰 사용량 드릴다운
-- **워크스페이스 자동 매핑**: 현재 열린 프로젝트의 비용을 사이드바에 자동 강조
-- **인-에디터 비용 알림**: 월 누적 비용 임계값 초과 시 VS Code 네이티브 알림
+- **StatusBar 상시 표시**: 세션(5h) % · 주간(7d) % — 어느 파일 편집 중에도 우하단에 표시
+- **Sidebar 대시보드**: 5h/7d 사용률 게이지 + 재설정 카운트다운 + 상태 뱃지(OK/Warning/Blocked)
+- **Dashboard Panel**: 게이지 차트 + 폴링 이력 추세선 (세션 중 사용량 변화 추적)
+- **임계값 알림**: 설정한 % 초과 시 VS Code 네이티브 경고 알림
+- **자동 폴링**: 5분마다 Anthropic API에서 최신 Rate Limit 헤더 수신
 
 ## 데이터 소스
 
-`~/.claude/projects/**/*.jsonl` 로컬 파일 직접 파싱.  
-**외부 API 호출 0회 · 추가 결제 0원 · 100% 오프라인**.
+Claude Code CLI가 생성하는 `~/.claude/.credentials.json`의 OAuth 토큰으로 `POST https://api.anthropic.com/v1/messages`를 5분마다 폴링, 응답 헤더에서 Rate Limit 상태를 읽습니다.
+
+- **로컬 파일 파싱 없음** — jsonl 파일 미접근
+- **비공개 API 미사용** — 공식 Anthropic API만 사용
+- **폴링 쿼터 소비**: 5분마다 claude-haiku로 1-token 요청 → Rate Limit 자체를 극소량 소비 (1회 폴링 ≈ 5~10 input tokens 수준)
 
 ## 요구사항
 
 - VS Code `^1.85.0` 또는 Cursor 최신
-- Claude Code CLI 설치 + `~/.claude/projects/` 디렉토리 존재
+- **Claude Max 플랜** 구독
+- Claude Code CLI 설치 + 1회 이상 로그인 (`~/.claude/.credentials.json` 존재 필요)
 
 ## 설치
 
-VS Code Marketplace 또는 Open VSX에서 **"Claudepulse"** 검색 후 설치.
+VS Code Marketplace 또는 Open VSX에서 **"Claudepulse"** 검색 후 설치.  
+설치 즉시 자동으로 credentials를 읽어 폴링을 시작합니다.
 
 ## 명령
 
 | Command | 설명 |
 |---|---|
 | `Claudepulse: Open Dashboard` | Dashboard Panel 열기 |
-| `Claudepulse: Refresh` | 수동 재집계 |
+| `Claudepulse: Refresh` | 즉시 폴링 실행 |
 
 ## 설정
 
@@ -44,13 +48,14 @@ VS Code Marketplace 또는 Open VSX에서 **"Claudepulse"** 검색 후 설치.
 
 | 설정 | 기본값 | 설명 |
 |---|---|---|
-| `claudepulse.claudeProjectsPath` | `~/.claude/projects` | jsonl 루트 경로 오버라이드 |
-| `claudepulse.costAlertThresholdUsd` | `10` | 월 누적 비용 알림 임계값 (USD) |
-| `claudepulse.refreshDebounceMs` | `300` | 파일 변경 감지 디바운스 (ms) |
+| `claudepulse.credentialsPath` | `~/.claude/.credentials.json` | Credentials 파일 경로 오버라이드 |
+| `claudepulse.pollIntervalMs` | `300000` (5분) | 폴링 간격 (ms) |
+| `claudepulse.utilizationWarnThreshold` | `0.8` (80%) | 경고 알림 임계값 (0–1) |
 
 ## 변경 이력
 
-- **v0.0.2** (2026-05-10) — 초기 릴리즈. Sessions 탭 드릴다운, 워크스페이스 자동 매핑, 비용 알림, 30일 차트.
+- **v0.0.4** (2026-05-11) — Rate Limit 대시보드로 전면 재설계. OAuth 폴링 기반, 5h/7d 사용률·재설정 시간 표시.
+- **v0.0.3** (2026-05-10) — 초기 릴리즈 (jsonl 파서 기반, 현재 폐기).
 
 ## 라이선스
 
