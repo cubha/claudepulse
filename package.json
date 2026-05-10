@@ -1,0 +1,121 @@
+{
+  "name": "claudepulse",
+  "displayName": "Claudepulse — Claude Code Usage Dashboard",
+  "description": "Claude Code 사용량을 IDE 안에서 실시간으로 시각화. 워크스페이스별 비용·5h 윈도우·세션 드릴다운.",
+  "version": "0.0.1",
+  "publisher": "cubha",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cubha/claudepulse.git"
+  },
+  "homepage": "https://github.com/cubha/claudepulse#readme",
+  "bugs": {
+    "url": "https://github.com/cubha/claudepulse/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "anthropic",
+    "ccusage",
+    "usage",
+    "dashboard",
+    "tokens",
+    "cost",
+    "monitor"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudepulse",
+          "title": "Claudepulse",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "claudepulse": [
+        {
+          "type": "webview",
+          "id": "claudepulse.sidebar",
+          "name": "Usage"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claudepulse.openDashboard",
+        "title": "Claudepulse: Open Dashboard"
+      },
+      {
+        "command": "claudepulse.refresh",
+        "title": "Claudepulse: Refresh"
+      }
+    ],
+    "configuration": {
+      "title": "Claudepulse",
+      "properties": {
+        "claudepulse.claudeProjectsPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to ~/.claude/projects (leave empty for auto-detect)."
+        },
+        "claudepulse.costAlertThresholdUsd": {
+          "type": "number",
+          "default": 10,
+          "description": "Show a warning notification when month-to-date cost exceeds this USD value."
+        },
+        "claudepulse.refreshDebounceMs": {
+          "type": "number",
+          "default": 300,
+          "description": "Debounce window for file watcher events (ms)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs && tsc --noEmit",
+    "watch": "node esbuild.config.mjs --watch",
+    "lint": "eslint src --ext ts",
+    "typecheck": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "test:integration": "vscode-test",
+    "package": "vsce package --no-dependencies",
+    "publish:vscode": "vsce publish --no-dependencies",
+    "publish:ovsx": "ovsx publish --no-dependencies"
+  },
+  "dependencies": {
+    "chart.js": "^4.4.0",
+    "chokidar": "^4.0.0",
+    "vscode-messenger": "^0.5.0",
+    "vscode-messenger-common": "^0.5.0",
+    "vscode-messenger-webview": "^0.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.3.9",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.57.0",
+    "ovsx": "^0.9.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}

@@ -1,0 +1,54 @@
+import * as vscode from 'vscode';
+import { VIEW_IDS } from '../constants';
+
+export class SidebarViewProvider implements vscode.WebviewViewProvider {
+  static readonly viewType = VIEW_IDS.sidebar;
+
+  constructor(private readonly extensionUri: vscode.Uri) {}
+
+  resolveWebviewView(
+    webviewView: vscode.WebviewView,
+    _context: vscode.WebviewViewResolveContext,
+    _token: vscode.CancellationToken
+  ): void {
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview')]
+    };
+    webviewView.webview.html = this.getHtml(webviewView.webview);
+    // TODO: vscode-messenger 연결 + snapshot push
+  }
+
+  private getHtml(webview: vscode.Webview): string {
+    const cssUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'styles.css')
+    );
+    const jsUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview', 'main.js')
+    );
+    const nonce = getNonce();
+    const csp = [
+      `default-src 'none'`,
+      `style-src ${webview.cspSource}`,
+      `img-src ${webview.cspSource} data:`,
+      `script-src 'nonce-${nonce}'`,
+      `font-src ${webview.cspSource}`
+    ].join('; ');
+    return `<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8" />
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<link rel="stylesheet" href="${cssUri}">
+<title>Claudepulse Sidebar</title>
+</head><body class="theme-dark">
+<div id="root">Loading…</div>
+<script nonce="${nonce}" src="${jsUri}"></script>
+</body></html>`;
+  }
+}
+
+function getNonce(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let n = '';
+  for (let i = 0; i < 32; i++) n += chars.charAt(Math.floor(Math.random() * chars.length));
+  return n;
+}

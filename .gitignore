@@ -1,0 +1,13 @@
+node_modules/
+dist/
+out/
+.vscode-test/
+*.vsix
+.DS_Store
+*.log
+.env
+.env.*
+coverage/
+.nyc_output/
+.turbo/
+.eslintcache
