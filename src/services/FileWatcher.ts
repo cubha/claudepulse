@@ -10,11 +10,12 @@ import { Logger } from '../logger';
 export class FileWatcher {
   private watcher: chokidar.FSWatcher | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
+  private pendingPaths = new Set<string>();
 
   constructor(
     private readonly rootPath: string,
     private readonly debounceMs: number,
-    private readonly onChange: () => void | Promise<void>,
+    private readonly onChange: (changedPaths: string[]) => void | Promise<void>,
     private readonly logger: Logger
   ) {}
 
@@ -23,24 +24,35 @@ export class FileWatcher {
     this.watcher = chokidar.watch(this.rootPath, {
       ignored: /(^|[/\\])\../,
       persistent: true,
-      ignoreInitial: true,
+      ignoreInitial: false,
       depth: 4
     });
-    this.watcher.on('add', (p) => this.schedule(p, 'add'));
-    this.watcher.on('change', (p) => this.schedule(p, 'change'));
+    this.watcher.on('add', (p) => this.schedule(p));
+    this.watcher.on('change', (p) => this.schedule(p));
+    this.watcher.on('unlink', (p) => this.schedule(p));
     this.logger.info(`FileWatcher started: ${this.rootPath}`);
-    // TODO: handle .jsonl 필터링, 초기 스캔 트리거
   }
 
-  private schedule(_path: string, _kind: string): void {
+  private schedule(path: string): void {
+    if (!path.endsWith('.jsonl')) return;
+    this.pendingPaths.add(path);
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
-      void this.onChange();
+      const paths = Array.from(this.pendingPaths);
+      this.pendingPaths.clear();
+      this.debounceTimer = null;
+      Promise.resolve(this.onChange(paths)).catch((err: unknown) =>
+        this.logger.error('FileWatcher onChange failed', err)
+      );
     }, this.debounceMs);
   }
 
   async dispose(): Promise<void> {
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingPaths.clear();
     await this.watcher?.close();
     this.watcher = null;
   }
