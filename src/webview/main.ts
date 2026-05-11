@@ -1,20 +1,34 @@
 // Webview 진입점.
 // data-mode={sidebar|panel} 속성으로 두 컨텍스트 분기.
 import { Chart, registerables } from 'chart.js';
-Chart.register(...registerables);
-
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import { GetRateLimit, PushPollerError, PushRateLimit, RequestLogin, RequestRefresh } from '../messaging/contracts';
 import type { PollerError, RateLimitSnapshot, UnifiedWindow } from '../types';
 
+Chart.register(...registerables);
+
+// VS Code webview 글로벌 — 비webview 환경에서는 undefined
+declare function acquireVsCodeApi(): unknown;
+
 const mode = (document.body.dataset.mode ?? 'panel') as 'sidebar' | 'panel';
 const root = document.getElementById('root');
 
-if (mode === 'sidebar') {
-  initSidebar();
-} else {
-  initPanel();
+try {
+  if (mode === 'sidebar') {
+    initSidebar();
+  } else {
+    initPanel();
+  }
+} catch (err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error('[Claudepulse] webview init failed:', err);
+  if (root) {
+    root.innerHTML = `<div style="padding:12px;color:#f48771;font-size:12px;font-family:monospace;">
+      Claudepulse webview error:<br>${msg}<br><br>
+      Open DevTools (Help → Toggle Developer Tools) for details.
+    </div>`;
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -64,6 +78,15 @@ function escapeHtml(s: string): string {
 
 function initSidebar(): void {
   if (!root) return;
+
+  // acquireVsCodeApi가 없으면 non-webview 환경 — 명확한 에러 표시
+  if (typeof acquireVsCodeApi === 'undefined') {
+    root.innerHTML = `<div style="padding:12px;color:#f48771;font-size:12px;">
+      acquireVsCodeApi not available.<br>This view must run inside VS Code.
+    </div>`;
+    return;
+  }
+
   const messenger = new Messenger();
 
   let lastError: PollerError | null = null;
