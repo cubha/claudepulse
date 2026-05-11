@@ -8,8 +8,12 @@ import type { PollerError, RateLimitSnapshot, UnifiedWindow } from '../types';
 
 Chart.register(...registerables);
 
-// VS Code webview 글로벌 — 비webview 환경에서는 undefined
-declare function acquireVsCodeApi(): unknown;
+// esbuild가 vscode-messenger-webview 내부의 acquireVsCodeApi를 빈 모듈로 번들링하는 문제 우회.
+// 글로벌에서 직접 호출해 캐싱 후 Messenger 생성자에 전달한다.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _vsApi: unknown = typeof (globalThis as any).acquireVsCodeApi === 'function'
+  ? (globalThis as any).acquireVsCodeApi()
+  : undefined;
 
 const mode = (document.body.dataset.mode ?? 'panel') as 'sidebar' | 'panel';
 const root = document.getElementById('root');
@@ -92,7 +96,8 @@ function initSidebar(): void {
 
   let messenger: InstanceType<typeof Messenger>;
   try {
-    messenger = new Messenger();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messenger = new Messenger(_vsApi as any);
   } catch (err) {
     root.innerHTML = `<div class="sb-layout"><div class="sb-error-card card">
       <div class="sb-error-icon">&#9888;</div>
@@ -258,7 +263,8 @@ function initPanel(): void {
 
   let messenger: InstanceType<typeof Messenger>;
   try {
-    messenger = new Messenger();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    messenger = new Messenger(_vsApi as any);
   } catch (err) {
     const el = document.getElementById('panel-status');
     if (el) el.innerHTML = `<span style="color:#f48771">Messenger init failed: ${err instanceof Error ? err.message : String(err)}</span>`;
