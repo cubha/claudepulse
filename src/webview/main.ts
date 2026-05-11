@@ -87,7 +87,20 @@ function initSidebar(): void {
     return;
   }
 
-  const messenger = new Messenger();
+  // messenger 초기화 전에 먼저 상태 표시 — 초기화 실패해도 "Loading..." 안 남도록
+  root.innerHTML = `<div class="sb-layout"><div class="sb-loading">Connecting...</div></div>`;
+
+  let messenger: InstanceType<typeof Messenger>;
+  try {
+    messenger = new Messenger();
+  } catch (err) {
+    root.innerHTML = `<div class="sb-layout"><div class="sb-error-card card">
+      <div class="sb-error-icon">&#9888;</div>
+      <div class="sb-error-msg">Messenger init failed</div>
+      <div class="sb-error-sub">${err instanceof Error ? err.message : String(err)}</div>
+    </div></div>`;
+    return;
+  }
 
   let lastError: PollerError | null = null;
 
@@ -101,9 +114,16 @@ function initSidebar(): void {
     renderSidebar(null, error);
   });
 
-  messenger.start();
-
-  root.innerHTML = `<div class="sb-layout"><div class="sb-loading">Connecting to Anthropic API…</div></div>`;
+  try {
+    messenger.start();
+  } catch (err) {
+    root.innerHTML = `<div class="sb-layout"><div class="sb-error-card card">
+      <div class="sb-error-icon">&#9888;</div>
+      <div class="sb-error-msg">Messenger start failed</div>
+      <div class="sb-error-sub">${err instanceof Error ? err.message : String(err)}</div>
+    </div></div>`;
+    return;
+  }
 
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
     .then((snapshot) => renderSidebar(snapshot, null))
@@ -236,12 +256,27 @@ function initPanel(): void {
   if (!root) return;
   root.innerHTML = buildPanelShell();
 
-  const messenger = new Messenger();
+  let messenger: InstanceType<typeof Messenger>;
+  try {
+    messenger = new Messenger();
+  } catch (err) {
+    const el = document.getElementById('panel-status');
+    if (el) el.innerHTML = `<span style="color:#f48771">Messenger init failed: ${err instanceof Error ? err.message : String(err)}</span>`;
+    return;
+  }
+
   messenger.onNotification(PushRateLimit, (snapshot) => {
     recordHistory(snapshot);
     updatePanel(snapshot);
   });
-  messenger.start();
+
+  try {
+    messenger.start();
+  } catch (err) {
+    const el = document.getElementById('panel-status');
+    if (el) el.innerHTML = `<span style="color:#f48771">Messenger start failed: ${err instanceof Error ? err.message : String(err)}</span>`;
+    return;
+  }
 
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
     .then((snapshot) => {
@@ -250,7 +285,7 @@ function initPanel(): void {
     })
     .catch(() => {
       const el = document.getElementById('panel-status');
-      if (el) el.textContent = 'Unable to load — check credentials';
+      if (el) el.innerHTML = `<span style="color:#8a8a8a;font-size:12px;">Waiting for first poll... (≈5 min) or click ↻</span>`;
     });
 
   document.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
