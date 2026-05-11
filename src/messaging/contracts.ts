@@ -15,3 +15,13 @@ export const PushRateLimit: NotificationType<RateLimitSnapshot> = {
 export const RequestRefresh: NotificationType<void> = {
   method: 'requestRefresh'
 };
+
+/** Notification: extension → webview. 폴러 오류 상태 푸시. */
+export const PushPollerError: NotificationType<import('../types').PollerError> = {
+  method: 'pushPollerError'
+};
+
+/** Notification: webview → extension. 로그인 터미널 열기 요청. */
+export const RequestLogin: NotificationType<void> = {
+  method: 'requestLogin'
+};

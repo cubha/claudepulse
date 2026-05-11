@@ -1,0 +1,58 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]: Sidebar — Normal (84% / 93%)
+    - generic [ref=e6]:
+      - generic [ref=e7]:
+        - generic [ref=e8]: Clausight
+        - button "↻" [ref=e9] [cursor=pointer]
+      - generic [ref=e10]:
+        - generic [ref=e11]: Warning
+        - generic [ref=e12]: just now
+      - generic [ref=e13]:
+        - generic [ref=e14]: Session (5h)
+        - generic [ref=e15]: 84%
+      - generic [ref=e19]:
+        - generic [ref=e20]: Warning
+        - generic [ref=e21]: resets in 1h 23m
+      - generic [ref=e22]:
+        - generic [ref=e23]: Weekly (7d)
+        - generic [ref=e24]: 93%
+      - generic [ref=e28]:
+        - generic [ref=e29]: Warning
+        - generic [ref=e30]: resets in 3d 14h
+      - button "↻ Refresh" [ref=e32] [cursor=pointer]
+    - generic [ref=e33]: Sidebar — Error / Connecting
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]: Clausight
+        - button "↻" [ref=e38] [cursor=pointer]
+      - generic [ref=e39]:
+        - generic [ref=e40]: ⚠
+        - generic [ref=e41]: Connecting…
+        - generic [ref=e42]:
+          - text: Polling Anthropic API for rate limit data.
+          - text: If this persists, ensure Claude Code CLI is installed and you are logged in.
+          - text: "Required: ~/.claude/.credentials.json"
+  - generic [ref=e43]:
+    - generic [ref=e44]: Panel — Rate Limit Dashboard
+    - generic [ref=e46]:
+      - generic [ref=e47]:
+        - generic [ref=e48]: Claudepulse
+        - button "↻" [ref=e49] [cursor=pointer]
+      - generic [ref=e51]: Warning
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e54]: Session (5h)
+          - generic [ref=e55]:
+            - img [ref=e56]
+            - generic [ref=e59]: 84%
+          - generic [ref=e60]: resets in 1h 23m
+        - generic [ref=e61]:
+          - generic [ref=e62]: Weekly (7d)
+          - generic [ref=e63]:
+            - img [ref=e64]
+            - generic [ref=e67]: 93%
+          - generic [ref=e68]: resets in 3d 14h
+      - generic [ref=e69]:
+        - generic [ref=e70]: Utilization Trend
+        - generic [ref=e72]: Trend chart appears after 2+ polls (~10 min)

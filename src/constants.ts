@@ -6,7 +6,8 @@ export const EXTENSION_NAME = 'Claudepulse';
 
 export const COMMANDS = {
   openDashboard: 'claudepulse.openDashboard',
-  refresh: 'claudepulse.refresh'
+  refresh: 'claudepulse.refresh',
+  login: 'claudepulse.login'
 } as const;
 
 export const VIEW_IDS = {

@@ -5,8 +5,8 @@ Chart.register(...registerables);
 
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { GetRateLimit, PushRateLimit, RequestRefresh } from '../messaging/contracts';
-import type { RateLimitSnapshot, UnifiedWindow } from '../types';
+import { GetRateLimit, PushPollerError, PushRateLimit, RequestLogin, RequestRefresh } from '../messaging/contracts';
+import type { PollerError, RateLimitSnapshot, UnifiedWindow } from '../types';
 
 const mode = (document.body.dataset.mode ?? 'panel') as 'sidebar' | 'panel';
 const root = document.getElementById('root');
@@ -66,32 +66,53 @@ function initSidebar(): void {
   if (!root) return;
   const messenger = new Messenger();
 
+  let lastError: PollerError | null = null;
+
   messenger.onNotification(PushRateLimit, (snapshot) => {
-    renderSidebar(snapshot);
+    lastError = null;
+    renderSidebar(snapshot, null);
   });
+
+  messenger.onNotification(PushPollerError, (error) => {
+    lastError = error;
+    renderSidebar(null, error);
+  });
+
   messenger.start();
 
   root.innerHTML = `<div class="sb-layout"><div class="sb-loading">Connecting to Anthropic API…</div></div>`;
 
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
-    .then((snapshot) => renderSidebar(snapshot))
-    .catch(() => {
-      // 첫 폴링 완료 전(not_ready) 또는 credentials 오류 — null 전달로 에러 UI 표시
-      renderSidebar(null);
-    });
+    .then((snapshot) => renderSidebar(snapshot, null))
+    .catch(() => renderSidebar(null, lastError));
 
-  function renderSidebar(snapshot: RateLimitSnapshot | null): void {
-    root!.innerHTML = buildSidebarHtml(snapshot);
+  function renderSidebar(snapshot: RateLimitSnapshot | null, error: PollerError | null): void {
+    root!.innerHTML = buildSidebarHtml(snapshot, error);
     root!.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
-      btn.addEventListener('click', () => {
-        messenger.sendNotification(RequestRefresh, HOST_EXTENSION);
-      });
+      btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
+    });
+    root!.querySelectorAll<HTMLButtonElement>('.js-login').forEach(btn => {
+      btn.addEventListener('click', () => messenger.sendNotification(RequestLogin, HOST_EXTENSION));
     });
   }
 }
 
-function buildSidebarHtml(snapshot: RateLimitSnapshot | null): string {
+function buildSidebarHtml(snapshot: RateLimitSnapshot | null, error: PollerError | null): string {
   if (!snapshot) {
+    const needsLogin = error === 'credentials_missing' || error === 'token_expired';
+    const icon = needsLogin ? '🔑' : '⚠';
+    const title = error === 'credentials_missing' ? 'Login Required'
+      : error === 'token_expired' ? 'Session Expired'
+      : error === 'network_error' ? 'Network Error'
+      : 'Connecting…';
+    const sub = error === 'credentials_missing'
+      ? 'Claude Code CLI가 설치되어 있지 않거나<br>로그인되지 않았습니다.'
+      : error === 'token_expired'
+      ? 'OAuth 토큰이 만료됐습니다.<br>다시 로그인해 주세요.'
+      : error === 'network_error'
+      ? 'Anthropic API에 연결할 수 없습니다.<br>네트워크를 확인하세요.'
+      : 'Anthropic API에서 Rate Limit 정보를<br>가져오는 중…';
+
     return `
       <div class="sb-layout">
         <div class="sb-header">
@@ -100,9 +121,14 @@ function buildSidebarHtml(snapshot: RateLimitSnapshot | null): string {
           <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
         </div>
         <div class="sb-error-card card">
-          <div class="sb-error-icon">⚠</div>
-          <div class="sb-error-msg">Connecting…</div>
-          <div class="sb-error-sub">Polling Anthropic API for rate limit data.<br>If this persists, ensure Claude Code CLI is installed and you are logged in.<br>Required: ~/.claude/.credentials.json</div>
+          <div class="sb-error-icon">${icon}</div>
+          <div class="sb-error-msg">${title}</div>
+          <div class="sb-error-sub">${sub}</div>
+          ${needsLogin
+            ? `<button class="login-btn js-login">Login with Claude</button>
+               <div class="login-hint">로그인 후 ↻ 버튼을 눌러 새로고침하세요</div>`
+            : `<button class="btn-ghost js-refresh" style="margin-top:8px;">↻ Retry</button>`
+          }
         </div>
       </div>`;
   }

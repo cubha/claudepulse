@@ -750,6 +750,26 @@
   color: var(--vscode-descriptionForeground);
   line-height: 1.5;
 }
+.login-btn {
+  margin-top: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  background: var(--c-sonnet);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-md);
+  font-size: var(--fs-body);
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity .15s;
+}
+.login-btn:hover { opacity: .85; }
+.login-hint {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  text-align: center;
+}
 
 /* ── Panel ─────────────────────────────────────────── */
 .panel-header-spacer { flex: 1; }
