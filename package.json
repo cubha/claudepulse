@@ -2,7 +2,7 @@
   "name": "claudepulse",
   "displayName": "Claudepulse — Claude Rate Limit Dashboard",
   "description": "Claude Max 플랜 Rate Limit을 IDE 안에서 실시간 모니터링. 세션(5h)·주간(7d) 사용률 + 재설정 카운트다운을 StatusBar와 Sidebar에 표시.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
