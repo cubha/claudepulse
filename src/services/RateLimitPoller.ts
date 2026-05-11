@@ -1,6 +1,6 @@
 import * as https from 'node:https';
 import type { Logger } from '../logger';
-import type { RateLimitSnapshot, UnifiedWindow } from '../types';
+import type { PollerError, RateLimitSnapshot, UnifiedWindow } from '../types';
 import type { CredentialsReader } from './CredentialsReader';
 
 const POLL_MODEL = 'claude-haiku-4-5-20251001';
@@ -14,7 +14,8 @@ export class RateLimitPoller {
     private readonly credReader: CredentialsReader,
     private readonly credentialsPath: string,
     private readonly logger: Logger,
-    private readonly onSnapshot: (s: RateLimitSnapshot) => void
+    private readonly onSnapshot: (s: RateLimitSnapshot) => void,
+    private readonly onError: (e: PollerError) => void
   ) {}
 
   start(pollIntervalMs: number): void {
@@ -36,7 +37,17 @@ export class RateLimitPoller {
       const snapshot = this.parseHeaders(headers);
       this.onSnapshot(snapshot);
     } catch (err) {
-      this.logger.warn(`RateLimitPoller poll failed: ${String(err)}`);
+      const msg = String(err);
+      if (msg.includes('not found') || msg.includes('not valid JSON') || msg.includes('accessToken')) {
+        this.logger.warn(`RateLimitPoller: credentials missing — ${msg}`);
+        this.onError('credentials_missing');
+      } else if (msg.includes('TOKEN_EXPIRED')) {
+        this.logger.warn(`RateLimitPoller: token expired`);
+        this.onError('token_expired');
+      } else {
+        this.logger.warn(`RateLimitPoller: network error — ${msg}`);
+        this.onError('network_error');
+      }
     }
   }
 
@@ -61,14 +72,13 @@ export class RateLimitPoller {
           },
         },
         (res) => {
-          // 응답 헤더만 필요 — body는 드레인
           const captured: Record<string, string> = {};
           for (const [k, v] of Object.entries(res.headers)) {
             if (typeof v === 'string') captured[k] = v;
             else if (Array.isArray(v)) captured[k] = v[0] ?? '';
           }
 
-          res.resume(); // body 소비 (메모리 누수 방지)
+          res.resume();
           res.on('end', () => {
             const status = res.statusCode ?? 0;
             if (status === 401) {
@@ -106,7 +116,6 @@ export class RateLimitPoller {
     );
 
     const overallStatus = this.worstStatus(fiveHour.status, sevenDay.status);
-
     return { fiveHour, sevenDay, overallStatus, generatedAt: now };
   }
 

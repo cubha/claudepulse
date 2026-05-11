@@ -27,3 +27,6 @@ export interface ClaudeCredentials {
   refreshToken: string;
   expiresAt: number; // Unix ms
 }
+
+/** 폴러 오류 상태 — 웹뷰 로그인 UI 분기용. */
+export type PollerError = 'credentials_missing' | 'token_expired' | 'network_error';

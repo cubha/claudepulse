@@ -15,9 +15,9 @@ import { StatusBarController } from './providers/StatusBarController';
 import { DashboardPanel } from './panel/DashboardPanel';
 import { CredentialsReader } from './services/CredentialsReader';
 import { RateLimitPoller } from './services/RateLimitPoller';
-import { PushRateLimit } from './messaging/contracts';
+import { PushPollerError, PushRateLimit } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
-import type { RateLimitSnapshot } from './types';
+import type { PollerError, RateLimitSnapshot } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger('Claudepulse');
@@ -34,7 +34,8 @@ export function activate(context: vscode.ExtensionContext): void {
   registerHandlers(
     messenger,
     () => lastSnapshot,
-    () => { poller?.poll(); }
+    () => { poller?.poll(); },
+    () => vscode.commands.executeCommand(COMMANDS.login)
   );
 
   const sidebarProvider = new SidebarViewProvider(context.extensionUri, messenger);
@@ -50,6 +51,11 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand(COMMANDS.refresh, () => {
       poller?.poll();
+    }),
+    vscode.commands.registerCommand(COMMANDS.login, () => {
+      const terminal = vscode.window.createTerminal({ name: 'Claude Login' });
+      terminal.show();
+      terminal.sendText('claude login');
     })
   );
 
@@ -67,12 +73,18 @@ export function activate(context: vscode.ExtensionContext): void {
   function startPoller(): void {
     poller?.stop();
     const { credentialsPath, pollIntervalMs } = getConfig();
-    poller = new RateLimitPoller(credReader, credentialsPath, logger, (snapshot) => {
-      lastSnapshot = snapshot;
-      statusBar.update(snapshot);
-      messenger.sendNotification(PushRateLimit, BROADCAST, snapshot);
-      checkThreshold(snapshot);
-    });
+    poller = new RateLimitPoller(
+      credReader, credentialsPath, logger,
+      (snapshot) => {
+        lastSnapshot = snapshot;
+        statusBar.update(snapshot);
+        messenger.sendNotification(PushRateLimit, BROADCAST, snapshot);
+        checkThreshold(snapshot);
+      },
+      (error: PollerError) => {
+        messenger.sendNotification(PushPollerError, BROADCAST, error);
+      }
+    );
     poller.start(pollIntervalMs);
     context.subscriptions.push({ dispose: () => poller?.stop() });
   }
