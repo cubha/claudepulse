@@ -1,9 +1,9 @@
-# Claude Usage Dashboard
+# Claude Code Gauge
 
 > Real-time Claude Max rate limit monitor — right inside VS Code & Cursor.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![Open VSX](https://img.shields.io/badge/Open%20VSX-cubha.claude--usage--dashboard-purple)](https://open-vsx.org/extension/cubha/claude-usage-dashboard)
+[![Open VSX](https://img.shields.io/badge/Open%20VSX-cubha.claude--usage--dashboard-purple)](https://open-vsx.org/extension/cubha/claude-code-gauge)
 
 Stop switching to your browser to check Claude rate limits. See your **5-hour session** and **7-day weekly** usage at a glance — with burn rate predictions and safe-until estimates — without leaving your editor.
 
@@ -19,7 +19,7 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ## How it works
 
-Claude Usage Dashboard reads the OAuth token from `~/.claude/.credentials.json` (created by Claude Code CLI) and polls `POST https://api.anthropic.com/v1/messages` every 5 minutes. Rate limit status is extracted directly from the response headers.
+Claude Code Gauge reads the OAuth token from `~/.claude/.credentials.json` (created by Claude Code CLI) and polls `POST https://api.anthropic.com/v1/messages` every 5 minutes. Rate limit status is extracted directly from the response headers.
 
 - **No local file parsing** — does not touch your `.jsonl` session files
 - **No private APIs** — official Anthropic API only
@@ -33,25 +33,25 @@ Claude Usage Dashboard reads the OAuth token from `~/.claude/.credentials.json` 
 
 ## Installation
 
-Search **"Claude Usage Dashboard"** in the VS Code Extensions panel or Open VSX Registry and install.  
+Search **"Claude Code Gauge"** in the VS Code Extensions panel or Open VSX Registry and install.  
 The extension activates automatically on startup and begins polling immediately.
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `Claude Usage Dashboard: Open Dashboard` | Open the full Dashboard Panel |
-| `Claude Usage Dashboard: Refresh` | Force an immediate poll |
+| `Claude Code Gauge: Open Dashboard` | Open the full Dashboard Panel |
+| `Claude Code Gauge: Refresh` | Force an immediate poll |
 
 ## Settings
 
-`Settings → Extensions → Claude Usage Dashboard`:
+`Settings → Extensions → Claude Code Gauge`:
 
 | Setting | Default | Description |
 |---|---|---|
-| `claudeUsageDashboard.credentialsPath` | `~/.claude/.credentials.json` | Override credentials file path |
-| `claudeUsageDashboard.pollIntervalMs` | `300000` (5 min) | Polling interval in ms |
-| `claudeUsageDashboard.utilizationWarnThreshold` | `0.8` (80%) | Warning alert threshold (0–1) |
+| `claudeCodeGauge.credentialsPath` | `~/.claude/.credentials.json` | Override credentials file path |
+| `claudeCodeGauge.pollIntervalMs` | `300000` (5 min) | Polling interval in ms |
+| `claudeCodeGauge.utilizationWarnThreshold` | `0.8` (80%) | Warning alert threshold (0–1) |
 
 ## Changelog
 
