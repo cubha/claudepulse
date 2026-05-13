@@ -6,13 +6,14 @@
 [![VS Marketplace](https://img.shields.io/badge/VS%20Marketplace-cubha.claudepulse-blue)](https://marketplace.visualstudio.com/items?itemName=cubha.claudepulse)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-cubha.claudepulse-purple)](https://open-vsx.org/extension/cubha/claudepulse)
 
-Claude 계정의 세션 사용률과 주간 사용률을 IDE 안에서 실시간으로 확인. 브라우저 탭 전환 없이 Rate Limit 상태를 한눈에.
+Claude 계정의 세션 사용률과 주간 사용률을 IDE 안에서 실시간으로 확인. 브라우저 탭 전환 없이 Rate Limit 상태와 소비 속도를 한눈에.
 
 ## 핵심 기능
 
 - **StatusBar 상시 표시**: 세션(5h) % · 주간(7d) % — 어느 파일 편집 중에도 우하단에 표시
-- **Sidebar 대시보드**: 5h/7d 사용률 게이지 + 재설정 카운트다운 + 상태 뱃지(OK/Warning/Blocked)
-- **Dashboard Panel**: 게이지 차트 + 폴링 이력 추세선 (세션 중 사용량 변화 추적)
+- **Sidebar 대시보드**: 5h/7d 사용률 + `used% · left%` 동시 표시 + 재설정 카운트다운 + 상태 뱃지(OK/Warning/Blocked)
+- **Burn Rate 예측**: 최근 폴링 이력 기반 %/min 소비 속도 + Safe Until 예상 시각
+- **Dashboard Panel**: SESSION · WEEKLY · BURN RATE · SAFE UNTIL 4-카드 + 폴링 이력 추세선
 - **임계값 알림**: 설정한 % 초과 시 VS Code 네이티브 경고 알림
 - **자동 폴링**: 5분마다 Anthropic API에서 최신 Rate Limit 헤더 수신
 
@@ -54,8 +55,16 @@ VS Code Marketplace 또는 Open VSX에서 **"Claudepulse"** 검색 후 설치.
 
 ## 변경 이력
 
-- **v0.0.4** (2026-05-11) — Rate Limit 대시보드로 전면 재설계. OAuth 폴링 기반, 5h/7d 사용률·재설정 시간 표시.
-- **v0.0.3** (2026-05-10) — 초기 릴리즈 (jsonl 파서 기반, 현재 폐기).
+- **v0.1.5** (2026-05-12) — UI 전면 개선: Burn Rate + Safe Until 예측, 4-카드 패널, 프로그레스 바 가시성 개선
+- **v0.1.4** (2026-05-11) — acquireVsCodeApi esbuild 번들링 버그 수정
+- **v0.1.3** (2026-05-11) — Messenger 초기화 단계별 에러 캐치 개선
+- **v0.1.2** (2026-05-11) — Webview 초기화 실패 시 에러 메시지 표시
+- **v0.1.1** (2026-05-11) — 로그인 UX 개선 (credentials_missing / token_expired 상태 분기)
+- **v0.1.0** (2026-05-11) — Rate Limit 대시보드로 전면 재설계. OAuth 폴링 기반, 5h/7d 사용률·재설정 시간 표시.
+- **v0.0.2** (2026-05-10) — MVP 구현 (jsonl 파서 기반, 현재 폐기).
+- **v0.0.1** (2026-05-10) — Initial scaffold.
+
+전체 변경 이력: [CHANGELOG.md](./CHANGELOG.md)
 
 ## 라이선스
 

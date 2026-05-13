@@ -39,6 +39,8 @@ try {
 // 공통 유틸
 // ──────────────────────────────────────────────
 
+type PollPoint = { t: Date; v: number };
+
 function fmtPct(utilization: number): string {
   return `${(utilization * 100).toFixed(0)}%`;
 }
@@ -54,6 +56,10 @@ function fmtReset(ms: number): string {
   return `${mins}m`;
 }
 
+function fmtTime(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+}
+
 function statusColor(status: UnifiedWindow['status']): string {
   if (status === 'blocked') return 'var(--c-danger)';
   if (status === 'allowed_warning') return 'var(--c-warn)';
@@ -66,14 +72,59 @@ function statusLabel(status: UnifiedWindow['status']): string {
   return 'OK';
 }
 
-function barFillStyle(utilization: number, status: UnifiedWindow['status']): string {
-  const color = statusColor(status);
+function barFillWidth(utilization: number): string {
   const pct = Math.min(100, Math.max(0, utilization * 100));
-  return `width:${pct}%;background:${color};`;
+  return `width:${pct}%;`;
 }
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function calcBurnRate(history: PollPoint[]): number | null {
+  if (history.length < 2) return null;
+  const last = history[history.length - 1];
+  const prev = history[history.length - 2];
+  const deltaV = last.v - prev.v;
+  const deltaT = (last.t.getTime() - prev.t.getTime()) / 60000;
+  if (deltaT <= 0) return null;
+  return deltaV / deltaT; // %/min (양수 = 소비 중)
+}
+
+function calcSafeUntil(
+  utilization: number,
+  burnRatePerMin: number,
+  resetAt: Date
+): Date | null {
+  if (burnRatePerMin <= 0) return null;
+  const remaining = 1 - utilization;
+  const minsLeft = remaining / burnRatePerMin;
+  const safeUntil = new Date(Date.now() + minsLeft * 60000);
+  if (safeUntil > resetAt) return null;
+  return safeUntil;
+}
+
+function calcProjAtReset(
+  utilization: number,
+  burnRatePerMin: number,
+  msUntilReset: number
+): number {
+  const minsUntilReset = msUntilReset / 60000;
+  const projected = utilization + burnRatePerMin * minsUntilReset;
+  return Math.min(1, Math.max(0, 1 - projected));
+}
+
+function buildBurnRow(history: PollPoint[], utilization: number, msUntilReset: number): string {
+  const rate = calcBurnRate(history);
+  if (rate === null || rate <= 0) return '';
+  const resetAt = new Date(Date.now() + msUntilReset);
+  const safeUntil = calcSafeUntil(utilization, rate, resetAt);
+  const projRemaining = calcProjAtReset(utilization, rate, msUntilReset);
+  const rateStr = `${(rate * 100).toFixed(2)}%/min`;
+  const safeStr = safeUntil ? ` · Safe until ${fmtTime(safeUntil)} (proj ${fmtPct(projRemaining)} left)` : '';
+  return `<div class="rate-burn-row">
+    <span class="rate-burn-label">Burn ${rateStr}${safeStr}</span>
+  </div>`;
 }
 
 // ──────────────────────────────────────────────
@@ -84,7 +135,8 @@ function initSidebar(): void {
   if (!root) return;
 
   // acquireVsCodeApi가 없으면 non-webview 환경 — 명확한 에러 표시
-  if (typeof acquireVsCodeApi === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof (globalThis as any).acquireVsCodeApi === 'undefined' && _vsApi === undefined) {
     root.innerHTML = `<div style="padding:12px;color:#f48771;font-size:12px;">
       acquireVsCodeApi not available.<br>This view must run inside VS Code.
     </div>`;
@@ -107,10 +159,22 @@ function initSidebar(): void {
     return;
   }
 
+  const MAX_SB_HISTORY = 288;
+  const sbFhHistory: PollPoint[] = [];
+  const sbSdHistory: PollPoint[] = [];
   let lastError: PollerError | null = null;
+
+  function recordSbHistory(snapshot: RateLimitSnapshot): void {
+    const t = new Date(snapshot.generatedAt);
+    sbFhHistory.push({ t, v: snapshot.fiveHour.utilization });
+    sbSdHistory.push({ t, v: snapshot.sevenDay.utilization });
+    if (sbFhHistory.length > MAX_SB_HISTORY) sbFhHistory.shift();
+    if (sbSdHistory.length > MAX_SB_HISTORY) sbSdHistory.shift();
+  }
 
   messenger.onNotification(PushRateLimit, (snapshot) => {
     lastError = null;
+    recordSbHistory(snapshot);
     renderSidebar(snapshot, null);
   });
 
@@ -131,11 +195,14 @@ function initSidebar(): void {
   }
 
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
-    .then((snapshot) => renderSidebar(snapshot, null))
+    .then((snapshot) => {
+      recordSbHistory(snapshot);
+      renderSidebar(snapshot, null);
+    })
     .catch(() => renderSidebar(null, lastError));
 
   function renderSidebar(snapshot: RateLimitSnapshot | null, error: PollerError | null): void {
-    root!.innerHTML = buildSidebarHtml(snapshot, error);
+    root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory);
     root!.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
     });
@@ -145,7 +212,12 @@ function initSidebar(): void {
   }
 }
 
-function buildSidebarHtml(snapshot: RateLimitSnapshot | null, error: PollerError | null): string {
+function buildSidebarHtml(
+  snapshot: RateLimitSnapshot | null,
+  error: PollerError | null,
+  fhHist: PollPoint[],
+  sdHist: PollPoint[]
+): string {
   if (!snapshot) {
     const needsLogin = error === 'credentials_missing' || error === 'token_expired';
     const icon = needsLogin ? '🔑' : '⚠';
@@ -185,6 +257,10 @@ function buildSidebarHtml(snapshot: RateLimitSnapshot | null, error: PollerError
   const sd = snapshot.sevenDay;
   const overall = snapshot.overallStatus;
   const overallColor = statusColor(overall);
+  const timestamp = fmtTime(new Date(snapshot.generatedAt));
+
+  const fhBurnRow = buildBurnRow(fhHist, fh.utilization, fh.msUntilReset);
+  const sdBurnRow = buildBurnRow(sdHist, sd.utilization, sd.msUntilReset);
 
   return `
     <div class="sb-layout">
@@ -200,47 +276,51 @@ function buildSidebarHtml(snapshot: RateLimitSnapshot | null, error: PollerError
         <span class="status-badge" style="background:${overallColor}22;color:${overallColor};border-color:${overallColor}44;">
           ${statusLabel(overall)}
         </span>
-        <span class="sb-gen-time">updated just now</span>
+        <span class="sb-gen-time mono">${timestamp}</span>
       </div>
 
       <!-- 5h 세션 섹션 -->
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:var(--c-sonnet);"></span>
         <span class="sb-section-label">Session (5h)</span>
-        <span class="sb-section-right mono">${fmtPct(fh.utilization)}</span>
+        <span class="sb-section-right">
+          <span class="mono">${fmtPct(fh.utilization)}</span>
+          <span class="sb-section-sep">·</span>
+          <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(1 - fh.utilization)} left</span>
+        </span>
       </div>
       <div class="sb-rate-card card">
         <div class="rate-bar">
-          <div class="rate-bar-fill" style="${barFillStyle(fh.utilization, fh.status)}"></div>
+          <div class="rate-bar-fill" data-status="${fh.status}" style="${barFillWidth(fh.utilization)}"></div>
         </div>
         <div class="rate-meta-row">
           <span class="rate-status-chip" style="background:${statusColor(fh.status)}22;color:${statusColor(fh.status)};">${statusLabel(fh.status)}</span>
           <span class="rate-reset-label">resets in <span class="mono">${fmtReset(fh.msUntilReset)}</span></span>
         </div>
+        ${fhBurnRow}
       </div>
 
       <!-- 7d 주간 섹션 -->
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:var(--c-opus);"></span>
         <span class="sb-section-label">Weekly (7d)</span>
-        <span class="sb-section-right mono">${fmtPct(sd.utilization)}</span>
+        <span class="sb-section-right">
+          <span class="mono">${fmtPct(sd.utilization)}</span>
+          <span class="sb-section-sep">·</span>
+          <span class="mono" style="color:${statusColor(sd.status)};">${fmtPct(1 - sd.utilization)} left</span>
+        </span>
       </div>
       <div class="sb-rate-card card">
         <div class="rate-bar">
-          <div class="rate-bar-fill" style="${barFillStyle(sd.utilization, sd.status)}"></div>
+          <div class="rate-bar-fill" data-status="${sd.status}" style="${barFillWidth(sd.utilization)}"></div>
         </div>
         <div class="rate-meta-row">
           <span class="rate-status-chip" style="background:${statusColor(sd.status)}22;color:${statusColor(sd.status)};">${statusLabel(sd.status)}</span>
           <span class="rate-reset-label">resets in <span class="mono">${fmtReset(sd.msUntilReset)}</span></span>
         </div>
+        ${sdBurnRow}
       </div>
 
-      <!-- Footer -->
-      <div class="sb-footer">
-        <button class="btn-ghost sb-refresh-btn js-refresh" aria-label="Refresh data">
-          <span>↻</span><span>Refresh</span>
-        </button>
-      </div>
     </div>`;
 }
 
@@ -250,11 +330,9 @@ function buildSidebarHtml(snapshot: RateLimitSnapshot | null, error: PollerError
 
 // 폴링 이력 (메모리 내, 최대 288포인트 = 5분 × 288 = 24h)
 const MAX_HISTORY = 288;
-const fhHistory: Array<{ t: Date; v: number }> = [];
-const sdHistory: Array<{ t: Date; v: number }> = [];
+const fhHistory: PollPoint[] = [];
+const sdHistory: PollPoint[] = [];
 
-let fhGauge: Chart | null = null;
-let sdGauge: Chart | null = null;
 let trendChart: Chart | null = null;
 
 function initPanel(): void {
@@ -318,23 +396,37 @@ function buildPanelShell(): string {
 
       <div id="panel-status" class="panel-status-row"></div>
 
-      <!-- 게이지 그리드 -->
-      <div class="panel-gauge-grid">
-        <div class="card panel-gauge-card">
-          <div class="panel-gauge-label">Session (5h)</div>
-          <div class="panel-gauge-wrap">
-            <canvas id="chart-fh-gauge"></canvas>
-            <div class="panel-gauge-center" id="fh-pct">—</div>
+      <!-- 4-카드 메트릭 그리드 -->
+      <div class="panel-metric-grid">
+        <div class="card panel-metric-card">
+          <div class="panel-metric-label">Session (5h)</div>
+          <div class="panel-metric-value" id="fh-remaining">—</div>
+          <div class="panel-metric-bar">
+            <div class="rate-bar">
+              <div class="rate-bar-fill" id="fh-bar-fill"></div>
+            </div>
           </div>
-          <div class="panel-gauge-sub" id="fh-reset">—</div>
+          <div class="panel-metric-sub" id="fh-reset">—</div>
         </div>
-        <div class="card panel-gauge-card">
-          <div class="panel-gauge-label">Weekly (7d)</div>
-          <div class="panel-gauge-wrap">
-            <canvas id="chart-sd-gauge"></canvas>
-            <div class="panel-gauge-center" id="sd-pct">—</div>
+        <div class="card panel-metric-card">
+          <div class="panel-metric-label">Weekly (7d)</div>
+          <div class="panel-metric-value" id="sd-remaining">—</div>
+          <div class="panel-metric-bar">
+            <div class="rate-bar">
+              <div class="rate-bar-fill" id="sd-bar-fill"></div>
+            </div>
           </div>
-          <div class="panel-gauge-sub" id="sd-reset">—</div>
+          <div class="panel-metric-sub" id="sd-reset">—</div>
+        </div>
+        <div class="card panel-metric-card">
+          <div class="panel-metric-label">Burn Rate</div>
+          <div class="panel-metric-value" id="burn-rate-val">—</div>
+          <div class="panel-metric-sub" id="burn-rate-hr">Collecting data…</div>
+        </div>
+        <div class="card panel-metric-card">
+          <div class="panel-metric-label">Safe Until</div>
+          <div class="panel-metric-value" id="safe-until-val">—</div>
+          <div class="panel-metric-sub" id="safe-until-proj">Collecting data…</div>
         </div>
       </div>
 
@@ -357,65 +449,62 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   const fh = snapshot.fiveHour;
   const sd = snapshot.sevenDay;
 
-  // 상태 표시
+  // 상태 배지
   const statusEl = document.getElementById('panel-status');
   if (statusEl) {
     const color = statusColor(snapshot.overallStatus);
     statusEl.innerHTML = `<span class="status-badge" style="background:${color}22;color:${color};border-color:${color}44;">${statusLabel(snapshot.overallStatus)}</span>`;
   }
 
-  // 5h 게이지
-  document.getElementById('fh-pct')!.textContent = fmtPct(fh.utilization);
-  document.getElementById('fh-reset')!.textContent = `resets in ${fmtReset(fh.msUntilReset)}`;
-  updateGauge('chart-fh-gauge', fh, 'fhGauge');
-
-  // 7d 게이지
-  document.getElementById('sd-pct')!.textContent = fmtPct(sd.utilization);
-  document.getElementById('sd-reset')!.textContent = `resets in ${fmtReset(sd.msUntilReset)}`;
-  updateGauge('chart-sd-gauge', sd, 'sdGauge');
-
-  // 추세 차트
-  updateTrendChart();
-}
-
-function updateGauge(canvasId: string, window: UnifiedWindow, chartVar: 'fhGauge' | 'sdGauge'): void {
-  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
-  if (!canvas) return;
-
-  const used = window.utilization;
-  const remaining = Math.max(0, 1 - used);
-  const color = statusColor(window.status);
-  const trackColor = getCssVar('--vscode-panel-border') || '#333';
-
-  const data = {
-    datasets: [{
-      data: [used, remaining],
-      backgroundColor: [color, trackColor],
-      borderWidth: 0,
-      circumference: 270,
-      rotation: -135,
-    }],
-  };
-
-  const existing = chartVar === 'fhGauge' ? fhGauge : sdGauge;
-  if (existing) {
-    existing.data = data;
-    existing.update();
-  } else {
-    const chart = new Chart(canvas, {
-      type: 'doughnut',
-      data,
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        cutout: '75%',
-        plugins: { legend: { display: false }, tooltip: { enabled: false } },
-        animation: { duration: 400 },
-      },
-    });
-    if (chartVar === 'fhGauge') fhGauge = chart;
-    else sdGauge = chart;
+  // SESSION (5h) 카드
+  const fhRemEl = document.getElementById('fh-remaining');
+  const fhBarFill = document.getElementById('fh-bar-fill') as HTMLElement | null;
+  const fhResetEl = document.getElementById('fh-reset');
+  if (fhRemEl) fhRemEl.textContent = `${fmtPct(1 - fh.utilization)} remaining`;
+  if (fhBarFill) {
+    fhBarFill.style.cssText = barFillWidth(fh.utilization);
+    fhBarFill.dataset.status = fh.status;
   }
+  if (fhResetEl) fhResetEl.textContent = `Resets in ${fmtReset(fh.msUntilReset)} · used ${fmtPct(fh.utilization)}`;
+
+  // WEEKLY (7d) 카드
+  const sdRemEl = document.getElementById('sd-remaining');
+  const sdBarFill = document.getElementById('sd-bar-fill') as HTMLElement | null;
+  const sdResetEl = document.getElementById('sd-reset');
+  if (sdRemEl) sdRemEl.textContent = `${fmtPct(1 - sd.utilization)} remaining`;
+  if (sdBarFill) {
+    sdBarFill.style.cssText = barFillWidth(sd.utilization);
+    sdBarFill.dataset.status = sd.status;
+  }
+  if (sdResetEl) sdResetEl.textContent = `Resets in ${fmtReset(sd.msUntilReset)} · used ${fmtPct(sd.utilization)}`;
+
+  // BURN RATE 카드
+  const burnRate = calcBurnRate(fhHistory);
+  const burnRateEl = document.getElementById('burn-rate-val');
+  const burnHrEl = document.getElementById('burn-rate-hr');
+  if (burnRate !== null && burnRate > 0) {
+    if (burnRateEl) burnRateEl.textContent = `${(burnRate * 100).toFixed(2)}%/min`;
+    if (burnHrEl) burnHrEl.textContent = `${(burnRate * 100 * 60).toFixed(1)}%/hr`;
+  } else {
+    if (burnRateEl) burnRateEl.textContent = '—';
+    if (burnHrEl) burnHrEl.textContent = 'Collecting data…';
+  }
+
+  // SAFE UNTIL 카드
+  const safeEl = document.getElementById('safe-until-val');
+  const safeProjEl = document.getElementById('safe-until-proj');
+  if (burnRate !== null && burnRate > 0) {
+    const resetAt = new Date(Date.now() + fh.msUntilReset);
+    const safeUntil = calcSafeUntil(fh.utilization, burnRate, resetAt);
+    const projRemaining = calcProjAtReset(fh.utilization, burnRate, fh.msUntilReset);
+    if (safeEl) safeEl.textContent = safeUntil ? fmtTime(safeUntil) : 'After reset';
+    if (safeProjEl) safeProjEl.textContent = `proj ${fmtPct(projRemaining)} left at reset`;
+  } else {
+    if (safeEl) safeEl.textContent = '—';
+    if (safeProjEl) safeProjEl.textContent = 'Collecting data…';
+  }
+
+  updateTrendChart();
 }
 
 function updateTrendChart(): void {
