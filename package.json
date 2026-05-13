@@ -1,18 +1,18 @@
 {
-  "name": "claude-usage-dashboard",
-  "displayName": "Claude Usage Dashboard",
-  "description": "Real-time Claude Max rate limit monitor in your IDE. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.0.1",
+  "name": "claude-code-gauge",
+  "displayName": "Claude Code Gauge",
+  "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
+  "version": "0.0.2",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cubha/claude-usage-dashboard.git"
+    "url": "https://github.com/cubha/claude-code-gauge.git"
   },
-  "homepage": "https://github.com/cubha/claude-usage-dashboard#readme",
+  "homepage": "https://github.com/cubha/claude-code-gauge#readme",
   "bugs": {
-    "url": "https://github.com/cubha/claude-usage-dashboard/issues"
+    "url": "https://github.com/cubha/claude-code-gauge/issues"
   },
   "engines": {
     "vscode": "^1.85.0",
@@ -59,31 +59,31 @@
     "commands": [
       {
         "command": "claudepulse.openDashboard",
-        "title": "Claude Usage Dashboard: Open Dashboard"
+        "title": "Claude Code Gauge: Open Dashboard"
       },
       {
         "command": "claudepulse.refresh",
-        "title": "Claude Usage Dashboard: Refresh"
+        "title": "Claude Code Gauge: Refresh"
       },
       {
         "command": "claudepulse.login",
-        "title": "Claude Usage Dashboard: Login with Claude"
+        "title": "Claude Code Gauge: Login with Claude"
       }
     ],
     "configuration": {
-      "title": "Claude Usage Dashboard",
+      "title": "Claude Code Gauge",
       "properties": {
-        "claudeUsageDashboard.credentialsPath": {
+        "claudeCodeGauge.credentialsPath": {
           "type": "string",
           "default": "",
           "description": "Path to Claude Code credentials file. Leave empty to use default (~/.claude/.credentials.json)."
         },
-        "claudeUsageDashboard.pollIntervalMs": {
+        "claudeCodeGauge.pollIntervalMs": {
           "type": "number",
           "default": 300000,
           "description": "How often to poll the Anthropic API for rate limit data (ms). Default: 300000 (5 min)."
         },
-        "claudeUsageDashboard.utilizationWarnThreshold": {
+        "claudeCodeGauge.utilizationWarnThreshold": {
           "type": "number",
           "default": 0.8,
           "minimum": 0,
