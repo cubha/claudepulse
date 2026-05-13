@@ -43,7 +43,7 @@ step "dist/webview/styles.css 복사 확인" test -f dist/webview/styles.css
 
 # 6. package.json 메타 검증
 step "package.json publisher=cubha" bash -c "grep -q '\"publisher\": \"cubha\"' package.json"
-step "package.json name=claudepulse" bash -c "grep -q '\"name\": \"claudepulse\"' package.json"
+step "package.json name=claude-usage-dashboard" bash -c "grep -q '\"name\": \"claude-usage-dashboard\"' package.json"
 
 # 7. CRITICAL — vscode.FileSystemWatcher 사용 금지 확인 (chokidar 불필요, API 기반으로 전환)
 if grep -rEn "createFileSystemWatcher\s*\(" src/ 2>/dev/null; then

@@ -1,18 +1,18 @@
 {
-  "name": "claudepulse",
-  "displayName": "Claudepulse — Claude Rate Limit Dashboard",
-  "description": "Claude Max 플랜 Rate Limit 실시간 모니터링. 세션(5h)·주간(7d) 사용률, Burn Rate, Safe Until 예측을 StatusBar·Sidebar·Dashboard에 표시.",
-  "version": "0.1.5",
+  "name": "claude-usage-dashboard",
+  "displayName": "Claude Usage Dashboard",
+  "description": "Real-time Claude Max rate limit monitor in your IDE. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
+  "version": "0.0.1",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cubha/claudepulse.git"
+    "url": "https://github.com/cubha/claude-usage-dashboard.git"
   },
-  "homepage": "https://github.com/cubha/claudepulse#readme",
+  "homepage": "https://github.com/cubha/claude-usage-dashboard#readme",
   "bugs": {
-    "url": "https://github.com/cubha/claudepulse/issues"
+    "url": "https://github.com/cubha/claude-usage-dashboard/issues"
   },
   "engines": {
     "vscode": "^1.85.0",
@@ -25,11 +25,13 @@
   "keywords": [
     "claude",
     "claude-code",
+    "claude-max",
     "anthropic",
     "rate-limit",
     "usage",
     "dashboard",
-    "monitor"
+    "monitor",
+    "burn-rate"
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
@@ -57,31 +59,31 @@
     "commands": [
       {
         "command": "claudepulse.openDashboard",
-        "title": "Claudepulse: Open Dashboard"
+        "title": "Claude Usage Dashboard: Open Dashboard"
       },
       {
         "command": "claudepulse.refresh",
-        "title": "Claudepulse: Refresh"
+        "title": "Claude Usage Dashboard: Refresh"
       },
       {
         "command": "claudepulse.login",
-        "title": "Claudepulse: Login with Claude"
+        "title": "Claude Usage Dashboard: Login with Claude"
       }
     ],
     "configuration": {
-      "title": "Claudepulse",
+      "title": "Claude Usage Dashboard",
       "properties": {
-        "claudepulse.credentialsPath": {
+        "claudeUsageDashboard.credentialsPath": {
           "type": "string",
           "default": "",
           "description": "Path to Claude Code credentials file. Leave empty to use default (~/.claude/.credentials.json)."
         },
-        "claudepulse.pollIntervalMs": {
+        "claudeUsageDashboard.pollIntervalMs": {
           "type": "number",
           "default": 300000,
           "description": "How often to poll the Anthropic API for rate limit data (ms). Default: 300000 (5 min)."
         },
-        "claudepulse.utilizationWarnThreshold": {
+        "claudeUsageDashboard.utilizationWarnThreshold": {
           "type": "number",
           "default": 0.8,
           "minimum": 0,
