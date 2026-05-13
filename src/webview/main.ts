@@ -91,6 +91,14 @@ function calcBurnRate(history: PollPoint[]): number | null {
   return deltaV / deltaT; // %/min (양수 = 소비 중)
 }
 
+/** 히스토리 1개일 때 세션 경과 시간 기반 추정 번 레이트 */
+function calcBurnRateEstimate(utilization: number, msUntilReset: number, windowMs: number): number | null {
+  const elapsed = windowMs - msUntilReset;
+  const elapsedMin = elapsed / 60000;
+  if (elapsedMin < 1) return null;
+  return utilization / elapsedMin; // %/min 추정
+}
+
 function calcSafeUntil(
   utilization: number,
   burnRatePerMin: number,
@@ -203,6 +211,13 @@ function initSidebar(): void {
 
   function renderSidebar(snapshot: RateLimitSnapshot | null, error: PollerError | null): void {
     root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory);
+    // JS로 진행바 width 설정 (innerHTML 내 inline style은 CSP 안전망으로 차단될 수 있음)
+    if (snapshot) {
+      const fhBar = root!.querySelector<HTMLElement>('#sb-fh-bar');
+      const sdBar = root!.querySelector<HTMLElement>('#sb-sd-bar');
+      if (fhBar) fhBar.style.width = `${Math.min(100, snapshot.fiveHour.utilization * 100)}%`;
+      if (sdBar) sdBar.style.width = `${Math.min(100, snapshot.sevenDay.utilization * 100)}%`;
+    }
     root!.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
     });
@@ -273,9 +288,7 @@ function buildSidebarHtml(
 
       <!-- 상태 뱃지 -->
       <div class="sb-status-row">
-        <span class="status-badge" style="background:${overallColor}22;color:${overallColor};border-color:${overallColor}44;">
-          ${statusLabel(overall)}
-        </span>
+        <span class="status-badge ${overall}">${statusLabel(overall)}</span>
         <span class="sb-gen-time mono">${timestamp}</span>
       </div>
 
@@ -291,10 +304,10 @@ function buildSidebarHtml(
       </div>
       <div class="sb-rate-card card">
         <div class="rate-bar">
-          <div class="rate-bar-fill" data-status="${fh.status}" style="${barFillWidth(fh.utilization)}"></div>
+          <div class="rate-bar-fill" id="sb-fh-bar" data-status="${fh.status}"></div>
         </div>
         <div class="rate-meta-row">
-          <span class="rate-status-chip" style="background:${statusColor(fh.status)}22;color:${statusColor(fh.status)};">${statusLabel(fh.status)}</span>
+          <span class="rate-status-chip ${fh.status}">${statusLabel(fh.status)}</span>
           <span class="rate-reset-label">resets in <span class="mono">${fmtReset(fh.msUntilReset)}</span></span>
         </div>
         ${fhBurnRow}
@@ -312,10 +325,10 @@ function buildSidebarHtml(
       </div>
       <div class="sb-rate-card card">
         <div class="rate-bar">
-          <div class="rate-bar-fill" data-status="${sd.status}" style="${barFillWidth(sd.utilization)}"></div>
+          <div class="rate-bar-fill" id="sb-sd-bar" data-status="${sd.status}"></div>
         </div>
         <div class="rate-meta-row">
-          <span class="rate-status-chip" style="background:${statusColor(sd.status)}22;color:${statusColor(sd.status)};">${statusLabel(sd.status)}</span>
+          <span class="rate-status-chip ${sd.status}">${statusLabel(sd.status)}</span>
           <span class="rate-reset-label">resets in <span class="mono">${fmtReset(sd.msUntilReset)}</span></span>
         </div>
         ${sdBurnRow}
@@ -334,6 +347,7 @@ const fhHistory: PollPoint[] = [];
 const sdHistory: PollPoint[] = [];
 
 let trendChart: Chart | null = null;
+let chartScopeMin = 120; // 기본 2h
 
 function initPanel(): void {
   if (!root) return;
@@ -374,6 +388,15 @@ function initPanel(): void {
 
   document.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
     btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.scope-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      chartScopeMin = Number(btn.dataset.scope) || 120;
+      document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateTrendChart();
+    });
   });
 }
 
@@ -433,6 +456,12 @@ function buildPanelShell(): string {
       <!-- 추세 차트 -->
       <div class="card panel-trend-card">
         <div class="panel-chart-header">Utilization Trend</div>
+        <div class="chart-scope-row">
+          <span class="chart-scope-label">Scope:</span>
+          <button class="scope-btn" data-scope="30">30m</button>
+          <button class="scope-btn active" data-scope="120">2h</button>
+          <button class="scope-btn" data-scope="1440">24h</button>
+        </div>
         <div class="panel-trend-wrap">
           <canvas id="chart-trend"></canvas>
           <div class="panel-empty" id="trend-empty" style="display:none">Collecting data…</div>
@@ -452,8 +481,7 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   // 상태 배지
   const statusEl = document.getElementById('panel-status');
   if (statusEl) {
-    const color = statusColor(snapshot.overallStatus);
-    statusEl.innerHTML = `<span class="status-badge" style="background:${color}22;color:${color};border-color:${color}44;">${statusLabel(snapshot.overallStatus)}</span>`;
+    statusEl.innerHTML = `<span class="status-badge ${snapshot.overallStatus}">${statusLabel(snapshot.overallStatus)}</span>`;
   }
 
   // SESSION (5h) 카드
@@ -479,15 +507,20 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   if (sdResetEl) sdResetEl.textContent = `Resets in ${fmtReset(sd.msUntilReset)} · used ${fmtPct(sd.utilization)}`;
 
   // BURN RATE 카드
-  const burnRate = calcBurnRate(fhHistory);
+  const FH_WINDOW_MS = 5 * 60 * 60 * 1000; // 5h
+  const burnRate = calcBurnRate(fhHistory)
+    ?? calcBurnRateEstimate(fh.utilization, fh.msUntilReset, FH_WINDOW_MS);
+  const isEstimate = calcBurnRate(fhHistory) === null && burnRate !== null;
   const burnRateEl = document.getElementById('burn-rate-val');
   const burnHrEl = document.getElementById('burn-rate-hr');
   if (burnRate !== null && burnRate > 0) {
     if (burnRateEl) burnRateEl.textContent = `${(burnRate * 100).toFixed(2)}%/min`;
-    if (burnHrEl) burnHrEl.textContent = `${(burnRate * 100 * 60).toFixed(1)}%/hr`;
+    if (burnHrEl) burnHrEl.textContent = isEstimate
+      ? `${(burnRate * 100 * 60).toFixed(1)}%/hr (est.)`
+      : `${(burnRate * 100 * 60).toFixed(1)}%/hr`;
   } else {
     if (burnRateEl) burnRateEl.textContent = '—';
-    if (burnHrEl) burnHrEl.textContent = 'Collecting data…';
+    if (burnHrEl) burnHrEl.textContent = fh.utilization === 0 ? 'No usage yet' : 'Collecting data…';
   }
 
   // SAFE UNTIL 카드
@@ -498,10 +531,10 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
     const safeUntil = calcSafeUntil(fh.utilization, burnRate, resetAt);
     const projRemaining = calcProjAtReset(fh.utilization, burnRate, fh.msUntilReset);
     if (safeEl) safeEl.textContent = safeUntil ? fmtTime(safeUntil) : 'After reset';
-    if (safeProjEl) safeProjEl.textContent = `proj ${fmtPct(projRemaining)} left at reset`;
+    if (safeProjEl) safeProjEl.textContent = `proj ${fmtPct(projRemaining)} left at reset${isEstimate ? ' (est.)' : ''}`;
   } else {
     if (safeEl) safeEl.textContent = '—';
-    if (safeProjEl) safeProjEl.textContent = 'Collecting data…';
+    if (safeProjEl) safeProjEl.textContent = fh.utilization === 0 ? 'No usage yet' : 'Collecting data…';
   }
 
   updateTrendChart();
@@ -512,18 +545,28 @@ function updateTrendChart(): void {
   const emptyEl = document.getElementById('trend-empty');
   if (!canvas) return;
 
-  if (fhHistory.length < 2) {
+  // 스코프 필터: 최근 N분 이내 포인트만
+  const cutoff = Date.now() - chartScopeMin * 60000;
+  const fhSlice = fhHistory.filter(p => p.t.getTime() >= cutoff);
+  const sdSlice = sdHistory.filter(p => p.t.getTime() >= cutoff);
+
+  if (fhSlice.length < 2) {
     canvas.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = '';
+    if (emptyEl) {
+      emptyEl.style.display = '';
+      emptyEl.textContent = fhHistory.length < 2
+        ? 'Collecting data… (next poll in ~5 min)'
+        : 'No data in selected scope — try a wider range';
+    }
     if (trendChart) { trendChart.destroy(); trendChart = null; }
     return;
   }
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
-  const labels = fhHistory.map(p => {
+  const labels = fhSlice.map(p => {
     const d = new Date(p.t);
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
   });
 
   const fhColor = getCssVar('--c-sonnet');
@@ -534,29 +577,35 @@ function updateTrendChart(): void {
   const datasets = [
     {
       label: 'Session (5h)',
-      data: fhHistory.map(p => p.v * 100),
+      data: fhSlice.map(p => p.v * 100),
       borderColor: fhColor,
       backgroundColor: fhColor + '22',
       borderWidth: 2,
       fill: true,
       tension: 0.3,
-      pointRadius: 0,
+      pointRadius: fhSlice.length <= 10 ? 3 : 0,
     },
     {
       label: 'Weekly (7d)',
-      data: sdHistory.map(p => p.v * 100),
+      data: sdSlice.map(p => p.v * 100),
       borderColor: sdColor,
       backgroundColor: sdColor + '22',
       borderWidth: 2,
       fill: true,
       tension: 0.3,
-      pointRadius: 0,
+      pointRadius: sdSlice.length <= 10 ? 3 : 0,
     },
   ];
 
   if (trendChart) {
     trendChart.data.labels = labels;
     trendChart.data.datasets = datasets;
+    // 스코프 변경 시 x축 tick 수도 갱신
+    const xScale = trendChart.options.scales?.['x'] as Record<string, unknown> | undefined;
+    if (xScale?.['ticks'] && typeof xScale['ticks'] === 'object') {
+      (xScale['ticks'] as Record<string, unknown>)['maxTicksLimit'] =
+        chartScopeMin <= 30 ? 6 : chartScopeMin <= 120 ? 8 : 12;
+    }
     trendChart.update();
   } else {
     trendChart = new Chart(canvas, {
@@ -567,7 +616,15 @@ function updateTrendChart(): void {
         maintainAspectRatio: false,
         plugins: { legend: { labels: { color: axisColor, boxWidth: 10, font: { size: 11 } } } },
         scales: {
-          x: { ticks: { color: axisColor, font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: gridColor } },
+          x: {
+            ticks: {
+              color: axisColor,
+              font: { size: 10 },
+              maxTicksLimit: chartScopeMin <= 30 ? 6 : chartScopeMin <= 120 ? 8 : 12,
+              maxRotation: 0,
+            },
+            grid: { color: gridColor },
+          },
           y: {
             min: 0,
             max: 100,

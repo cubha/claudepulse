@@ -45,7 +45,7 @@ export class DashboardPanel {
     const nonce = getNonce();
     const csp = [
       `default-src 'none'`,
-      `style-src ${webview.cspSource}`,
+      `style-src ${webview.cspSource} 'unsafe-inline'`,
       `img-src ${webview.cspSource} data:`,
       `script-src 'nonce-${nonce}'`,
       `font-src ${webview.cspSource}`

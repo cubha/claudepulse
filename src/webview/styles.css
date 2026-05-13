@@ -116,6 +116,7 @@
 }
 
 /* App-wide resets inside a theme container. */
+html, body { margin: 0; padding: 0; }
 .theme-dark, .theme-light {
   font-family: var(--ff-sans);
   font-size: var(--fs-body);
@@ -481,7 +482,7 @@
 
 /* 섹션 헤더 */
 .sb-section-hdr {
-  padding: var(--sp-3) var(--sp-3) var(--sp-1);
+  padding: var(--sp-3) var(--sp-4) var(--sp-1);
   display: flex;
   align-items: center;
   gap: var(--sp-1);
@@ -701,10 +702,21 @@
   border-radius: 6px;
   transition: width .4s ease;
   background: var(--c-haiku);
+  width: 0;
 }
 .rate-bar-fill[data-status="allowed"]         { background: var(--c-haiku); }
 .rate-bar-fill[data-status="allowed_warning"] { background: var(--c-warn); }
 .rate-bar-fill[data-status="blocked"]         { background: var(--c-danger); }
+
+/* Status badge color classes (inline style 대체) */
+.status-badge.allowed         { background: rgba(20,184,166,.13); color: var(--c-haiku);   border-color: rgba(20,184,166,.27); }
+.status-badge.allowed_warning { background: rgba(245,158,11,.13); color: var(--c-warn);    border-color: rgba(245,158,11,.27); }
+.status-badge.blocked         { background: rgba(244,63,94,.13);  color: var(--c-danger);  border-color: rgba(244,63,94,.27); }
+
+/* Rate status chip color classes */
+.rate-status-chip.allowed         { background: rgba(20,184,166,.13); color: var(--c-haiku); }
+.rate-status-chip.allowed_warning { background: rgba(245,158,11,.13); color: var(--c-warn); }
+.rate-status-chip.blocked         { background: rgba(244,63,94,.13);  color: var(--c-danger); }
 
 /* Burn rate row (sidebar) */
 .rate-burn-row {
@@ -742,7 +754,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--sp-3) var(--sp-2);
+  padding: 0 var(--sp-4) var(--sp-2);
 }
 .sb-gen-time {
   font-size: var(--fs-label);
@@ -751,7 +763,7 @@
 }
 .sb-rate-card {
   padding: var(--sp-3) var(--sp-4);
-  margin: 0 var(--sp-3) var(--sp-3);
+  margin: 0 0 var(--sp-2);
 }
 .sb-error-card {
   margin: var(--sp-3);
@@ -902,4 +914,35 @@
   font-size: var(--fs-label);
   color: var(--vscode-descriptionForeground);
   font-family: var(--ff-mono);
+}
+
+/* Chart scope selector */
+.chart-scope-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-3);
+}
+.chart-scope-label {
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  margin-right: var(--sp-1);
+}
+.scope-btn {
+  background: transparent;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--r-sm);
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--fs-label);
+  font-family: var(--ff-mono);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.scope-btn:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
+.scope-btn.active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-foreground);
+  border-color: var(--vscode-focusBorder);
+  font-weight: 600;
 }

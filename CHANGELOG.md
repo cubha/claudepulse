@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-05-14
+
+### Fixed
+- **Sidebar whitespace**: Removed default `body` margin and card side margins — content now fills full sidebar width
+- **Progress bars inverted**: Bars were showing remaining% instead of used% due to block-element default width; now correctly animate from 0 to actual utilization
+- **Status badge unstyled "OK"**: CSP blocked inline `style=""` attributes; fixed by adding `'unsafe-inline'` to `style-src` and converting status colors to CSS classes
+- **Burn Rate / Safe Until stuck on "Collecting data…"**: Now computes an estimated burn rate from session elapsed time when only one poll point is available (labeled `est.`); shows "No usage yet" when utilization is zero
+
+### Added
+- **Trend chart time scope selector**: Toggle between 30m / 2h (default) / 24h views directly on the chart
+- **Chart X-axis seconds**: Labels now include `HH:MM:SS` for better granularity in short windows
+- **Smart data points**: Shows dot markers when ≤10 data points for readability in sparse views
+
 ## [0.0.2] - 2026-05-13
 
 ### Changed
