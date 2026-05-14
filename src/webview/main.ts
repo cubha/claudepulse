@@ -282,14 +282,10 @@ function buildSidebarHtml(
       <!-- 헤더 -->
       <div class="sb-header">
         <span class="sb-header-title">Clausight</span>
+        <span class="status-badge ${overall}" style="margin-left:8px;">${statusLabel(overall)}</span>
         <div class="sb-header-spacer"></div>
-        <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
-      </div>
-
-      <!-- 상태 뱃지 -->
-      <div class="sb-status-row">
-        <span class="status-badge ${overall}">${statusLabel(overall)}</span>
         <span class="sb-gen-time mono">${timestamp}</span>
+        <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
       </div>
 
       <!-- 5h 세션 섹션 -->
@@ -307,7 +303,6 @@ function buildSidebarHtml(
           <div class="rate-bar-fill" id="sb-fh-bar" data-status="${fh.status}"></div>
         </div>
         <div class="rate-meta-row">
-          <span class="rate-status-chip ${fh.status}">${statusLabel(fh.status)}</span>
           <span class="rate-reset-label">resets in <span class="mono">${fmtReset(fh.msUntilReset)}</span></span>
         </div>
         ${fhBurnRow}
@@ -328,7 +323,6 @@ function buildSidebarHtml(
           <div class="rate-bar-fill" id="sb-sd-bar" data-status="${sd.status}"></div>
         </div>
         <div class="rate-meta-row">
-          <span class="rate-status-chip ${sd.status}">${statusLabel(sd.status)}</span>
           <span class="rate-reset-label">resets in <span class="mono">${fmtReset(sd.msUntilReset)}</span></span>
         </div>
         ${sdBurnRow}
@@ -413,11 +407,10 @@ function buildPanelShell(): string {
     <div class="panel-root">
       <div class="panel-header">
         <span class="panel-title">Claudepulse</span>
+        <span class="status-badge" id="panel-status" style="margin-left:10px;"></span>
         <div class="panel-header-spacer"></div>
         <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
       </div>
-
-      <div id="panel-status" class="panel-status-row"></div>
 
       <!-- 4-카드 메트릭 그리드 -->
       <div class="panel-metric-grid">
