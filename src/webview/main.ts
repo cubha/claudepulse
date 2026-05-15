@@ -26,10 +26,10 @@ try {
   }
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err);
-  console.error('[Claudepulse] webview init failed:', err);
+  console.error('[Claude Code Gauge] webview init failed:', err);
   if (root) {
     root.innerHTML = `<div style="padding:12px;color:#f48771;font-size:12px;font-family:monospace;">
-      Claudepulse webview error:<br>${msg}<br><br>
+      Claude Code Gauge webview error:<br>${msg}<br><br>
       Open DevTools (Help → Toggle Developer Tools) for details.
     </div>`;
   }
@@ -120,6 +120,12 @@ function calcProjAtReset(
   const minsUntilReset = msUntilReset / 60000;
   const projected = utilization + burnRatePerMin * minsUntilReset;
   return Math.min(1, Math.max(0, 1 - projected));
+}
+
+function fmtPlanTier(subscriptionType: string, rateLimitTier: string): string {
+  const m = /(\d+)x/.exec(rateLimitTier);
+  const base = subscriptionType.charAt(0).toUpperCase() + subscriptionType.slice(1);
+  return m ? `${base} ${m[1]}x` : base || rateLimitTier;
 }
 
 function buildBurnRow(history: PollPoint[], utilization: number, msUntilReset: number): string {
@@ -215,8 +221,12 @@ function initSidebar(): void {
     if (snapshot) {
       const fhBar = root!.querySelector<HTMLElement>('#sb-fh-bar');
       const sdBar = root!.querySelector<HTMLElement>('#sb-sd-bar');
+      const ovBar = root!.querySelector<HTMLElement>('#sb-ov-bar');
       if (fhBar) fhBar.style.width = `${Math.min(100, snapshot.fiveHour.utilization * 100)}%`;
       if (sdBar) sdBar.style.width = `${Math.min(100, snapshot.sevenDay.utilization * 100)}%`;
+      if (ovBar && snapshot.overage) {
+        ovBar.style.width = `${Math.min(100, snapshot.overage.utilization * 100)}%`;
+      }
     }
     root!.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
@@ -251,7 +261,7 @@ function buildSidebarHtml(
     return `
       <div class="sb-layout">
         <div class="sb-header">
-          <span class="sb-header-title">Clausight</span>
+          <span class="sb-header-title">Claude Code Gauge</span>
           <div class="sb-header-spacer"></div>
           <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
         </div>
@@ -271,22 +281,59 @@ function buildSidebarHtml(
   const fh = snapshot.fiveHour;
   const sd = snapshot.sevenDay;
   const overall = snapshot.overallStatus;
-  const overallColor = statusColor(overall);
   const timestamp = fmtTime(new Date(snapshot.generatedAt));
 
   const fhBurnRow = buildBurnRow(fhHist, fh.utilization, fh.msUntilReset);
   const sdBurnRow = buildBurnRow(sdHist, sd.utilization, sd.msUntilReset);
 
+  // 병목 윈도우 카드 하이라이트
+  const isFhBottleneck = snapshot.representativeClaim === 'five_hour';
+  const isSdBottleneck = snapshot.representativeClaim === 'seven_day';
+
+  // Plan 배지
+  const planBadge = snapshot.plan?.subscriptionType
+    ? `<span class="plan-badge">${escapeHtml(fmtPlanTier(snapshot.plan.subscriptionType, snapshot.plan.rateLimitTier))}</span>`
+    : '';
+
+  // Fallback 배너
+  const fallbackBanner = (snapshot.fallback?.available === 'unavailable')
+    ? `<div class="fallback-banner">⚠ Fallback: ${snapshot.fallback.percentage !== undefined ? `${Math.round(snapshot.fallback.percentage * 100)}% speed` : 'throttled'}</div>`
+    : '';
+
+  // 7d 임계값 배지
+  const thresholdBadge = snapshot.sevenDaySurpassedThreshold !== undefined
+    ? `<span class="threshold-badge">>${Math.round(snapshot.sevenDaySurpassedThreshold * 100)}%</span>`
+    : '';
+
+  // Overage 섹션
+  const overageSection = snapshot.overage
+    ? `<div class="sb-overage-wrap">
+        <div class="sb-overage-card card">
+          <div class="overage-header-row">
+            <span class="overage-label">Overage</span>
+            <span class="overage-status-chip ${snapshot.overage.status}">${snapshot.overage.status === 'allowed' ? 'Active' : 'Blocked'}</span>
+          </div>
+          <div class="rate-bar">
+            <div class="rate-bar-fill" id="sb-ov-bar" data-status="${snapshot.overage.status === 'rejected' ? 'blocked' : 'allowed'}"></div>
+          </div>
+          ${snapshot.overage.disabledReason ? `<div class="overage-disabled-reason">${escapeHtml(snapshot.overage.disabledReason)}</div>` : ''}
+        </div>
+      </div>`
+    : '';
+
   return `
     <div class="sb-layout">
       <!-- 헤더 -->
       <div class="sb-header">
-        <span class="sb-header-title">Clausight</span>
-        <span class="status-badge ${overall}" style="margin-left:8px;">${statusLabel(overall)}</span>
+        <span class="sb-header-title">Claude Code Gauge</span>
+        ${planBadge}
+        <span class="status-badge ${overall}" style="margin-left:6px;">${statusLabel(overall)}</span>
         <div class="sb-header-spacer"></div>
         <span class="sb-gen-time mono">${timestamp}</span>
         <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
       </div>
+
+      ${fallbackBanner}
 
       <!-- 5h 세션 섹션 -->
       <div class="sb-section-hdr">
@@ -298,7 +345,7 @@ function buildSidebarHtml(
           <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(1 - fh.utilization)} left</span>
         </span>
       </div>
-      <div class="sb-rate-card card">
+      <div class="sb-rate-card card${isFhBottleneck ? ' is-bottleneck' : ''}">
         <div class="rate-bar">
           <div class="rate-bar-fill" id="sb-fh-bar" data-status="${fh.status}"></div>
         </div>
@@ -311,14 +358,14 @@ function buildSidebarHtml(
       <!-- 7d 주간 섹션 -->
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:var(--c-opus);"></span>
-        <span class="sb-section-label">Weekly (7d)</span>
+        <span class="sb-section-label">Weekly (7d)${thresholdBadge}</span>
         <span class="sb-section-right">
           <span class="mono">${fmtPct(sd.utilization)}</span>
           <span class="sb-section-sep">·</span>
           <span class="mono" style="color:${statusColor(sd.status)};">${fmtPct(1 - sd.utilization)} left</span>
         </span>
       </div>
-      <div class="sb-rate-card card">
+      <div class="sb-rate-card card${isSdBottleneck ? ' is-bottleneck' : ''}">
         <div class="rate-bar">
           <div class="rate-bar-fill" id="sb-sd-bar" data-status="${sd.status}"></div>
         </div>
@@ -327,6 +374,8 @@ function buildSidebarHtml(
         </div>
         ${sdBurnRow}
       </div>
+
+      ${overageSection}
 
     </div>`;
 }
@@ -406,15 +455,17 @@ function buildPanelShell(): string {
   return `
     <div class="panel-root">
       <div class="panel-header">
-        <span class="panel-title">Claudepulse</span>
-        <span class="status-badge" id="panel-status" style="margin-left:10px;"></span>
+        <span class="panel-title">Claude Code Gauge</span>
+        <span id="panel-plan-badge"></span>
+        <span class="status-badge" id="panel-status" style="margin-left:6px;"></span>
         <div class="panel-header-spacer"></div>
         <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
       </div>
+      <div id="panel-fallback-banner"></div>
 
       <!-- 4-카드 메트릭 그리드 -->
       <div class="panel-metric-grid">
-        <div class="card panel-metric-card">
+        <div class="card panel-metric-card" id="panel-fh-card">
           <div class="panel-metric-label">Session (5h)</div>
           <div class="panel-metric-value" id="fh-remaining">—</div>
           <div class="panel-metric-bar">
@@ -424,7 +475,7 @@ function buildPanelShell(): string {
           </div>
           <div class="panel-metric-sub" id="fh-reset">—</div>
         </div>
-        <div class="card panel-metric-card">
+        <div class="card panel-metric-card" id="panel-sd-card">
           <div class="panel-metric-label">Weekly (7d)</div>
           <div class="panel-metric-value" id="sd-remaining">—</div>
           <div class="panel-metric-bar">
@@ -474,10 +525,28 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   // 상태 배지
   const statusEl = document.getElementById('panel-status');
   if (statusEl) {
-    statusEl.innerHTML = `<span class="status-badge ${snapshot.overallStatus}">${statusLabel(snapshot.overallStatus)}</span>`;
+    statusEl.className = `status-badge ${snapshot.overallStatus}`;
+    statusEl.textContent = statusLabel(snapshot.overallStatus);
   }
 
-  // SESSION (5h) 카드
+  // Plan 배지
+  const planBadgeEl = document.getElementById('panel-plan-badge');
+  if (planBadgeEl && snapshot.plan?.subscriptionType) {
+    planBadgeEl.innerHTML = `<span class="plan-badge" style="margin-left:8px;">${escapeHtml(fmtPlanTier(snapshot.plan.subscriptionType, snapshot.plan.rateLimitTier))}</span>`;
+  }
+
+  // Fallback 배너
+  const fallbackEl = document.getElementById('panel-fallback-banner');
+  if (fallbackEl) {
+    fallbackEl.innerHTML = (snapshot.fallback?.available === 'unavailable')
+      ? `<div class="fallback-banner" style="margin:0 0 var(--sp-2);">⚠ Fallback active: ${snapshot.fallback.percentage !== undefined ? `${Math.round(snapshot.fallback.percentage * 100)}% speed` : 'throttled'}</div>`
+      : '';
+  }
+
+  // SESSION (5h) 카드 — 병목 하이라이트
+  const fhCard = document.getElementById('panel-fh-card');
+  if (fhCard) fhCard.classList.toggle('is-bottleneck', snapshot.representativeClaim === 'five_hour');
+
   const fhRemEl = document.getElementById('fh-remaining');
   const fhBarFill = document.getElementById('fh-bar-fill') as HTMLElement | null;
   const fhResetEl = document.getElementById('fh-reset');
@@ -488,7 +557,10 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   }
   if (fhResetEl) fhResetEl.textContent = `Resets in ${fmtReset(fh.msUntilReset)} · used ${fmtPct(fh.utilization)}`;
 
-  // WEEKLY (7d) 카드
+  // WEEKLY (7d) 카드 — 병목 하이라이트 + 임계값 배지
+  const sdCard = document.getElementById('panel-sd-card');
+  if (sdCard) sdCard.classList.toggle('is-bottleneck', snapshot.representativeClaim === 'seven_day');
+
   const sdRemEl = document.getElementById('sd-remaining');
   const sdBarFill = document.getElementById('sd-bar-fill') as HTMLElement | null;
   const sdResetEl = document.getElementById('sd-reset');
@@ -497,7 +569,12 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
     sdBarFill.style.cssText = barFillWidth(sd.utilization);
     sdBarFill.dataset.status = sd.status;
   }
-  if (sdResetEl) sdResetEl.textContent = `Resets in ${fmtReset(sd.msUntilReset)} · used ${fmtPct(sd.utilization)}`;
+  if (sdResetEl) {
+    const thBadge = snapshot.sevenDaySurpassedThreshold !== undefined
+      ? ` <span class="threshold-badge">&gt;${Math.round(snapshot.sevenDaySurpassedThreshold * 100)}%</span>`
+      : '';
+    sdResetEl.innerHTML = `Resets in ${fmtReset(sd.msUntilReset)} · used ${fmtPct(sd.utilization)}${thBadge}`;
+  }
 
   // BURN RATE 카드
   const FH_WINDOW_MS = 5 * 60 * 60 * 1000; // 5h

@@ -17,7 +17,8 @@ export class CredentialsReader {
       throw new Error(`Credentials file is not valid JSON: ${credentialsPath}`);
     }
 
-    const oauth = (parsed as Record<string, unknown>)?.claudeAiOauth as Record<string, unknown> | undefined;
+    const root = parsed as Record<string, unknown>;
+    const oauth = root?.claudeAiOauth as Record<string, unknown> | undefined;
     if (!oauth?.accessToken || typeof oauth.accessToken !== 'string') {
       throw new Error('Credentials file missing claudeAiOauth.accessToken — re-login via Claude Code CLI.');
     }
@@ -26,6 +27,9 @@ export class CredentialsReader {
       accessToken: oauth.accessToken as string,
       refreshToken: (oauth.refreshToken as string | undefined) ?? '',
       expiresAt: (oauth.expiresAt as number | undefined) ?? 0,
+      subscriptionType: oauth.subscriptionType as string | undefined,
+      rateLimitTier: oauth.rateLimitTier as string | undefined,
+      organizationUuid: root.organizationUuid as string | undefined,
     };
   }
 }

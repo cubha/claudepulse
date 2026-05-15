@@ -11,10 +11,15 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 - **StatusBar**: Always-visible `⚡ 29% · 98%` — session and weekly usage at a glance
 - **Sidebar**: `used% · left%` dual display + status-colored progress bars (teal OK / amber Warning / red Blocked) + overall status badge inline with title
+- **Plan badge**: Your subscription tier (e.g. `Max 5x`) shown in the header — read from local credentials, no extra API call
 - **Burn Rate**: `%/min` consumption speed — estimated from session elapsed time on first open, then refined from poll history
 - **Safe Until**: Predicted time when your 5h quota runs out at current burn rate
 - **Dashboard Panel**: SESSION · WEEKLY · BURN RATE · SAFE UNTIL 4-card layout + utilization trend chart
 - **Trend Chart Scope**: Toggle 30m / 2h / 24h view window directly on the chart
+- **Bottleneck highlight**: The currently limiting window (5h or 7d) is outlined in amber so you instantly see what's constraining you
+- **Overage section**: Progress bar + status chip for your overage (extra usage) quota when active
+- **Fallback banner**: Inline warning when Claude throttles to reduced speed (e.g. 50%)
+- **7d threshold badge**: Red badge on the Weekly card when a usage threshold has been surpassed
 - **Threshold alerts**: Native VS Code warning notification when usage exceeds your configured limit
 - **Auto-polling**: Fetches latest rate limit headers from Anthropic API every 5 minutes
 

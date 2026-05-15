@@ -1,6 +1,14 @@
 import * as https from 'node:https';
 import type { Logger } from '../logger';
-import type { PollerError, RateLimitSnapshot, UnifiedWindow } from '../types';
+import type {
+  ClaudeCredentials,
+  FallbackInfo,
+  OverageWindow,
+  PlanInfo,
+  PollerError,
+  RateLimitSnapshot,
+  UnifiedWindow,
+} from '../types';
 import type { CredentialsReader } from './CredentialsReader';
 
 const POLL_MODEL = 'claude-haiku-4-5-20251001';
@@ -34,7 +42,7 @@ export class RateLimitPoller {
     try {
       const creds = await this.credReader.read(this.credentialsPath);
       const headers = await this.postMinimalMessage(creds.accessToken);
-      const snapshot = this.parseHeaders(headers);
+      const snapshot = this.parseHeaders(headers, creds);
       this.onSnapshot(snapshot);
     } catch (err) {
       const msg = String(err);
@@ -98,7 +106,7 @@ export class RateLimitPoller {
     });
   }
 
-  protected parseHeaders(h: Record<string, string>): RateLimitSnapshot {
+  protected parseHeaders(h: Record<string, string>, creds?: ClaudeCredentials): RateLimitSnapshot {
     const now = new Date();
 
     const fiveHour = this.parseWindow(
@@ -116,7 +124,68 @@ export class RateLimitPoller {
     );
 
     const overallStatus = this.worstStatus(fiveHour.status, sevenDay.status);
-    return { fiveHour, sevenDay, overallStatus, generatedAt: now };
+
+    // 플랜 정보 (credentials 기반)
+    const plan: PlanInfo | undefined = (creds?.subscriptionType || creds?.rateLimitTier)
+      ? {
+          subscriptionType: creds?.subscriptionType ?? '',
+          rateLimitTier: creds?.rateLimitTier ?? '',
+          organizationUuid: creds?.organizationUuid,
+        }
+      : undefined;
+
+    // Overage(추가 사용량) 상태
+    const overageStatusStr = h['anthropic-ratelimit-unified-overage-status'];
+    const overage: OverageWindow | undefined = overageStatusStr
+      ? {
+          status: overageStatusStr === 'rejected' ? 'rejected' : 'allowed',
+          utilization: h['anthropic-ratelimit-unified-overage-utilization']
+            ? parseFloat(h['anthropic-ratelimit-unified-overage-utilization'])
+            : 0,
+          disabledReason: h['anthropic-ratelimit-unified-overage-disabled-reason'],
+        }
+      : undefined;
+
+    // Fallback(속도 축소) 상태
+    const fallbackStr = h['anthropic-ratelimit-unified-fallback'];
+    const fallback: FallbackInfo | undefined = fallbackStr
+      ? {
+          available: fallbackStr === 'available' ? 'available' : 'unavailable',
+          percentage: h['anthropic-ratelimit-unified-fallback-percentage']
+            ? parseFloat(h['anthropic-ratelimit-unified-fallback-percentage'])
+            : undefined,
+        }
+      : undefined;
+
+    // 현재 병목 윈도우
+    const repClaimStr = h['anthropic-ratelimit-unified-representative-claim'];
+    const representativeClaim: 'five_hour' | 'seven_day' | undefined =
+      repClaimStr === 'five_hour' ? 'five_hour'
+      : repClaimStr === 'seven_day' ? 'seven_day'
+      : undefined;
+
+    // 7d 임계값 돌파
+    const surpassedStr = h['anthropic-ratelimit-unified-7d-surpassed-threshold'];
+    const sevenDaySurpassedThreshold = surpassedStr ? parseFloat(surpassedStr) : undefined;
+
+    // 업그레이드 경로
+    const upgradePathsStr = h['anthropic-ratelimit-unified-upgrade-paths'];
+    const upgradePaths = upgradePathsStr
+      ? upgradePathsStr.split(',').map(s => s.trim()).filter(Boolean)
+      : undefined;
+
+    return {
+      fiveHour,
+      sevenDay,
+      overallStatus,
+      generatedAt: now,
+      plan,
+      overage,
+      fallback,
+      representativeClaim,
+      sevenDaySurpassedThreshold,
+      upgradePaths,
+    };
   }
 
   protected parseWindow(

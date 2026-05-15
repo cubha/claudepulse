@@ -20,7 +20,7 @@ import { registerHandlers } from './messaging/handlers';
 import type { PollerError, RateLimitSnapshot } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const logger = new Logger('Claudepulse');
+  const logger = new Logger('Claude Code Gauge');
   logger.info('extension activating...');
 
   const messenger = new Messenger();
@@ -62,7 +62,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(statusBar, logger);
 
   function getConfig() {
-    const cfg = vscode.workspace.getConfiguration('claudepulse');
+    const cfg = vscode.workspace.getConfiguration('claudeCodeGauge');
     return {
       credentialsPath: cfg.get<string>(CONFIG_KEYS.credentialsPath) || DEFAULT_CREDENTIALS_PATH,
       pollIntervalMs: cfg.get<number>(CONFIG_KEYS.pollIntervalMs) ?? DEFAULT_POLL_INTERVAL_MS,
@@ -100,14 +100,14 @@ export function activate(context: vscode.ExtensionContext): void {
       lastAlerted = 'fiveHour';
       const pct = (snapshot.fiveHour.utilization * 100).toFixed(0);
       void vscode.window.showWarningMessage(
-        `Claudepulse: Session usage at ${pct}% — resets in ${fmtReset(snapshot.fiveHour.msUntilReset)}`,
+        `Claude Code Gauge: Session usage at ${pct}% — resets in ${fmtReset(snapshot.fiveHour.msUntilReset)}`,
         'Open Dashboard'
       ).then(sel => { if (sel) void vscode.commands.executeCommand(COMMANDS.openDashboard); });
     } else if (sdOver && lastAlerted !== 'sevenDay') {
       lastAlerted = 'sevenDay';
       const pct = (snapshot.sevenDay.utilization * 100).toFixed(0);
       void vscode.window.showWarningMessage(
-        `Claudepulse: Weekly usage at ${pct}% — resets in ${fmtReset(snapshot.sevenDay.msUntilReset)}`,
+        `Claude Code Gauge: Weekly usage at ${pct}% — resets in ${fmtReset(snapshot.sevenDay.msUntilReset)}`,
         'Open Dashboard'
       ).then(sel => { if (sel) void vscode.commands.executeCommand(COMMANDS.openDashboard); });
     } else if (!fhOver && !sdOver) {

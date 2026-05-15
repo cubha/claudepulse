@@ -43,7 +43,7 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <link rel="stylesheet" href="${cssUri}">
-<title>Claudepulse Sidebar</title>
+<title>Claude Code Gauge Sidebar</title>
 </head><body class="theme-dark" data-mode="sidebar">
 <div id="root">Loading…</div>
 <script nonce="${nonce}" src="${jsUri}"></script>

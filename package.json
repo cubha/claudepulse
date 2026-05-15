@@ -2,7 +2,7 @@
   "name": "claude-code-gauge",
   "displayName": "Claude Code Gauge",
   "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.0.31",
+  "version": "0.0.4",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -41,32 +41,32 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "claudepulse",
-          "title": "Claudepulse",
+          "id": "claudeCodeGauge",
+          "title": "Claude Code Gauge",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "claudepulse": [
+      "claudeCodeGauge": [
         {
           "type": "webview",
-          "id": "claudepulse.sidebar",
+          "id": "claudeCodeGauge.sidebar",
           "name": "Rate Limits"
         }
       ]
     },
     "commands": [
       {
-        "command": "claudepulse.openDashboard",
+        "command": "claudeCodeGauge.openDashboard",
         "title": "Claude Code Gauge: Open Dashboard"
       },
       {
-        "command": "claudepulse.refresh",
+        "command": "claudeCodeGauge.refresh",
         "title": "Claude Code Gauge: Refresh"
       },
       {
-        "command": "claudepulse.login",
+        "command": "claudeCodeGauge.login",
         "title": "Claude Code Gauge: Login with Claude"
       }
     ],

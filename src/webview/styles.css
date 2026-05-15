@@ -916,6 +916,104 @@ html, body { margin: 0; padding: 0; }
   font-family: var(--ff-mono);
 }
 
+/* ── v0.0.4 신규 컴포넌트 ────────────────────────────── */
+
+/* Plan 배지 (헤더 우측) */
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: var(--ff-mono);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(139,92,246,0.14);
+  color: #C4B5FD;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.theme-light .plan-badge {
+  background: rgba(139,92,246,0.10);
+  color: #6D28D9;
+}
+
+/* Fallback 배너 (속도 50% 제한 등) */
+.fallback-banner {
+  margin: 0 var(--sp-3) var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  background: rgba(245,158,11,0.10);
+  border: 1px solid rgba(245,158,11,0.30);
+  border-radius: var(--r-md);
+  font-size: var(--fs-label);
+  color: var(--c-warn);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-shrink: 0;
+}
+
+/* 병목 윈도우 카드 하이라이트 */
+.is-bottleneck {
+  border-color: var(--c-warn) !important;
+  box-shadow: 0 0 0 1px var(--c-warn);
+}
+
+/* 임계값 돌파 배지 */
+.threshold-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-family: var(--ff-mono);
+  font-weight: 600;
+  background: rgba(244,63,94,0.14);
+  color: var(--c-danger);
+  margin-left: 4px;
+}
+
+/* Overage 카드 */
+.sb-overage-wrap {
+  padding: 0 var(--sp-3) var(--sp-2);
+  flex-shrink: 0;
+}
+.sb-overage-card {
+  padding: var(--sp-2) var(--sp-3);
+}
+.overage-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--sp-1);
+}
+.overage-label {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--vscode-descriptionForeground);
+}
+.overage-status-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.overage-status-chip.allowed  { background: rgba(20,184,166,0.13); color: var(--c-haiku); }
+.overage-status-chip.rejected { background: rgba(244,63,94,0.13);  color: var(--c-danger); }
+.overage-disabled-reason {
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  margin-top: var(--sp-1);
+  font-family: var(--ff-mono);
+}
+
 /* Chart scope selector */
 .chart-scope-row {
   display: flex;

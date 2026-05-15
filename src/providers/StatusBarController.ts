@@ -9,7 +9,7 @@ export class StatusBarController {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.item.command = COMMANDS.openDashboard;
     this.item.text = '$(pulse) ...';
-    this.item.tooltip = 'Claudepulse — Loading...';
+    this.item.tooltip = 'Claude Code Gauge — Loading...';
   }
 
   show(): void {
@@ -26,7 +26,7 @@ export class StatusBarController {
     const fhReset = this.fmtReset(snapshot.fiveHour.msUntilReset);
     const sdReset = this.fmtReset(snapshot.sevenDay.msUntilReset);
     this.item.tooltip = new vscode.MarkdownString(
-      `**Claudepulse Rate Limits**\n\n` +
+      `**Claude Code Gauge Rate Limits**\n\n` +
       `Session (5h): **${fh}%** · resets in ${fhReset}\n\n` +
       `Weekly (7d): **${sd}%** · resets in ${sdReset}\n\n` +
       `_Click to open dashboard_`
