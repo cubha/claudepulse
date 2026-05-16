@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.5] - 2026-05-16
+
+### Added
+- **Today's usage summary**: Sidebar now shows "오늘 N tokens · ~$X.XX" one-line row — powered by local `.jsonl` parsing, no extra API call
+- **7-day cost bar chart**: Dashboard panel now includes a daily cost chart for the last 7 days
+- **Recent sessions list**: Dashboard shows up to 20 most recent sessions with start time, working directory, token count, and cost
+
+### Infrastructure
+- `FileWatcher`: chokidar v3 file watcher with WSL `usePolling` fallback, `depth:2`, 3 s polling interval
+- `JsonlParser`: incremental `readline` parser with `mtime`+`offset` cache, `progress`/`file-history-snapshot` type filter, dual dedup via `requestId` (streaming) + `message.id` (cross-file)
+- `UsageAggregator`: daily/weekly/monthly rollup with LiteLLM-based cost calculation
+- `WorkspaceMapper`: encode-then-match pattern for `~/.claude/projects/<encoded>` resolution
+- `src/utils/pricing.ts`: Claude model price snapshot (opus-4 / sonnet-4-5 / haiku-4-5)
+- New messaging contracts: `GetUsageSummary` / `PushUsageSummary`
+
 ## [0.0.4] - 2026-05-15
 
 ### Added

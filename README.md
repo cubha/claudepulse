@@ -5,10 +5,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-cubha.claude--usage--dashboard-purple)](https://open-vsx.org/extension/cubha/claude-code-gauge)
 
-Stop switching to your browser to check Claude rate limits. See your **5-hour session** and **7-day weekly** usage at a glance — with burn rate predictions and safe-until estimates — without leaving your editor.
+Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, and **today's token cost** at a glance — with burn rate predictions and safe-until estimates — without leaving your editor.
 
 ## Features
 
+### Rate Limit Monitor (API headers)
 - **StatusBar**: Always-visible `⚡ 29% · 98%` — session and weekly usage at a glance
 - **Sidebar**: `used% · left%` dual display + status-colored progress bars (teal OK / amber Warning / red Blocked) + overall status badge inline with title
 - **Plan badge**: Your subscription tier (e.g. `Max 5x`) shown in the header — read from local credentials, no extra API call
@@ -23,13 +24,24 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Threshold alerts**: Native VS Code warning notification when usage exceeds your configured limit
 - **Auto-polling**: Fetches latest rate limit headers from Anthropic API every 5 minutes
 
+### Token & Cost Analytics (local `.jsonl` — v0.0.5)
+- **Today's usage**: Sidebar shows "N tokens · ~$X.XX" — parsed directly from `~/.claude/projects/**/*.jsonl`, no API call
+- **7-day cost bar chart**: Dashboard panel shows daily spend for the past 7 days
+- **Session history**: Up to 20 recent sessions with start time, working directory, token count, and estimated cost
+- **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (opus-4 / sonnet-4-5 / haiku-4-5)
+
 ## How it works
 
-Claude Code Gauge reads the OAuth token from `~/.claude/.credentials.json` (created by Claude Code CLI) and polls `POST https://api.anthropic.com/v1/messages` every 5 minutes. Rate limit status is extracted directly from the response headers.
+Claude Code Gauge uses **two data sources**:
 
-- **No local file parsing** — does not touch your `.jsonl` session files
-- **No private APIs** — official Anthropic API only
+| Source | What it tracks | How |
+|---|---|---|
+| `~/.claude/.credentials.json` + Anthropic API | Rate limit windows (5h / 7d), plan tier | OAuth token + minimal API poll every 5 min |
+| `~/.claude/projects/**/*.jsonl` | Token count, cost per session/day | Local file parsing — no network, no private API |
+
+- **No private APIs** — official Anthropic API only for rate limits
 - **Minimal quota usage**: 1-token haiku request per poll ≈ 5–10 input tokens
+- **Streaming dedup**: `requestId` + `message.id` dual dedup prevents double-counting streamed responses
 
 ## Requirements
 
