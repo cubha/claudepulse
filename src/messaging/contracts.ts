@@ -1,5 +1,5 @@
 import { NotificationType, RequestType } from 'vscode-messenger-common';
-import type { RateLimitSnapshot } from '../types';
+import type { RateLimitSnapshot, UsageSummary } from '../types';
 
 /** Request: webview → extension. 현재 Rate Limit 스냅샷 요청. */
 export const GetRateLimit: RequestType<void, RateLimitSnapshot> = {
@@ -24,4 +24,14 @@ export const PushPollerError: NotificationType<import('../types').PollerError> =
 /** Notification: webview → extension. 로그인 터미널 열기 요청. */
 export const RequestLogin: NotificationType<void> = {
   method: 'requestLogin'
+};
+
+/** Request: webview → extension. 현재 사용량 요약 요청. */
+export const GetUsageSummary: RequestType<void, UsageSummary | null> = {
+  method: 'getUsageSummary'
+};
+
+/** Notification: extension → webview. 새 사용량 요약 푸시. */
+export const PushUsageSummary: NotificationType<UsageSummary> = {
+  method: 'pushUsageSummary'
 };

@@ -15,9 +15,14 @@ import { StatusBarController } from './providers/StatusBarController';
 import { DashboardPanel } from './panel/DashboardPanel';
 import { CredentialsReader } from './services/CredentialsReader';
 import { RateLimitPoller } from './services/RateLimitPoller';
-import { PushPollerError, PushRateLimit } from './messaging/contracts';
+import { FileWatcher } from './services/FileWatcher';
+import { JsonlParser } from './services/JsonlParser';
+import { UsageAggregator } from './services/UsageAggregator';
+import { WorkspaceMapper } from './services/WorkspaceMapper';
+import { PushPollerError, PushRateLimit, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
-import type { PollerError, RateLimitSnapshot } from './types';
+import { PRICING } from './utils/pricing';
+import type { PollerError, RateLimitSnapshot, SessionRecord, UsageSummary } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger('Claude Code Gauge');
@@ -29,11 +34,35 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const credReader = new CredentialsReader();
   let lastSnapshot: RateLimitSnapshot | null = null;
+  let lastUsageSummary: UsageSummary | null = null;
   let poller: RateLimitPoller | null = null;
+
+  // jsonl 파이프라인
+  const jsonlParser = new JsonlParser(PRICING);
+  const aggregator = new UsageAggregator();
+  const workspaceMapper = new WorkspaceMapper();
+  const fileWatcher = new FileWatcher();
+  let allRecords: SessionRecord[] = [];
+
+  async function refreshUsage(): Promise<void> {
+    const files = workspaceMapper.getAllJsonlFiles();
+    const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
+    allRecords = perFile.flat();
+    lastUsageSummary = aggregator.aggregate(allRecords);
+    messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
+  }
+
+  fileWatcher.on('change', () => { void refreshUsage(); });
+  fileWatcher.start();
+  context.subscriptions.push({ dispose: () => fileWatcher.stop() });
+
+  // 시작 시 초기 집계
+  void refreshUsage();
 
   registerHandlers(
     messenger,
     () => lastSnapshot,
+    () => lastUsageSummary,
     () => { poller?.poll(); },
     () => vscode.commands.executeCommand(COMMANDS.login)
   );

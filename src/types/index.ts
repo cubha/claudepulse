@@ -65,3 +65,56 @@ export interface ClaudeCredentials {
 
 /** 폴러 오류 상태 — 웹뷰 로그인 UI 분기용. */
 export type PollerError = 'credentials_missing' | 'token_expired' | 'network_error';
+
+// ─────────────────────────────────────────────────────────────
+// jsonl 파싱 도메인 모델 (v0.0.5+)
+// ─────────────────────────────────────────────────────────────
+
+/** jsonl assistant 엔트리의 usage 필드 서브셋. */
+export interface JournalUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+}
+
+/** dedup+비용 계산 후 남은 단일 assistant 레코드. */
+export interface SessionRecord {
+  messageId: string;    // message.id (cross-file dedup 키)
+  requestId: string;    // requestId (스트리밍 dedup 키)
+  sessionId: string;
+  model: string;
+  timestamp: string;    // ISO8601
+  cwd: string;
+  usage: JournalUsage;
+  costUsd: number;      // LiteLLM 기반 계산값
+}
+
+/** 하루 집계 (UTC 날짜 기준). */
+export interface DailyUsage {
+  date: string;         // YYYY-MM-DD UTC
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  costUsd: number;
+}
+
+/** 세션 집계 (sessionId 기준). */
+export interface SessionSummary {
+  sessionId: string;
+  startTime: string;    // ISO8601 (첫 레코드 timestamp)
+  cwd: string;
+  totalTokens: number;
+  costUsd: number;
+  messageCount: number;
+}
+
+/** Webview로 전달하는 전체 사용량 요약. */
+export interface UsageSummary {
+  today: DailyUsage;
+  last7Days: DailyUsage[];
+  recentSessions: SessionSummary[];  // 최근 20개
+  generatedAt: string;               // ISO8601
+}

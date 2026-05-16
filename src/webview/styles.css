@@ -1044,3 +1044,42 @@ html, body { margin: 0; padding: 0; }
   border-color: var(--vscode-focusBorder);
   font-weight: 600;
 }
+
+/* ── 사이드바 오늘 사용량 행 ── */
+.sb-usage-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.sb-usage-icon { color: var(--c-sonnet); font-size: 10px; }
+.sb-usage-tokens { color: var(--vscode-foreground); }
+.sb-usage-sep { opacity: 0.4; }
+.sb-usage-cost { color: var(--c-haiku); }
+
+/* ── 대시보드 Daily Cost 차트 ── */
+.panel-session-card {
+  padding: var(--sp-3);
+}
+.session-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: var(--fs-label);
+}
+.session-row:last-child { border-bottom: none; }
+.session-cwd {
+  color: var(--vscode-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-time { color: var(--vscode-descriptionForeground); }
+.session-tokens { color: var(--c-haiku); }
+.session-cost { color: var(--c-sonnet); min-width: 52px; text-align: right; }

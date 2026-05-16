@@ -52,8 +52,8 @@ if grep -rEn "createFileSystemWatcher\s*\(" src/ 2>/dev/null; then
   FAIL=$((FAIL + 1))
 fi
 
-# 8. CRITICAL — 구 jsonl 서비스 파일 미존재 확인
-for f in src/services/JsonlParser.ts src/services/FileWatcher.ts src/services/UsageAggregator.ts src/services/CacheStore.ts; do
+# 8. CRITICAL — 구 폐기 파일 미존재 확인 (CacheStore만 해당 — v0.0.5에서 나머지는 정식 도입)
+for f in src/services/CacheStore.ts; do
   if [ -f "$f" ]; then
     echo "⚠️  폐기된 파일 존재: $f"
     FAIL=$((FAIL + 1))
@@ -67,6 +67,11 @@ PASS=$((PASS + 1))
 # 9. 신규 서비스 파일 존재 확인
 step "CredentialsReader.ts 존재" test -f src/services/CredentialsReader.ts
 step "RateLimitPoller.ts 존재" test -f src/services/RateLimitPoller.ts
+step "FileWatcher.ts 존재 (v0.0.5)" test -f src/services/FileWatcher.ts
+step "JsonlParser.ts 존재 (v0.0.5)" test -f src/services/JsonlParser.ts
+step "UsageAggregator.ts 존재 (v0.0.5)" test -f src/services/UsageAggregator.ts
+step "WorkspaceMapper.ts 존재 (v0.0.5)" test -f src/services/WorkspaceMapper.ts
+step "pricing.ts 존재 (v0.0.5)" test -f src/utils/pricing.ts
 
 # 10. vitest 단위 테스트
 step "vitest unit tests" npx vitest run --reporter=verbose
