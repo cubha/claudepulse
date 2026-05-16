@@ -1,10 +1,11 @@
 import { Messenger } from 'vscode-messenger';
-import type { RateLimitSnapshot } from '../types';
-import { GetRateLimit, RequestLogin, RequestRefresh } from './contracts';
+import type { RateLimitSnapshot, UsageSummary } from '../types';
+import { GetRateLimit, GetUsageSummary, RequestLogin, RequestRefresh } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
   getSnapshot: () => RateLimitSnapshot | null,
+  getUsageSummary: () => UsageSummary | null,
   onRefresh: () => void,
   onLogin: () => void
 ): void {
@@ -13,6 +14,7 @@ export function registerHandlers(
     if (!snap) throw new Error('not_ready');
     return snap;
   });
+  messenger.onRequest(GetUsageSummary, () => getUsageSummary());
   messenger.onNotification(RequestRefresh, () => { void onRefresh(); });
   messenger.onNotification(RequestLogin, () => { onLogin(); });
 }

@@ -3,8 +3,8 @@
 import { Chart, registerables } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { GetRateLimit, PushPollerError, PushRateLimit, RequestLogin, RequestRefresh } from '../messaging/contracts';
-import type { PollerError, RateLimitSnapshot, UnifiedWindow } from '../types';
+import { GetRateLimit, GetUsageSummary, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestRefresh } from '../messaging/contracts';
+import type { DailyUsage, PollerError, RateLimitSnapshot, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
 
 Chart.register(...registerables);
 
@@ -177,6 +177,7 @@ function initSidebar(): void {
   const sbFhHistory: PollPoint[] = [];
   const sbSdHistory: PollPoint[] = [];
   let lastError: PollerError | null = null;
+  let lastUsage: UsageSummary | null = null;
 
   function recordSbHistory(snapshot: RateLimitSnapshot): void {
     const t = new Date(snapshot.generatedAt);
@@ -197,6 +198,11 @@ function initSidebar(): void {
     renderSidebar(null, error);
   });
 
+  messenger.onNotification(PushUsageSummary, (usage) => {
+    lastUsage = usage;
+    renderSidebar(null, lastError);
+  });
+
   try {
     messenger.start();
   } catch (err) {
@@ -208,6 +214,11 @@ function initSidebar(): void {
     return;
   }
 
+  // 초기 데이터 병렬 요청
+  void messenger.sendRequest(GetUsageSummary, HOST_EXTENSION, undefined)
+    .then((usage) => { if (usage) lastUsage = usage; })
+    .catch(() => undefined);
+
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
     .then((snapshot) => {
       recordSbHistory(snapshot);
@@ -216,7 +227,7 @@ function initSidebar(): void {
     .catch(() => renderSidebar(null, lastError));
 
   function renderSidebar(snapshot: RateLimitSnapshot | null, error: PollerError | null): void {
-    root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory);
+    root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory, lastUsage);
     // JS로 진행바 width 설정 (innerHTML 내 inline style은 CSP 안전망으로 차단될 수 있음)
     if (snapshot) {
       const fhBar = root!.querySelector<HTMLElement>('#sb-fh-bar');
@@ -237,11 +248,37 @@ function initSidebar(): void {
   }
 }
 
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function fmtCost(usd: number): string {
+  if (usd < 0.01) return '<$0.01';
+  return `$${usd.toFixed(2)}`;
+}
+
+function buildUsageRowHtml(usage: UsageSummary | null): string {
+  if (!usage) return '';
+  const { today } = usage;
+  if (today.totalTokens === 0 && today.costUsd === 0) {
+    return `<div class="sb-usage-row">오늘 사용량 없음</div>`;
+  }
+  return `<div class="sb-usage-row">
+    <span class="sb-usage-icon">◎</span>
+    <span class="sb-usage-tokens">${fmtTokens(today.totalTokens)} tokens</span>
+    <span class="sb-usage-sep">·</span>
+    <span class="sb-usage-cost mono">${fmtCost(today.costUsd)}</span>
+  </div>`;
+}
+
 function buildSidebarHtml(
   snapshot: RateLimitSnapshot | null,
   error: PollerError | null,
   fhHist: PollPoint[],
-  sdHist: PollPoint[]
+  sdHist: PollPoint[],
+  usage: UsageSummary | null
 ): string {
   if (!snapshot) {
     const needsLogin = error === 'credentials_missing' || error === 'token_expired';
@@ -265,6 +302,7 @@ function buildSidebarHtml(
           <div class="sb-header-spacer"></div>
           <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
         </div>
+        ${buildUsageRowHtml(usage)}
         <div class="sb-error-card card">
           <div class="sb-error-icon">${icon}</div>
           <div class="sb-error-msg">${title}</div>
@@ -333,6 +371,7 @@ function buildSidebarHtml(
         <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
       </div>
 
+      ${buildUsageRowHtml(usage)}
       ${fallbackBanner}
 
       <!-- 5h 세션 섹션 -->
@@ -390,7 +429,9 @@ const fhHistory: PollPoint[] = [];
 const sdHistory: PollPoint[] = [];
 
 let trendChart: Chart | null = null;
+let dailyChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
+let panelUsage: UsageSummary | null = null;
 
 function initPanel(): void {
   if (!root) return;
@@ -411,6 +452,11 @@ function initPanel(): void {
     updatePanel(snapshot);
   });
 
+  messenger.onNotification(PushUsageSummary, (usage) => {
+    panelUsage = usage;
+    updateUsageSection();
+  });
+
   try {
     messenger.start();
   } catch (err) {
@@ -418,6 +464,12 @@ function initPanel(): void {
     if (el) el.innerHTML = `<span style="color:#f48771">Messenger start failed: ${err instanceof Error ? err.message : String(err)}</span>`;
     return;
   }
+
+  void messenger.sendRequest(GetUsageSummary, HOST_EXTENSION, undefined)
+    .then((usage) => {
+      if (usage) { panelUsage = usage; updateUsageSection(); }
+    })
+    .catch(() => undefined);
 
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
     .then((snapshot) => {
@@ -511,11 +563,113 @@ function buildPanelShell(): string {
           <div class="panel-empty" id="trend-empty" style="display:none">Collecting data…</div>
         </div>
       </div>
+
+      <!-- 7일 사용량 바 차트 -->
+      <div class="card panel-trend-card" id="panel-daily-card">
+        <div class="panel-chart-header">Daily Cost (Last 7 Days)</div>
+        <div class="panel-trend-wrap">
+          <canvas id="chart-daily"></canvas>
+          <div class="panel-empty" id="daily-empty">Collecting usage data…</div>
+        </div>
+      </div>
+
+      <!-- 세션 목록 -->
+      <div class="card panel-session-card" id="panel-session-card">
+        <div class="panel-chart-header">Recent Sessions</div>
+        <div id="panel-session-list"><div class="panel-empty">No sessions yet…</div></div>
+      </div>
     </div>`;
 }
 
 function getCssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function updateUsageSection(): void {
+  updateDailyChart();
+  updateSessionList();
+}
+
+function updateDailyChart(): void {
+  const canvas = document.getElementById('chart-daily') as HTMLCanvasElement | null;
+  const emptyEl = document.getElementById('daily-empty');
+  if (!canvas) return;
+
+  const days = panelUsage?.last7Days ?? [];
+  const hasData = days.some(d => d.costUsd > 0);
+
+  if (!hasData) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = '';
+    if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
+    return;
+  }
+  canvas.style.display = '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const labels = days.map(d => d.date.slice(5)); // MM-DD
+  const data = days.map(d => Number(d.costUsd.toFixed(4)));
+  const barColor = getCssVar('--c-sonnet');
+  const axisColor = getCssVar('--vscode-descriptionForeground');
+  const gridColor = getCssVar('--vscode-panel-border');
+
+  const datasets = [{
+    label: 'Cost (USD)',
+    data,
+    backgroundColor: barColor + 'bb',
+    borderColor: barColor,
+    borderWidth: 1,
+    borderRadius: 3,
+  }];
+
+  if (dailyChart) {
+    dailyChart.data.labels = labels;
+    dailyChart.data.datasets = datasets;
+    dailyChart.update();
+  } else {
+    dailyChart = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
+          y: {
+            ticks: { color: axisColor, font: { size: 10 }, callback: (v) => `$${Number(v).toFixed(2)}` },
+            grid: { color: gridColor },
+          },
+        },
+      },
+    });
+  }
+}
+
+function updateSessionList(): void {
+  const listEl = document.getElementById('panel-session-list');
+  if (!listEl) return;
+
+  const sessions = panelUsage?.recentSessions ?? [];
+  if (sessions.length === 0) {
+    listEl.innerHTML = '<div class="panel-empty">No sessions yet…</div>';
+    return;
+  }
+
+  listEl.innerHTML = sessions.map(s => buildSessionRow(s)).join('');
+}
+
+function buildSessionRow(s: SessionSummary): string {
+  const startTime = new Date(s.startTime);
+  const timeStr = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+  const dateStr = startTime.toISOString().slice(0, 10);
+  const cwdShort = s.cwd.split('/').pop() ?? s.cwd;
+  return `<div class="session-row">
+    <span class="session-cwd" title="${escapeHtml(s.cwd)}">${escapeHtml(cwdShort)}</span>
+    <span class="session-time mono">${escapeHtml(dateStr)} ${escapeHtml(timeStr)}</span>
+    <span class="session-tokens mono">${fmtTokens(s.totalTokens)}</span>
+    <span class="session-cost mono">${fmtCost(s.costUsd)}</span>
+  </div>`;
 }
 
 function updatePanel(snapshot: RateLimitSnapshot): void {

@@ -1,0 +1,172 @@
+import * as fs from 'node:fs';
+import * as readline from 'node:readline';
+import type { JournalUsage, SessionRecord } from '../types';
+
+/** mtime+offset 캐시 엔트리 */
+interface ParseCache {
+  mtime: number;
+  offset: number;
+  records: SessionRecord[];
+}
+
+type PricingModel = { input: number; output: number; cache_creation: number; cache_read: number };
+type PricingMap = Record<string, PricingModel>;
+
+const SKIP_TYPES = new Set(['progress', 'file-history-snapshot', 'attachment', 'permission-mode']);
+
+export class JsonlParser {
+  private readonly cache = new Map<string, ParseCache>();
+  private readonly pricing: PricingMap;
+
+  constructor(pricing: PricingMap) {
+    this.pricing = pricing;
+  }
+
+  /**
+   * 지정 파일에서 새 레코드만 증분 파싱.
+   * 변경 없으면 캐시 그대로 반환.
+   */
+  async parseFile(filePath: string): Promise<SessionRecord[]> {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      this.cache.delete(filePath);
+      return [];
+    }
+
+    const cached = this.cache.get(filePath);
+    if (cached && cached.mtime === stat.mtimeMs) {
+      return cached.records;
+    }
+
+    const startOffset = cached?.mtime === stat.mtimeMs ? cached.offset : 0;
+    const existingRecords: SessionRecord[] = cached ? [...cached.records] : [];
+
+    const newRecords = await this.readFrom(filePath, startOffset);
+    const merged = this.dedup([...existingRecords, ...newRecords]);
+
+    this.cache.set(filePath, {
+      mtime: stat.mtimeMs,
+      offset: stat.size,
+      records: merged,
+    });
+
+    return merged;
+  }
+
+  private async readFrom(filePath: string, offset: number): Promise<SessionRecord[]> {
+    const records: SessionRecord[] = [];
+
+    // requestId 기준 마지막 엔트리만 보존 (스트리밍 중복)
+    const byRequestId = new Map<string, SessionRecord>();
+
+    return new Promise((resolve) => {
+      let stream: fs.ReadStream;
+      try {
+        stream = fs.createReadStream(filePath, { start: offset, encoding: 'utf8' });
+      } catch {
+        resolve([]);
+        return;
+      }
+
+      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+      rl.on('line', (line) => {
+        line = line.trim();
+        if (!line) return;
+
+        let entry: Record<string, unknown>;
+        try {
+          entry = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          return;
+        }
+
+        if (SKIP_TYPES.has(String(entry['type'] ?? ''))) return;
+        if (entry['type'] !== 'assistant') return;
+
+        const msg = entry['message'] as Record<string, unknown> | undefined;
+        if (!msg) return;
+
+        const usage = msg['usage'] as Record<string, unknown> | undefined;
+        if (!usage) return;
+
+        const messageId = String(msg['id'] ?? '');
+        const requestId = String(entry['requestId'] ?? messageId);
+        if (!messageId) return;
+
+        const journalUsage: JournalUsage = {
+          input_tokens: Number(usage['input_tokens'] ?? 0),
+          output_tokens: Number(usage['output_tokens'] ?? 0),
+          cache_creation_input_tokens: Number(usage['cache_creation_input_tokens'] ?? 0),
+          cache_read_input_tokens: Number(usage['cache_read_input_tokens'] ?? 0),
+        };
+
+        const model = String(msg['model'] ?? 'unknown');
+        const record: SessionRecord = {
+          messageId,
+          requestId,
+          sessionId: String(entry['sessionId'] ?? ''),
+          model,
+          timestamp: String(entry['timestamp'] ?? new Date().toISOString()),
+          cwd: String(entry['cwd'] ?? ''),
+          usage: journalUsage,
+          costUsd: this.calcCost(model, journalUsage),
+        };
+
+        // 같은 requestId → 마지막 엔트리로 교체 (스트리밍 중복 처리)
+        byRequestId.set(requestId, record);
+      });
+
+      rl.on('close', () => {
+        records.push(...byRequestId.values());
+        resolve(records);
+      });
+
+      rl.on('error', () => resolve(records));
+    });
+  }
+
+  /** message.id 기준 cross-file dedup */
+  private dedup(records: SessionRecord[]): SessionRecord[] {
+    const seen = new Map<string, SessionRecord>();
+    for (const r of records) {
+      // 같은 message.id가 있으면 더 최신 timestamp 것으로 교체
+      const existing = seen.get(r.messageId);
+      if (!existing || r.timestamp > existing.timestamp) {
+        seen.set(r.messageId, r);
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }
+
+  private calcCost(model: string, usage: JournalUsage): number {
+    const pricing = this.findPricing(model);
+    if (!pricing) return 0;
+
+    const inputCost = (usage.input_tokens / 1_000_000) * pricing.input;
+    const outputCost = (usage.output_tokens / 1_000_000) * pricing.output;
+    const cacheCreateCost = (usage.cache_creation_input_tokens / 1_000_000) * pricing.cache_creation;
+    const cacheReadCost = (usage.cache_read_input_tokens / 1_000_000) * pricing.cache_read;
+
+    return inputCost + outputCost + cacheCreateCost + cacheReadCost;
+  }
+
+  private findPricing(model: string): PricingModel | undefined {
+    if (this.pricing[model]) return this.pricing[model];
+
+    // 접두사 매칭: "claude-sonnet-4-6" → "claude-sonnet-4-5" fallback
+    const lm = model.toLowerCase();
+    for (const key of Object.keys(this.pricing)) {
+      if (lm.startsWith(key) || key.startsWith(lm.split('-').slice(0, 3).join('-'))) {
+        return this.pricing[key];
+      }
+    }
+    return undefined;
+  }
+
+  clearCache(): void {
+    this.cache.clear();
+  }
+}
