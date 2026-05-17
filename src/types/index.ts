@@ -99,6 +99,7 @@ export interface DailyUsage {
   cacheReadTokens: number;
   totalTokens: number;
   costUsd: number;
+  cacheHitRate: number; // 일별 캐시 히트율 (0.0~1.0, 일별 트렌드용)
 }
 
 /** 세션 집계 (sessionId 기준). */
@@ -111,10 +112,26 @@ export interface SessionSummary {
   messageCount: number;
 }
 
+/** 모델별 사용량 분해 (오늘 기준). */
+export interface ModelBreakdown {
+  model: string;
+  tokens: number;
+  costUsd: number;
+  share: number;  // 0.0 ~ 1.0 (비용 기준 비율)
+}
+
+/** 캐시 효율 통계. */
+export interface CacheStats {
+  hitRate: number;    // cache_read / (input + cache_creation + cache_read)
+  savedUsd: number;   // cache_read_tokens × (input_price - cache_read_price) / 1M
+}
+
 /** Webview로 전달하는 전체 사용량 요약. */
 export interface UsageSummary {
   today: DailyUsage;
   last7Days: DailyUsage[];
   recentSessions: SessionSummary[];  // 최근 20개
+  modelBreakdown: ModelBreakdown[];  // 오늘 모델별 집계
+  cacheStats: CacheStats;            // 오늘 캐시 효율
   generatedAt: string;               // ISO8601
 }

@@ -259,18 +259,43 @@ function fmtCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+function modelShortName(model: string): string {
+  if (model.includes('opus')) return 'Opus';
+  if (model.includes('sonnet')) return 'Sonnet';
+  if (model.includes('haiku')) return 'Haiku';
+  return model.split('-').slice(-2).join('-');
+}
+
+function modelAccentClass(model: string): string {
+  if (model.includes('opus')) return 'opus';
+  if (model.includes('sonnet')) return 'sonnet';
+  if (model.includes('haiku')) return 'haiku';
+  return 'slate';
+}
+
 function buildUsageRowHtml(usage: UsageSummary | null): string {
   if (!usage) return '';
-  const { today } = usage;
+  const { today, modelBreakdown, cacheStats } = usage;
   if (today.totalTokens === 0 && today.costUsd === 0) {
     return `<div class="sb-usage-row">오늘 사용량 없음</div>`;
   }
+
+  const topModel = modelBreakdown[0];
+  const modelChip = topModel
+    ? `<span class="sb-chip sb-chip--model ${modelAccentClass(topModel.model)}">${escapeHtml(modelShortName(topModel.model))}</span>`
+    : '';
+
+  const cacheChip = cacheStats.hitRate > 0
+    ? `<span class="sb-chip sb-chip--cache" title="캐시 절약 ${fmtCost(cacheStats.savedUsd)}">⚡ ${(cacheStats.hitRate * 100).toFixed(0)}%</span>`
+    : '';
+
   return `<div class="sb-usage-row">
     <span class="sb-usage-icon">◎</span>
     <span class="sb-usage-tokens">${fmtTokens(today.totalTokens)} tokens</span>
     <span class="sb-usage-sep">·</span>
     <span class="sb-usage-cost mono">${fmtCost(today.costUsd)}</span>
-  </div>`;
+  </div>
+  ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}`;
 }
 
 function buildSidebarHtml(
@@ -430,6 +455,7 @@ const sdHistory: PollPoint[] = [];
 
 let trendChart: Chart | null = null;
 let dailyChart: Chart | null = null;
+let modelChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
 let panelUsage: UsageSummary | null = null;
 
@@ -573,6 +599,22 @@ function buildPanelShell(): string {
         </div>
       </div>
 
+      <!-- 모델별 사용량 -->
+      <div class="card panel-trend-card" id="panel-model-card">
+        <div class="panel-chart-header">Model Breakdown (Today)</div>
+        <div class="panel-model-body" id="panel-model-body">
+          <div class="panel-empty">No usage today…</div>
+        </div>
+      </div>
+
+      <!-- 캐시 효율 -->
+      <div class="card panel-cache-card" id="panel-cache-card">
+        <div class="panel-chart-header">Cache Efficiency (Today)</div>
+        <div class="panel-cache-body" id="panel-cache-body">
+          <div class="panel-empty">No cache data…</div>
+        </div>
+      </div>
+
       <!-- 세션 목록 -->
       <div class="card panel-session-card" id="panel-session-card">
         <div class="panel-chart-header">Recent Sessions</div>
@@ -587,6 +629,8 @@ function getCssVar(name: string): string {
 
 function updateUsageSection(): void {
   updateDailyChart();
+  updateModelBreakdown();
+  updateCacheSection();
   updateSessionList();
 }
 
@@ -638,6 +682,160 @@ function updateDailyChart(): void {
           x: { ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
           y: {
             ticks: { color: axisColor, font: { size: 10 }, callback: (v) => `$${Number(v).toFixed(2)}` },
+            grid: { color: gridColor },
+          },
+        },
+      },
+    });
+  }
+}
+
+function modelColor(model: string): string {
+  if (model.includes('opus')) return getCssVar('--c-opus');
+  if (model.includes('sonnet')) return getCssVar('--c-sonnet');
+  if (model.includes('haiku')) return getCssVar('--c-haiku');
+  return getCssVar('--c-slate');
+}
+
+function updateModelBreakdown(): void {
+  const bodyEl = document.getElementById('panel-model-body');
+  if (!bodyEl) return;
+
+  const breakdown = panelUsage?.modelBreakdown ?? [];
+  if (breakdown.length === 0) {
+    bodyEl.innerHTML = '<div class="panel-empty">No usage today…</div>';
+    if (modelChart) { modelChart.destroy(); modelChart = null; }
+    return;
+  }
+
+  const axisColor = getCssVar('--vscode-descriptionForeground');
+  const borderColor = getCssVar('--vscode-panel-border');
+
+  const labels = breakdown.map(b => modelShortName(b.model));
+  const data = breakdown.map(b => Number(b.costUsd.toFixed(4)));
+  const colors = breakdown.map(b => modelColor(b.model));
+
+  // 모델 바 목록 렌더
+  const barsHtml = breakdown.map(b => `
+    <div class="model-bar-row">
+      <span class="model-bar-label">${escapeHtml(modelShortName(b.model))}</span>
+      <div class="model-bar-track">
+        <div class="model-bar-fill" style="width:${(b.share * 100).toFixed(1)}%;background:${modelColor(b.model)};"></div>
+      </div>
+      <span class="model-bar-cost mono">${fmtCost(b.costUsd)}</span>
+      <span class="model-bar-pct mono">${(b.share * 100).toFixed(0)}%</span>
+    </div>`).join('');
+
+  const canvasId = 'chart-model';
+  bodyEl.innerHTML = `
+    <div class="panel-model-layout">
+      <div class="panel-model-donut">
+        <canvas id="${canvasId}" width="100" height="100"></canvas>
+      </div>
+      <div class="panel-model-bars">${barsHtml}</div>
+    </div>`;
+
+  const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
+  if (!canvas) return;
+
+  if (modelChart) { modelChart.destroy(); modelChart = null; }
+  modelChart = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors.map(c => c + 'cc'),
+        borderColor: colors,
+        borderWidth: 1,
+      }],
+    },
+    options: {
+      responsive: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => ` ${fmtCost(ctx.parsed as number)}`,
+          },
+        },
+      },
+      cutout: '65%',
+      borderColor: borderColor,
+      color: axisColor,
+    } as Parameters<typeof Chart>[1]['options'],
+  });
+}
+
+function updateCacheSection(): void {
+  const bodyEl = document.getElementById('panel-cache-body');
+  if (!bodyEl) return;
+
+  const cache = panelUsage?.cacheStats;
+  const last7 = panelUsage?.last7Days ?? [];
+
+  if (!cache || cache.hitRate === 0) {
+    bodyEl.innerHTML = '<div class="panel-empty">No cache data…</div>';
+    return;
+  }
+
+  const hitPct = (cache.hitRate * 100).toFixed(1);
+  const savedStr = fmtCost(cache.savedUsd);
+
+  // 일별 캐시 히트율 스파크라인 데이터
+  const sparkLabels = last7.map(d => d.date.slice(5));
+  const sparkData = last7.map(d => Number((d.cacheHitRate * 100).toFixed(1)));
+  const hasSparkData = sparkData.some(v => v > 0);
+
+  bodyEl.innerHTML = `
+    <div class="cache-kpi-row">
+      <div class="cache-kpi-item">
+        <div class="cache-kpi-label">Hit Rate (Today)</div>
+        <div class="cache-kpi-value mono">${hitPct}%</div>
+      </div>
+      <div class="cache-kpi-item">
+        <div class="cache-kpi-label">Saved (Today)</div>
+        <div class="cache-kpi-value mono" style="color:var(--c-haiku);">${savedStr}</div>
+      </div>
+    </div>
+    ${hasSparkData ? `
+    <div class="cache-spark-wrap">
+      <div class="panel-chart-header" style="font-size:var(--fs-label);margin-bottom:var(--sp-1);">7-Day Hit Rate</div>
+      <div style="height:60px;position:relative;">
+        <canvas id="chart-cache-spark"></canvas>
+      </div>
+    </div>` : ''}`;
+
+  if (hasSparkData) {
+    const canvas = document.getElementById('chart-cache-spark') as HTMLCanvasElement | null;
+    if (!canvas) return;
+    const axisColor = getCssVar('--vscode-descriptionForeground');
+    const gridColor = getCssVar('--vscode-panel-border');
+    const lineColor = getCssVar('--c-warn');
+    new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: sparkLabels,
+        datasets: [{
+          data: sparkData,
+          borderColor: lineColor,
+          backgroundColor: lineColor + '22',
+          borderWidth: 1.5,
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: axisColor, font: { size: 9 } }, grid: { color: gridColor } },
+          y: {
+            min: 0,
+            max: 100,
+            ticks: { color: axisColor, font: { size: 9 }, callback: (v) => `${v}%` },
             grid: { color: gridColor },
           },
         },
