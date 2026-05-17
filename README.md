@@ -29,8 +29,8 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Model chip**: Color-coded Opus / Sonnet / Haiku chip showing today's primary model in the sidebar
 - **Cache hit rate chip**: Today's cache hit rate (e.g. `⚡ 72%`) with saved cost in tooltip — pure local calculation
 - **7-day cost bar chart**: Dashboard panel shows daily spend for the past 7 days
-- **Model breakdown**: Doughnut chart + bar list showing per-model cost share for today (v0.0.6)
-- **Cache efficiency**: Hit rate KPI, cumulative saved cost, and 7-day sparkline in the dashboard (v0.0.6)
+- **Model breakdown**: Doughnut chart + bar list showing per-model cost share for today (v0.0.60)
+- **Cache efficiency**: Hit rate KPI, cumulative saved cost, and 7-day sparkline in the dashboard (v0.0.60)
 - **Session history**: Up to 20 recent sessions with start time, working directory, token count, and estimated cost
 - **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (opus-4 / sonnet-4-5 / haiku-4-5)
 
