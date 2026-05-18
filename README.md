@@ -2,8 +2,10 @@
 
 > Real-time Claude Max rate limit monitor — right inside VS Code & Cursor.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
-[![Open VSX](https://img.shields.io/badge/Open%20VSX-cubha.claude--usage--dashboard-purple)](https://open-vsx.org/extension/cubha/claude-code-gauge)
+[![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/cubha.claude-code-gauge?label=VS%20Marketplace&color=0078d4)](https://marketplace.visualstudio.com/items?itemName=cubha.claude-code-gauge)
+[![Open VSX](https://img.shields.io/open-vsx/v/cubha/claude-code-gauge?label=Open%20VSX&color=a855f7)](https://open-vsx.org/extension/cubha/claude-code-gauge)
+[![Downloads](https://img.shields.io/visual-studio-marketplace/d/cubha.claude-code-gauge?color=22c55e)](https://marketplace.visualstudio.com/items?itemName=cubha.claude-code-gauge)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, and **what Claude actually did** — with burn rate predictions, tool usage breakdowns, and edited file history — without leaving your editor.
 

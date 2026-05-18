@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.74] - 2026-05-18
+
+### Changed
+- **Activity Bar icon**: Speedometer gauge SVG now correctly applied (16×16, semicircle track + active arc + needle + hub)
+- **Marketplace icon**: Resized `icon.png` from 1024×1024 (~991 KB) to 256×256 (~27 KB) — 97% size reduction, faster extension panel load
+- **README badges**: Replaced static badges with live shields.io badges — VS Marketplace version, Open VSX version, download count, MIT license
+
 ## [0.0.73] - 2026-05-18
 
 ### Added
