@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.75] - 2026-05-18
+
+### Fixed
+- **Dashboard loading state**: All data-dependent sections (Model Breakdown, Cache Efficiency, Tool Usage, Recently Edited Files, Recent Sessions) now show a pulsing "Collecting data…" indicator instead of an empty-state message while data is loading — prevents confusing "No data" flash on first open
+- **Chart canvas overflow**: Daily Cost and Tool Usage canvases are now hidden until data arrives, preventing layout overflow that caused loading text to bleed into adjacent sections
+
 ## [0.0.74] - 2026-05-18
 
 ### Changed

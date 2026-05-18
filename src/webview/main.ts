@@ -686,8 +686,8 @@ function buildPanelShell(): string {
       <div class="card panel-trend-card" id="panel-daily-card">
         <div class="panel-chart-header">${t('daily_cost')}</div>
         <div class="panel-trend-wrap">
-          <canvas id="chart-daily"></canvas>
-          <div class="panel-empty" id="daily-empty">${t('collecting_data')}</div>
+          <canvas id="chart-daily" style="display:none"></canvas>
+          <div class="panel-loading" id="daily-empty">${t('collecting_data')}</div>
         </div>
       </div>
 
@@ -695,7 +695,7 @@ function buildPanelShell(): string {
       <div class="card panel-trend-card" id="panel-model-card">
         <div class="panel-chart-header">${t('model_breakdown')}</div>
         <div class="panel-model-body" id="panel-model-body">
-          <div class="panel-empty">${t('no_usage_today2')}</div>
+          <div class="panel-loading">${t('collecting_data')}</div>
         </div>
       </div>
 
@@ -703,7 +703,7 @@ function buildPanelShell(): string {
       <div class="card panel-cache-card" id="panel-cache-card">
         <div class="panel-chart-header">${t('cache_efficiency')}</div>
         <div class="panel-cache-body" id="panel-cache-body">
-          <div class="panel-empty">${t('no_cache_data')}</div>
+          <div class="panel-loading">${t('collecting_data')}</div>
         </div>
       </div>
 
@@ -711,21 +711,21 @@ function buildPanelShell(): string {
       <div class="card panel-trend-card" id="panel-tool-card">
         <div class="panel-chart-header">${t('tool_usage')}</div>
         <div class="panel-trend-wrap" style="height:160px;">
-          <canvas id="chart-tools"></canvas>
-          <div class="panel-empty" id="tools-empty">${t('no_tool_data')}</div>
+          <canvas id="chart-tools" style="display:none"></canvas>
+          <div class="panel-loading" id="tools-empty">${t('collecting_data')}</div>
         </div>
       </div>
 
       <!-- 최근 편집 파일 -->
       <div class="card panel-files-card" id="panel-files-card">
         <div class="panel-chart-header">${t('recently_edited')}</div>
-        <div id="panel-files-list"><div class="panel-empty">${t('no_files_yet')}</div></div>
+        <div id="panel-files-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
       <!-- 세션 목록 -->
       <div class="card panel-session-card" id="panel-session-card">
         <div class="panel-chart-header">${t('recent_sessions')}</div>
-        <div id="panel-session-list"><div class="panel-empty">${t('no_sessions_yet')}</div></div>
+        <div id="panel-session-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
     </div>`;
 }
@@ -753,7 +753,7 @@ function updateDailyChart(): void {
 
   if (!hasData) {
     canvas.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = '';
+    if (emptyEl) { emptyEl.className = 'panel-empty'; emptyEl.textContent = t('collecting_data'); emptyEl.style.display = ''; }
     if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
     return;
   }
@@ -963,7 +963,7 @@ function updateToolChart(): void {
 
   if (!hasData) {
     canvas.style.display = 'none';
-    if (emptyEl) emptyEl.style.display = '';
+    if (emptyEl) { emptyEl.className = 'panel-empty'; emptyEl.textContent = t('no_tool_data'); emptyEl.style.display = ''; }
     if (toolChart) { toolChart.destroy(); toolChart = null; }
     return;
   }

@@ -994,6 +994,17 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   color: var(--vscode-descriptionForeground);
   font-family: var(--ff-mono);
 }
+@keyframes ccg-pulse { 0%,100%{opacity:.4} 50%{opacity:.9} }
+.panel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+  animation: ccg-pulse 1.4s ease-in-out infinite;
+}
 
 /* ── v0.0.4 신규 컴포넌트 ────────────────────────────── */
 
