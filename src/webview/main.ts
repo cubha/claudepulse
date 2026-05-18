@@ -275,7 +275,7 @@ function modelAccentClass(model: string): string {
 
 function buildUsageRowHtml(usage: UsageSummary | null): string {
   if (!usage) return '';
-  const { today, modelBreakdown, cacheStats } = usage;
+  const { today, modelBreakdown, cacheStats, todayToolCounts } = usage;
   if (today.totalTokens === 0 && today.costUsd === 0) {
     return `<div class="sb-usage-row">오늘 사용량 없음</div>`;
   }
@@ -289,13 +289,34 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
     ? `<span class="sb-chip sb-chip--cache" title="캐시 절약 ${fmtCost(cacheStats.savedUsd)}">⚡ ${(cacheStats.hitRate * 100).toFixed(0)}%</span>`
     : '';
 
+  // 도구 칩 행: 오늘 사용된 도구만 표시
+  const toolChips: string[] = [];
+  if (todayToolCounts) {
+    if (todayToolCounts.edit > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool tool-edit" title="Edit/MultiEdit">Edit ${todayToolCounts.edit}</span>`);
+    }
+    if (todayToolCounts.write > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool tool-write" title="Write">Write ${todayToolCounts.write}</span>`);
+    }
+    if (todayToolCounts.bash > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool tool-bash" title="Bash">Bash ${todayToolCounts.bash}</span>`);
+    }
+    if (todayToolCounts.webSearch > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool tool-search" title="WebSearch">🔍 ${todayToolCounts.webSearch}</span>`);
+    }
+  }
+  const toolRow = toolChips.length > 0
+    ? `<div class="sb-chip-row sb-tool-row">${toolChips.join('')}</div>`
+    : '';
+
   return `<div class="sb-usage-row">
     <span class="sb-usage-icon">◎</span>
     <span class="sb-usage-tokens">${fmtTokens(today.totalTokens)} tokens</span>
     <span class="sb-usage-sep">·</span>
     <span class="sb-usage-cost mono">${fmtCost(today.costUsd)}</span>
   </div>
-  ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}`;
+  ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}
+  ${toolRow}`;
 }
 
 function buildSidebarHtml(
@@ -456,6 +477,7 @@ const sdHistory: PollPoint[] = [];
 let trendChart: Chart | null = null;
 let dailyChart: Chart | null = null;
 let modelChart: Chart | null = null;
+let toolChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
 let panelUsage: UsageSummary | null = null;
 
@@ -615,6 +637,21 @@ function buildPanelShell(): string {
         </div>
       </div>
 
+      <!-- 도구 사용 히스토그램 -->
+      <div class="card panel-trend-card" id="panel-tool-card">
+        <div class="panel-chart-header">Tool Usage (Last 7 Days)</div>
+        <div class="panel-trend-wrap" style="height:160px;">
+          <canvas id="chart-tools"></canvas>
+          <div class="panel-empty" id="tools-empty">No tool data…</div>
+        </div>
+      </div>
+
+      <!-- 최근 편집 파일 -->
+      <div class="card panel-files-card" id="panel-files-card">
+        <div class="panel-chart-header">Recently Edited Files</div>
+        <div id="panel-files-list"><div class="panel-empty">No files yet…</div></div>
+      </div>
+
       <!-- 세션 목록 -->
       <div class="card panel-session-card" id="panel-session-card">
         <div class="panel-chart-header">Recent Sessions</div>
@@ -631,6 +668,8 @@ function updateUsageSection(): void {
   updateDailyChart();
   updateModelBreakdown();
   updateCacheSection();
+  updateToolChart();
+  updateFilesList();
   updateSessionList();
 }
 
@@ -842,6 +881,110 @@ function updateCacheSection(): void {
       },
     });
   }
+}
+
+function updateToolChart(): void {
+  const canvas = document.getElementById('chart-tools') as HTMLCanvasElement | null;
+  const emptyEl = document.getElementById('tools-empty');
+  if (!canvas) return;
+
+  const days = panelUsage?.last7DaysTools ?? [];
+  const hasData = days.some(d => d.edit > 0 || d.write > 0 || d.bash > 0 || d.webSearch > 0);
+
+  if (!hasData) {
+    canvas.style.display = 'none';
+    if (emptyEl) emptyEl.style.display = '';
+    if (toolChart) { toolChart.destroy(); toolChart = null; }
+    return;
+  }
+  canvas.style.display = '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const labels = days.map(d => d.date.slice(5));
+  const axisColor = getCssVar('--vscode-descriptionForeground');
+  const gridColor = getCssVar('--vscode-panel-border');
+
+  const datasets = [
+    {
+      label: 'Edit',
+      data: days.map(d => d.edit),
+      backgroundColor: getCssVar('--c-slate') + 'cc',
+      stack: 'tools',
+    },
+    {
+      label: 'Write',
+      data: days.map(d => d.write),
+      backgroundColor: getCssVar('--c-sonnet') + 'cc',
+      stack: 'tools',
+    },
+    {
+      label: 'Bash',
+      data: days.map(d => d.bash),
+      backgroundColor: getCssVar('--c-warn') + 'cc',
+      stack: 'tools',
+    },
+    {
+      label: 'Search',
+      data: days.map(d => d.webSearch),
+      backgroundColor: getCssVar('--c-haiku') + 'cc',
+      stack: 'tools',
+    },
+  ];
+
+  if (toolChart) {
+    toolChart.data.labels = labels;
+    toolChart.data.datasets = datasets;
+    toolChart.update();
+  } else {
+    toolChart = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { color: axisColor, boxWidth: 10, font: { size: 10 }, padding: 8 },
+          },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            ticks: { color: axisColor, font: { size: 10 } },
+            grid: { color: gridColor },
+          },
+          y: {
+            stacked: true,
+            ticks: { color: axisColor, font: { size: 10 }, stepSize: 1 },
+            grid: { color: gridColor },
+          },
+        },
+      },
+    });
+  }
+}
+
+function updateFilesList(): void {
+  const listEl = document.getElementById('panel-files-list');
+  if (!listEl) return;
+
+  const files = panelUsage?.recentEditedFiles ?? [];
+  if (files.length === 0) {
+    listEl.innerHTML = '<div class="panel-empty">No files yet…</div>';
+    return;
+  }
+
+  listEl.innerHTML = files.map(fp => {
+    const parts = fp.split('/');
+    const fileName = parts[parts.length - 1] ?? fp;
+    const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+    return `<div class="file-row">
+      <span class="file-name" title="${escapeHtml(fp)}">${escapeHtml(fileName)}</span>
+      ${dir ? `<span class="file-dir" title="${escapeHtml(fp)}">${escapeHtml(dir)}</span>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function updateSessionList(): void {

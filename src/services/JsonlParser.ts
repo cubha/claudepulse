@@ -1,6 +1,6 @@
 import * as fs from 'node:fs';
 import * as readline from 'node:readline';
-import type { JournalUsage, SessionRecord } from '../types';
+import type { JournalUsage, SessionRecord, ToolUseCounts } from '../types';
 
 /** mtime+offset 캐시 엔트리 */
 interface ParseCache {
@@ -103,6 +103,38 @@ export class JsonlParser {
           cache_read_input_tokens: Number(usage['cache_read_input_tokens'] ?? 0),
         };
 
+        // server_tool_use.web_search_requests (API usage 필드)
+        const serverToolUse = usage['server_tool_use'] as Record<string, unknown> | undefined;
+        const webSearchCount = Number(serverToolUse?.['web_search_requests'] ?? 0);
+
+        // content 배열에서 tool_use 블록 파싱
+        const content = msg['content'];
+        const toolCounts: ToolUseCounts = { edit: 0, write: 0, bash: 0, webSearch: webSearchCount, other: 0 };
+        const editedFiles: string[] = [];
+
+        if (Array.isArray(content)) {
+          for (const block of content as Array<Record<string, unknown>>) {
+            if (block['type'] !== 'tool_use') continue;
+            const name = String(block['name'] ?? '');
+            const input = block['input'] as Record<string, unknown> | undefined;
+            if (name === 'Edit' || name === 'MultiEdit') {
+              toolCounts.edit++;
+              const fp = String(input?.['file_path'] ?? '');
+              if (fp) editedFiles.push(fp);
+            } else if (name === 'Write') {
+              toolCounts.write++;
+              const fp = String(input?.['file_path'] ?? '');
+              if (fp) editedFiles.push(fp);
+            } else if (name === 'Bash') {
+              toolCounts.bash++;
+            } else if (name === 'WebSearch' || name === 'web_search') {
+              toolCounts.webSearch++;
+            } else {
+              toolCounts.other++;
+            }
+          }
+        }
+
         const model = String(msg['model'] ?? 'unknown');
         const record: SessionRecord = {
           messageId,
@@ -113,6 +145,8 @@ export class JsonlParser {
           cwd: String(entry['cwd'] ?? ''),
           usage: journalUsage,
           costUsd: this.calcCost(model, journalUsage),
+          toolCounts,
+          editedFiles,
         };
 
         // 같은 requestId → 마지막 엔트리로 교체 (스트리밍 중복 처리)

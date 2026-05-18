@@ -1,5 +1,5 @@
 import { findPricing } from '../utils/pricing';
-import type { CacheStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, UsageSummary } from '../types';
+import type { CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, ToolUseCounts, UsageSummary } from '../types';
 
 export class UsageAggregator {
   aggregate(records: SessionRecord[]): UsageSummary {
@@ -9,12 +9,17 @@ export class UsageAggregator {
     const byDay = new Map<string, DailyUsage>();
     const bySession = new Map<string, SessionSummary>();
     const byModel = new Map<string, { tokens: number; costUsd: number }>();
+    const byDayTools = new Map<string, DailyToolStats>();
 
-    // 오늘 캐시 집계용
+    // 오늘 집계용
     let todayCacheRead = 0;
     let todayCacheCreation = 0;
     let todayInput = 0;
     let todaySavedUsd = 0;
+    const todayTools: ToolUseCounts = { edit: 0, write: 0, bash: 0, webSearch: 0, other: 0 };
+
+    // 편집 파일 최근순 수집 (파일 경로 → 최근 timestamp)
+    const fileLastSeen = new Map<string, string>();
 
     for (const r of records) {
       const day = r.timestamp.slice(0, 10);
@@ -31,6 +36,16 @@ export class UsageAggregator {
       d.totalTokens += r.usage.input_tokens + r.usage.output_tokens
         + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
       d.costUsd += r.costUsd;
+
+      // 일별 도구 집계
+      if (!byDayTools.has(day)) {
+        byDayTools.set(day, { date: day, edit: 0, write: 0, bash: 0, webSearch: 0 });
+      }
+      const dt = byDayTools.get(day)!;
+      dt.edit += r.toolCounts.edit;
+      dt.write += r.toolCounts.write;
+      dt.bash += r.toolCounts.bash;
+      dt.webSearch += r.toolCounts.webSearch;
 
       // 세션 집계
       if (!bySession.has(r.sessionId)) {
@@ -50,6 +65,14 @@ export class UsageAggregator {
       s.costUsd += r.costUsd;
       s.messageCount += 1;
 
+      // 편집 파일 추적
+      for (const fp of r.editedFiles) {
+        const prev = fileLastSeen.get(fp);
+        if (!prev || r.timestamp > prev) {
+          fileLastSeen.set(fp, r.timestamp);
+        }
+      }
+
       // 오늘 전용 집계
       if (day === todayKey) {
         // 모델별 집계
@@ -64,12 +87,19 @@ export class UsageAggregator {
         todayCacheCreation += r.usage.cache_creation_input_tokens;
         todayInput += r.usage.input_tokens;
 
-        // 캐시 절약 비용: cache_read 대신 input 요금을 냈을 때의 차이
+        // 캐시 절약 비용
         const pricing = findPricing(r.model);
         if (pricing && r.usage.cache_read_input_tokens > 0) {
           todaySavedUsd += r.usage.cache_read_input_tokens
             * (pricing.input - pricing.cache_read) / 1_000_000;
         }
+
+        // 오늘 도구 집계
+        todayTools.edit += r.toolCounts.edit;
+        todayTools.write += r.toolCounts.write;
+        todayTools.bash += r.toolCounts.bash;
+        todayTools.webSearch += r.toolCounts.webSearch;
+        todayTools.other += r.toolCounts.other;
       }
     }
 
@@ -80,9 +110,9 @@ export class UsageAggregator {
     }
 
     const today = byDay.get(todayKey) ?? emptyDay(todayKey);
-
-    const last7Days = last7DayKeys(now)
-      .map(k => byDay.get(k) ?? emptyDay(k));
+    const last7Days = last7DayKeys(now).map(k => byDay.get(k) ?? emptyDay(k));
+    const last7DaysTools: DailyToolStats[] = last7DayKeys(now)
+      .map(k => byDayTools.get(k) ?? { date: k, edit: 0, write: 0, bash: 0, webSearch: 0 });
 
     const recentSessions = [...bySession.values()]
       .sort((a, b) => b.startTime.localeCompare(a.startTime))
@@ -106,12 +136,21 @@ export class UsageAggregator {
       savedUsd: todaySavedUsd,
     };
 
+    // 최근 편집 파일 (최근 활동 순 top 20)
+    const recentEditedFiles = [...fileLastSeen.entries()]
+      .sort((a, b) => b[1].localeCompare(a[1]))
+      .slice(0, 20)
+      .map(([fp]) => fp);
+
     return {
       today,
       last7Days,
       recentSessions,
       modelBreakdown,
       cacheStats,
+      todayToolCounts: todayTools,
+      last7DaysTools,
+      recentEditedFiles,
       generatedAt: now.toISOString(),
     };
   }

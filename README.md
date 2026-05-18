@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![Open VSX](https://img.shields.io/badge/Open%20VSX-cubha.claude--usage--dashboard-purple)](https://open-vsx.org/extension/cubha/claude-code-gauge)
 
-Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, and **today's token cost** at a glance — with burn rate predictions and safe-until estimates — without leaving your editor.
+Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, and **what Claude actually did** — with burn rate predictions, tool usage breakdowns, and edited file history — without leaving your editor.
 
 ## Features
 
@@ -33,6 +33,11 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Cache efficiency**: Hit rate KPI, cumulative saved cost, and 7-day sparkline in the dashboard (v0.0.60)
 - **Session history**: Up to 20 recent sessions with start time, working directory, token count, and estimated cost
 - **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (opus-4 / sonnet-4-5 / haiku-4-5)
+
+### Action Insights — *what Claude did* (local `.jsonl` — v0.0.70+)
+- **Tool usage chips** (sidebar): `Edit N · Write N · Bash N · 🔍 N` — today's tool call counts at a glance, color-coded by type
+- **Tool usage histogram** (dashboard): Stacked bar chart of Edit / Write / Bash / Search per day for the last 7 days — spot heavy editing vs. execution sessions
+- **Recently edited files** (dashboard): Up to 20 files touched in recent sessions, ordered by last activity — filename + full path
 
 ## How it works
 
