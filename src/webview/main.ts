@@ -392,7 +392,7 @@ function buildSidebarHtml(
   // Overage 섹션
   const overageSection = snapshot.overage
     ? `<div class="sb-overage-wrap">
-        <div class="sb-overage-card card">
+        <div class="sb-overage-card">
           <div class="overage-header-row">
             <span class="overage-label">Overage</span>
             <span class="overage-status-chip ${snapshot.overage.status}">${snapshot.overage.status === 'allowed' ? 'Active' : 'Blocked'}</span>
@@ -430,7 +430,7 @@ function buildSidebarHtml(
           <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(1 - fh.utilization)} left</span>
         </span>
       </div>
-      <div class="sb-rate-card card${isFhBottleneck ? ' is-bottleneck' : ''}">
+      <div class="sb-rate-card${isFhBottleneck ? ' is-bottleneck' : ''}">
         <div class="rate-bar">
           <div class="rate-bar-fill" id="sb-fh-bar" data-status="${fh.status}"></div>
         </div>
@@ -450,7 +450,7 @@ function buildSidebarHtml(
           <span class="mono" style="color:${statusColor(sd.status)};">${fmtPct(1 - sd.utilization)} left</span>
         </span>
       </div>
-      <div class="sb-rate-card card${isSdBottleneck ? ' is-bottleneck' : ''}">
+      <div class="sb-rate-card${isSdBottleneck ? ' is-bottleneck' : ''}">
         <div class="rate-bar">
           <div class="rate-bar-fill" id="sb-sd-bar" data-status="${sd.status}"></div>
         </div>
@@ -461,6 +461,7 @@ function buildSidebarHtml(
       </div>
 
       ${overageSection}
+      <div class="sb-spacer"></div>
 
     </div>`;
 }

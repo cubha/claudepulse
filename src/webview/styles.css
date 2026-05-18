@@ -762,15 +762,24 @@ html, body { margin: 0; padding: 0; }
   font-style: italic;
 }
 
-/* P0: 사이드바 섹션 카드 배경색 sideBar-background로 통일 */
+/* 사이드바 rate 섹션: 카드 아님 — 사이드바 배경에 완전 플랫 */
 .sb-rate-card {
-  padding: var(--sp-3) var(--sp-4);
-  margin: 0 3% var(--sp-2);
-  background: var(--vscode-sideBar-background);
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  flex-shrink: 0;
 }
-.sb-overage-card {
-  background: var(--vscode-sideBar-background);
+/* bottleneck: 전체 border 대신 좌측 accent 바 */
+.sb-rate-card.is-bottleneck {
+  border-left: 2px solid var(--c-warn) !important;
+  padding-left: calc(var(--sp-4) - 2px);
+  background: rgba(245, 158, 11, 0.05) !important;
+  box-shadow: none !important;
 }
+/* 하단 빈 공간 채움 */
+.sb-spacer { flex: 1; }
 .sb-error-card {
   margin: var(--sp-3);
   padding: var(--sp-4);
@@ -982,13 +991,16 @@ html, body { margin: 0; padding: 0; }
   margin-left: 4px;
 }
 
-/* Overage 카드 */
+/* Overage 섹션: rate-card와 동일 플랫 스타일 */
 .sb-overage-wrap {
-  padding: 0 var(--sp-3) var(--sp-2);
+  padding: 0;
   flex-shrink: 0;
 }
 .sb-overage-card {
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-4) var(--sp-3);
+  background: transparent;
+  border: none;
+  border-radius: 0;
 }
 .overage-header-row {
   display: flex;
