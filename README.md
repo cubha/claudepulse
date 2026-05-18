@@ -34,6 +34,10 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Session history**: Up to 20 recent sessions with start time, working directory, token count, and estimated cost
 - **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (opus-4 / sonnet-4-5 / haiku-4-5)
 
+### Language Support (v0.0.72+)
+- **4-language UI**: Switch between 한국어 / English / 日本語 / 中文 via the compact dropdown in the sidebar header — all labels, section names, error messages, and burn-rate strings update instantly
+- **Auto-detection**: Defaults to your system language (`navigator.language`) on first install; persists your choice in local storage
+
 ### Action Insights — *what Claude did* (local `.jsonl` — v0.0.70+)
 - **Tool usage chips** (sidebar): `Edit N · Write N · Bash N · 🔍 N` — today's tool call counts at a glance, color-coded by type
 - **Tool usage histogram** (dashboard): Stacked bar chart of Edit / Write / Bash / Search per day for the last 7 days — spot heavy editing vs. execution sessions
