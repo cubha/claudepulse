@@ -414,12 +414,20 @@ html, body { margin: 0; padding: 0; }
   border-bottom: 1px solid var(--vscode-panel-border);
   flex-shrink: 0;
 }
-.sb-header-title {
-  font-size: var(--fs-label);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--vscode-foreground);
+.lang-select {
+  background: var(--vscode-dropdown-background, transparent);
+  color: var(--vscode-dropdown-foreground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border));
+  border-radius: var(--r-sm);
+  font-size: 10px;
+  padding: 1px 4px;
+  cursor: pointer;
+  margin-left: 4px;
+  height: 20px;
+  outline: none;
+}
+.lang-select:hover {
+  border-color: var(--vscode-focusBorder, var(--c-sonnet));
 }
 .sb-header-spacer {
   flex: 1;

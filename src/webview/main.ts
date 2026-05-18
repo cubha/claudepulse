@@ -5,6 +5,7 @@ import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import { GetRateLimit, GetUsageSummary, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestRefresh } from '../messaging/contracts';
 import type { DailyUsage, PollerError, RateLimitSnapshot, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
+import { getLang, setLang, t } from './i18n';
 
 Chart.register(...registerables);
 
@@ -67,9 +68,9 @@ function statusColor(status: UnifiedWindow['status']): string {
 }
 
 function statusLabel(status: UnifiedWindow['status']): string {
-  if (status === 'blocked') return 'Blocked';
-  if (status === 'allowed_warning') return 'Warning';
-  return 'OK';
+  if (status === 'blocked') return t('status_blocked');
+  if (status === 'allowed_warning') return t('status_warning');
+  return t('status_ok');
 }
 
 function barFillWidth(utilization: number): string {
@@ -135,9 +136,9 @@ function buildBurnRow(history: PollPoint[], utilization: number, msUntilReset: n
   const safeUntil = calcSafeUntil(utilization, rate, resetAt);
   const projRemaining = calcProjAtReset(utilization, rate, msUntilReset);
   const rateStr = `${(rate * 100).toFixed(2)}%/min`;
-  const safeStr = safeUntil ? ` · Safe until ${fmtTime(safeUntil)} (proj ${fmtPct(projRemaining)} left)` : '';
+  const safeStr = safeUntil ? ` · ${t('safe_until')} ${fmtTime(safeUntil)} (${t('proj')} ${fmtPct(projRemaining)} ${t('left')})` : '';
   return `<div class="rate-burn-row">
-    <span class="rate-burn-label">Burn ${rateStr}${safeStr}</span>
+    <span class="rate-burn-label">${t('burn')} ${rateStr}${safeStr}</span>
   </div>`;
 }
 
@@ -177,6 +178,7 @@ function initSidebar(): void {
   const sbFhHistory: PollPoint[] = [];
   const sbSdHistory: PollPoint[] = [];
   let lastError: PollerError | null = null;
+  let lastSnapshot: RateLimitSnapshot | null = null;
   let lastUsage: UsageSummary | null = null;
 
   function recordSbHistory(snapshot: RateLimitSnapshot): void {
@@ -189,6 +191,7 @@ function initSidebar(): void {
 
   messenger.onNotification(PushRateLimit, (snapshot) => {
     lastError = null;
+    lastSnapshot = snapshot;
     recordSbHistory(snapshot);
     renderSidebar(snapshot, null);
   });
@@ -200,7 +203,7 @@ function initSidebar(): void {
 
   messenger.onNotification(PushUsageSummary, (usage) => {
     lastUsage = usage;
-    renderSidebar(null, lastError);
+    renderSidebar(lastSnapshot, lastError);
   });
 
   try {
@@ -221,6 +224,7 @@ function initSidebar(): void {
 
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
     .then((snapshot) => {
+      lastSnapshot = snapshot;
       recordSbHistory(snapshot);
       renderSidebar(snapshot, null);
     })
@@ -244,6 +248,12 @@ function initSidebar(): void {
     });
     root!.querySelectorAll<HTMLButtonElement>('.js-login').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestLogin, HOST_EXTENSION));
+    });
+    root!.querySelectorAll<HTMLSelectElement>('.js-lang-select').forEach(sel => {
+      sel.addEventListener('change', () => {
+        setLang(sel.value as Parameters<typeof setLang>[0]);
+        renderSidebar(lastSnapshot, lastError);
+      });
     });
   }
 }
@@ -277,7 +287,7 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
   if (!usage) return '';
   const { today, modelBreakdown, cacheStats, todayToolCounts } = usage;
   if (today.totalTokens === 0 && today.costUsd === 0) {
-    return `<div class="sb-usage-row">오늘 사용량 없음</div>`;
+    return `<div class="sb-usage-row">${t('no_usage_today')}</div>`;
   }
 
   const topModel = modelBreakdown[0];
@@ -311,12 +321,25 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
 
   return `<div class="sb-usage-row">
     <span class="sb-usage-icon">◎</span>
-    <span class="sb-usage-tokens">${fmtTokens(today.totalTokens)} tokens</span>
+    <span class="sb-usage-tokens">${fmtTokens(today.totalTokens)} ${t('tokens')}</span>
     <span class="sb-usage-sep">·</span>
     <span class="sb-usage-cost mono">${fmtCost(today.costUsd)}</span>
   </div>
   ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}
   ${toolRow}`;
+}
+
+function buildLangSelect(currentLang: string): string {
+  const langs = [
+    { code: 'ko', label: '한국어' },
+    { code: 'en', label: 'English' },
+    { code: 'ja', label: '日本語' },
+    { code: 'zh', label: '中文' },
+  ];
+  const options = langs.map(l =>
+    `<option value="${l.code}"${currentLang === l.code ? ' selected' : ''}>${l.label}</option>`
+  ).join('');
+  return `<select class="lang-select js-lang-select" aria-label="Language">${options}</select>`;
 }
 
 function buildSidebarHtml(
@@ -329,22 +352,23 @@ function buildSidebarHtml(
   if (!snapshot) {
     const needsLogin = error === 'credentials_missing' || error === 'token_expired';
     const icon = needsLogin ? '🔑' : '⚠';
-    const title = error === 'credentials_missing' ? 'Login Required'
-      : error === 'token_expired' ? 'Session Expired'
-      : error === 'network_error' ? 'Network Error'
-      : 'Connecting…';
+    const title = error === 'credentials_missing' ? t('login_required')
+      : error === 'token_expired' ? t('session_expired')
+      : error === 'network_error' ? t('network_error')
+      : t('connecting');
     const sub = error === 'credentials_missing'
-      ? 'Claude Code CLI가 설치되어 있지 않거나<br>로그인되지 않았습니다.'
+      ? t('login_sub_missing')
       : error === 'token_expired'
-      ? 'OAuth 토큰이 만료됐습니다.<br>다시 로그인해 주세요.'
+      ? t('login_sub_expired')
       : error === 'network_error'
-      ? 'Anthropic API에 연결할 수 없습니다.<br>네트워크를 확인하세요.'
-      : 'Anthropic API에서 Rate Limit 정보를<br>가져오는 중…';
+      ? t('login_sub_network')
+      : t('connecting_sub');
+    const lang = getLang();
 
     return `
       <div class="sb-layout">
         <div class="sb-header">
-          <span class="sb-header-title">Claude Code Gauge</span>
+          ${buildLangSelect(lang)}
           <div class="sb-header-spacer"></div>
           <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
         </div>
@@ -354,9 +378,9 @@ function buildSidebarHtml(
           <div class="sb-error-msg">${title}</div>
           <div class="sb-error-sub">${sub}</div>
           ${needsLogin
-            ? `<button class="login-btn js-login">Login with Claude</button>
-               <div class="login-hint">로그인 후 ↻ 버튼을 눌러 새로고침하세요</div>`
-            : `<button class="btn-ghost js-refresh" style="margin-top:8px;">↻ Retry</button>`
+            ? `<button class="login-btn js-login">${t('login_with_claude')}</button>
+               <div class="login-hint">${t('login_hint')}</div>`
+            : `<button class="btn-ghost js-refresh" style="margin-top:8px;">${t('retry')}</button>`
           }
         </div>
       </div>`;
@@ -394,8 +418,8 @@ function buildSidebarHtml(
     ? `<div class="sb-overage-wrap">
         <div class="sb-overage-card">
           <div class="overage-header-row">
-            <span class="overage-label">Overage</span>
-            <span class="overage-status-chip ${snapshot.overage.status}">${snapshot.overage.status === 'allowed' ? 'Active' : 'Blocked'}</span>
+            <span class="overage-label">${t('overage')}</span>
+            <span class="overage-status-chip ${snapshot.overage.status}">${snapshot.overage.status === 'allowed' ? t('overage_active') : t('overage_blocked')}</span>
           </div>
           <div class="rate-bar">
             <div class="rate-bar-fill" id="sb-ov-bar" data-status="${snapshot.overage.status === 'rejected' ? 'blocked' : 'allowed'}"></div>
@@ -405,13 +429,15 @@ function buildSidebarHtml(
       </div>`
     : '';
 
+  const lang = getLang();
+
   return `
     <div class="sb-layout">
       <!-- 헤더 -->
       <div class="sb-header">
-        <span class="sb-header-title">Claude Code Gauge</span>
         ${planBadge}
-        <span class="status-badge ${overall}" style="margin-left:6px;">${statusLabel(overall)}</span>
+        <span class="status-badge ${overall}">${statusLabel(overall)}</span>
+        ${buildLangSelect(lang)}
         <div class="sb-header-spacer"></div>
         <span class="sb-gen-time mono">${timestamp}</span>
         <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
@@ -423,11 +449,11 @@ function buildSidebarHtml(
       <!-- 5h 세션 섹션 -->
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:var(--c-sonnet);"></span>
-        <span class="sb-section-label">Session (5h)</span>
+        <span class="sb-section-label">${t('session_5h')}</span>
         <span class="sb-section-right">
           <span class="mono">${fmtPct(fh.utilization)}</span>
           <span class="sb-section-sep">·</span>
-          <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(1 - fh.utilization)} left</span>
+          <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(1 - fh.utilization)} ${t('left')}</span>
         </span>
       </div>
       <div class="sb-rate-card${isFhBottleneck ? ' is-bottleneck' : ''}">
@@ -435,7 +461,7 @@ function buildSidebarHtml(
           <div class="rate-bar-fill" id="sb-fh-bar" data-status="${fh.status}"></div>
         </div>
         <div class="rate-meta-row">
-          <span class="rate-reset-label">resets in <span class="mono">${fmtReset(fh.msUntilReset)}</span></span>
+          <span class="rate-reset-label">${t('resets_in')} <span class="mono">${fmtReset(fh.msUntilReset)}</span></span>
         </div>
         ${fhBurnRow}
       </div>
@@ -443,11 +469,11 @@ function buildSidebarHtml(
       <!-- 7d 주간 섹션 -->
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:var(--c-opus);"></span>
-        <span class="sb-section-label">Weekly (7d)${thresholdBadge}</span>
+        <span class="sb-section-label">${t('weekly_7d')}${thresholdBadge}</span>
         <span class="sb-section-right">
           <span class="mono">${fmtPct(sd.utilization)}</span>
           <span class="sb-section-sep">·</span>
-          <span class="mono" style="color:${statusColor(sd.status)};">${fmtPct(1 - sd.utilization)} left</span>
+          <span class="mono" style="color:${statusColor(sd.status)};">${fmtPct(1 - sd.utilization)} ${t('left')}</span>
         </span>
       </div>
       <div class="sb-rate-card${isSdBottleneck ? ' is-bottleneck' : ''}">
@@ -455,7 +481,7 @@ function buildSidebarHtml(
           <div class="rate-bar-fill" id="sb-sd-bar" data-status="${sd.status}"></div>
         </div>
         <div class="rate-meta-row">
-          <span class="rate-reset-label">resets in <span class="mono">${fmtReset(sd.msUntilReset)}</span></span>
+          <span class="rate-reset-label">${t('resets_in')} <span class="mono">${fmtReset(sd.msUntilReset)}</span></span>
         </div>
         ${sdBurnRow}
       </div>
