@@ -1,46 +1,90 @@
 import * as vscode from 'vscode';
 import { COMMANDS } from '../constants';
-import type { RateLimitSnapshot } from '../types';
+import type { RateLimitSnapshot, UnifiedWindow } from '../types';
 
 export class StatusBarController {
-  private item: vscode.StatusBarItem;
+  private item5h: vscode.StatusBarItem;
+  private item7d: vscode.StatusBarItem;
 
   constructor() {
-    this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    this.item.command = COMMANDS.openDashboard;
-    this.item.text = '$(pulse) ...';
-    this.item.tooltip = 'Claude Code Gauge — Loading...';
+    // 5H item이 더 왼쪽에 오도록 priority를 7D보다 높게
+    this.item5h = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1001);
+    this.item5h.command = COMMANDS.openDashboard;
+
+    this.item7d = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 1000);
+    this.item7d.command = COMMANDS.openDashboard;
   }
 
   show(): void {
-    this.item.show();
+    this.item5h.show();
+    this.item7d.show();
   }
 
-  update(snapshot: RateLimitSnapshot): void {
-    const fh = (snapshot.fiveHour.utilization * 100).toFixed(0);
-    const sd = (snapshot.sevenDay.utilization * 100).toFixed(0);
-    const icon = this.statusIcon(snapshot.overallStatus);
+  update(snapshot: RateLimitSnapshot, todayCostUsd?: number): void {
+    const fh = snapshot.fiveHour;
+    const sd = snapshot.sevenDay;
 
-    this.item.text = `${icon} ${fh}% · ${sd}%`;
+    // 5H item
+    this.item5h.text = `5H ${this.pctToSquares(fh.utilization)} ${this.fmtPct(fh.utilization)}`;
+    this.item5h.backgroundColor = this.windowBackground(fh);
+    this.item5h.color = this.windowColor(fh);
+    this.item5h.tooltip = this.buildTooltip(snapshot, todayCostUsd);
 
-    const fhReset = this.fmtReset(snapshot.fiveHour.msUntilReset);
-    const sdReset = this.fmtReset(snapshot.sevenDay.msUntilReset);
-    this.item.tooltip = new vscode.MarkdownString(
-      `**Claude Code Gauge Rate Limits**\n\n` +
-      `Session (5h): **${fh}%** · resets in ${fhReset}\n\n` +
-      `Weekly (7d): **${sd}%** · resets in ${sdReset}\n\n` +
-      `_Click to open dashboard_`
-    );
+    // 7D item
+    this.item7d.text = `7D ${this.pctToSquares(sd.utilization)} ${this.fmtPct(sd.utilization)}`;
+    this.item7d.backgroundColor = this.windowBackground(sd);
+    this.item7d.color = this.windowColor(sd);
+    this.item7d.tooltip = undefined;
   }
 
   dispose(): void {
-    this.item.dispose();
+    this.item5h.dispose();
+    this.item7d.dispose();
   }
 
-  private statusIcon(status: RateLimitSnapshot['overallStatus']): string {
-    if (status === 'blocked') return '$(pulse)$(error)';
-    if (status === 'allowed_warning') return '$(pulse)$(warning)';
-    return '$(pulse)';
+  /** API status 우선, utilization % fallback */
+  private windowBackground(w: UnifiedWindow): vscode.ThemeColor | undefined {
+    if (w.status === 'blocked' || w.utilization > 0.8) {
+      return new vscode.ThemeColor('statusBarItem.errorBackground');
+    }
+    if (w.status === 'allowed_warning' || w.utilization > 0.6) {
+      return new vscode.ThemeColor('statusBarItem.warningBackground');
+    }
+    return undefined;
+  }
+
+  /** warning/error는 backgroundColor가 foreground를 자동 처리, 정상만 파란색 명시 */
+  private windowColor(w: UnifiedWindow): string | undefined {
+    if (w.status === 'blocked' || w.utilization > 0.8) return undefined;
+    if (w.status === 'allowed_warning' || w.utilization > 0.6) return undefined;
+    return '#3B82F6';
+  }
+
+  private pctToSquares(pct: number): string {
+    const filled = pct < 0.10 ? 0
+      : pct < 0.30 ? 1
+      : pct < 0.50 ? 2
+      : pct < 0.70 ? 3
+      : pct < 0.90 ? 4
+      : 5;
+    const sq = pct < 0.50 ? '🟦' : pct < 0.90 ? '🟨' : '🟥';
+    return sq.repeat(filled) + '⬜'.repeat(5 - filled);
+  }
+
+  private fmtPct(pct: number): string {
+    return `${(pct * 100).toFixed(0)}%`;
+  }
+
+  private buildTooltip(snapshot: RateLimitSnapshot, todayCostUsd?: number): vscode.MarkdownString {
+    const fh = snapshot.fiveHour;
+    const sd = snapshot.sevenDay;
+    const costLine = todayCostUsd != null ? `\n\nToday: **$${todayCostUsd.toFixed(2)}**` : '';
+    return new vscode.MarkdownString(
+      `**Claude Code Gauge**\n\n` +
+      `Session (5h): **${this.fmtPct(fh.utilization)}** · resets in ${this.fmtReset(fh.msUntilReset)}\n\n` +
+      `Weekly (7d): **${this.fmtPct(sd.utilization)}** · resets in ${this.fmtReset(sd.msUntilReset)}` +
+      costLine + `\n\n_Click to open dashboard_`
+    );
   }
 
   private fmtReset(ms: number): string {

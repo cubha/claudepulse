@@ -26,6 +26,26 @@ export const RequestLogin: NotificationType<void> = {
   method: 'requestLogin'
 };
 
+/** Notification: webview → extension. 대시보드 패널 열기 요청. */
+export const RequestOpenDashboard: NotificationType<void> = {
+  method: 'requestOpenDashboard'
+};
+
+/** Notification: webview → extension. 언어 변경 요청 (언어 코드: 'ko'|'en'|'ja'|'zh'). */
+export const RequestSetLang: NotificationType<string> = {
+  method: 'requestSetLang'
+};
+
+/** Request: webview → extension. 현재 저장된 언어 코드 조회. */
+export const GetLang: RequestType<void, string> = {
+  method: 'getLang'
+};
+
+/** Notification: extension → webview. 언어 변경 브로드캐스트. */
+export const PushLang: NotificationType<string> = {
+  method: 'pushLang'
+};
+
 /** Request: webview → extension. 현재 사용량 요약 요청. */
 export const GetUsageSummary: RequestType<void, UsageSummary | null> = {
   method: 'getUsageSummary'
