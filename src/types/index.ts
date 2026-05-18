@@ -88,6 +88,8 @@ export interface SessionRecord {
   cwd: string;
   usage: JournalUsage;
   costUsd: number;      // LiteLLM 기반 계산값
+  toolCounts: ToolUseCounts;  // 이 메시지의 도구 사용 카운트
+  editedFiles: string[];      // Edit/Write 도구의 file_path 목록
 }
 
 /** 하루 집계 (UTC 날짜 기준). */
@@ -126,6 +128,24 @@ export interface CacheStats {
   savedUsd: number;   // cache_read_tokens × (input_price - cache_read_price) / 1M
 }
 
+/** 도구 사용 카운트. */
+export interface ToolUseCounts {
+  edit: number;
+  write: number;
+  bash: number;
+  webSearch: number;
+  other: number;
+}
+
+/** 일별 도구 사용 집계 (히스토그램용). */
+export interface DailyToolStats {
+  date: string;  // YYYY-MM-DD
+  edit: number;
+  write: number;
+  bash: number;
+  webSearch: number;
+}
+
 /** Webview로 전달하는 전체 사용량 요약. */
 export interface UsageSummary {
   today: DailyUsage;
@@ -133,5 +153,8 @@ export interface UsageSummary {
   recentSessions: SessionSummary[];  // 최근 20개
   modelBreakdown: ModelBreakdown[];  // 오늘 모델별 집계
   cacheStats: CacheStats;            // 오늘 캐시 효율
+  todayToolCounts: ToolUseCounts;    // 오늘 도구 사용 집계
+  last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
+  recentEditedFiles: string[];       // 최근 편집 파일 목록 (top 20)
   generatedAt: string;               // ISO8601
 }

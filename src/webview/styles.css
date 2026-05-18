@@ -761,9 +761,15 @@ html, body { margin: 0; padding: 0; }
   color: var(--vscode-descriptionForeground);
   font-style: italic;
 }
+
+/* P0: 사이드바 섹션 카드 배경색 sideBar-background로 통일 */
 .sb-rate-card {
   padding: var(--sp-3) var(--sp-4);
   margin: 0 3% var(--sp-2);
+  background: var(--vscode-sideBar-background);
+}
+.sb-overage-card {
+  background: var(--vscode-sideBar-background);
 }
 .sb-error-card {
   margin: var(--sp-3);
@@ -1094,6 +1100,20 @@ html, body { margin: 0; padding: 0; }
 }
 .theme-light .sb-chip--cache { background: rgba(245,158,11,0.10); color: #B45309; }
 
+/* 도구 칩 (v0.0.70) */
+.sb-chip--tool {
+  font-family: var(--ff-mono);
+}
+.sb-chip--tool.tool-edit   { background: rgba(100,116,139,0.14); color: #94A3B8; }
+.sb-chip--tool.tool-write  { background: rgba(59,130,246,0.14);  color: #93C5FD; }
+.sb-chip--tool.tool-bash   { background: rgba(245,158,11,0.14);  color: #FCD34D; }
+.sb-chip--tool.tool-search { background: rgba(20,184,166,0.14);  color: #5EEAD4; }
+.theme-light .sb-chip--tool.tool-edit   { background: rgba(100,116,139,0.10); color: #475569; }
+.theme-light .sb-chip--tool.tool-write  { background: rgba(59,130,246,0.10);  color: #1D4ED8; }
+.theme-light .sb-chip--tool.tool-bash   { background: rgba(245,158,11,0.10);  color: #B45309; }
+.theme-light .sb-chip--tool.tool-search { background: rgba(20,184,166,0.10);  color: #0F766E; }
+.sb-tool-row { padding-bottom: var(--sp-2); }
+
 /* ── 대시보드 모델 분해 ── */
 .panel-model-layout {
   display: flex;
@@ -1132,7 +1152,7 @@ html, body { margin: 0; padding: 0; }
 .model-bar-pct  { color: var(--vscode-descriptionForeground); text-align: right; }
 
 /* ── 대시보드 캐시 효율 ── */
-.panel-cache-card { padding: var(--sp-3); }
+.panel-cache-card { margin: 0 var(--sp-4) var(--sp-4); padding: var(--sp-3); }
 .cache-kpi-row {
   display: flex;
   gap: var(--sp-6);
@@ -1153,9 +1173,58 @@ html, body { margin: 0; padding: 0; }
 }
 .cache-spark-wrap { margin-top: var(--sp-2); }
 
+/* ── P0: 대시보드 섹션 Y축 정렬 통일 ──
+   panel-root에 sp-4 패딩이 있고, panel-metric-grid는 추가 sp-4 좌우 패딩으로 총 32px.
+   panel-trend-card도 동일한 margin을 사용하므로 카드 외곽은 정렬됨.
+   Chart.js layout padding을 0으로 설정해 Y축 레이블이 카드 경계에 붙도록 처리한다.
+   (실제 Chart.js options에서 layout.padding.left: 0 적용 — CSS는 컨테이너만 맞춤)
+*/
+.panel-metric-grid {
+  padding: 0 var(--sp-4) var(--sp-3);
+}
+.panel-trend-card {
+  margin: 0 var(--sp-4) var(--sp-4);
+  padding: var(--sp-4);
+}
+
 /* ── 대시보드 Daily Cost 차트 ── */
 .panel-session-card {
+  margin: 0 var(--sp-4) var(--sp-4);
   padding: var(--sp-3);
+}
+
+/* ── 대시보드 도구 히스토그램 + 파일 목록 (v0.0.70) ── */
+.panel-files-card {
+  margin: 0 var(--sp-4) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+}
+.file-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  font-size: var(--fs-label);
+  overflow: hidden;
+}
+.file-row:last-child { border-bottom: none; }
+.file-name {
+  color: var(--vscode-foreground);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-dir {
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-family: var(--ff-mono);
+  font-size: 10px;
 }
 .session-row {
   display: grid;
