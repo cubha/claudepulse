@@ -1,13 +1,17 @@
 import { Messenger } from 'vscode-messenger';
+import { BROADCAST } from 'vscode-messenger-common';
 import type { RateLimitSnapshot, UsageSummary } from '../types';
-import { GetRateLimit, GetUsageSummary, RequestLogin, RequestRefresh } from './contracts';
+import { GetLang, GetRateLimit, GetUsageSummary, PushLang, RequestLogin, RequestOpenDashboard, RequestRefresh, RequestSetLang } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
   getSnapshot: () => RateLimitSnapshot | null,
   getUsageSummary: () => UsageSummary | null,
   onRefresh: () => void,
-  onLogin: () => void
+  onLogin: () => void,
+  onOpenDashboard: () => void,
+  getLang: () => string,
+  setLang: (lang: string) => void
 ): void {
   messenger.onRequest(GetRateLimit, () => {
     const snap = getSnapshot();
@@ -15,6 +19,12 @@ export function registerHandlers(
     return snap;
   });
   messenger.onRequest(GetUsageSummary, () => getUsageSummary());
+  messenger.onRequest(GetLang, () => getLang());
   messenger.onNotification(RequestRefresh, () => { void onRefresh(); });
   messenger.onNotification(RequestLogin, () => { onLogin(); });
+  messenger.onNotification(RequestOpenDashboard, () => { onOpenDashboard(); });
+  messenger.onNotification(RequestSetLang, (lang) => {
+    setLang(lang);
+    messenger.sendNotification(PushLang, BROADCAST, lang);
+  });
 }

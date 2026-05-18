@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.73] - 2026-05-18
+
+### Added
+- **StatusBar dual items**: Split into two independent `StatusBarItem` instances — `5H` and `7D` — each with its own emoji gauge and background color (yellow=warning / red=blocked)
+- **StatusBar emoji gauge**: Usage level visualized as 5 colored squares (`🟦🟦🟦⬜⬜`) — blue for normal (0–50%), yellow for warning (50–90%), red for danger (90–100%)
+- **Open Dashboard button**: Persistent button at the sidebar bottom — tactile depth styling (gradient + inner glow + press effect) — opens Dashboard Panel on click
+- **Dashboard i18n**: All dashboard text (section headers, metric labels, chart titles, empty states, cache labels) fully translated via `t()` — respects the same 4-language setting as the sidebar
+- **i18n real-time sync**: Language changes in the sidebar broadcast `PushLang` to the dashboard panel instantly — no panel reopen needed
+- **New icon**: Speedometer gauge icon (PNG Marketplace + SVG Activity Bar) matching the extension's usage-monitoring identity
+
+### Fixed
+- **Overage section border**: Added `border-bottom` to the overage section for clear visual separation
+- **Dashboard header spacing**: Removed duplicate `margin-left` on plan badge and status badge — consistent `gap: 4px` via flex container
+
+### Internal
+- `RequestSetLang` / `GetLang` / `PushLang` messaging contracts for cross-webview language sync
+- `broadcastMethods` in `DashboardPanel` and `SidebarViewProvider` extended with `PushLang.method`
+- Extension `globalState` persists language preference as `ccg-lang`
+
 ## [0.0.72] - 2026-05-18
 
 ### Changed

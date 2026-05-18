@@ -36,6 +36,7 @@ export function activate(context: vscode.ExtensionContext): void {
   let lastSnapshot: RateLimitSnapshot | null = null;
   let lastUsageSummary: UsageSummary | null = null;
   let poller: RateLimitPoller | null = null;
+  let currentLang: string = context.globalState.get<string>('ccg-lang') ?? 'auto';
 
   // jsonl 파이프라인
   const jsonlParser = new JsonlParser(PRICING);
@@ -64,7 +65,13 @@ export function activate(context: vscode.ExtensionContext): void {
     () => lastSnapshot,
     () => lastUsageSummary,
     () => { poller?.poll(); },
-    () => vscode.commands.executeCommand(COMMANDS.login)
+    () => vscode.commands.executeCommand(COMMANDS.login),
+    () => { void vscode.commands.executeCommand(COMMANDS.openDashboard); },
+    () => currentLang,
+    (lang) => {
+      currentLang = lang;
+      void context.globalState.update('ccg-lang', lang);
+    }
   );
 
   const sidebarProvider = new SidebarViewProvider(context.extensionUri, messenger);
@@ -106,7 +113,7 @@ export function activate(context: vscode.ExtensionContext): void {
       credReader, credentialsPath, logger,
       (snapshot) => {
         lastSnapshot = snapshot;
-        statusBar.update(snapshot);
+        statusBar.update(snapshot, lastUsageSummary?.today.costUsd);
         messenger.sendNotification(PushRateLimit, BROADCAST, snapshot);
         checkThreshold(snapshot);
       },

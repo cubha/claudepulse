@@ -50,6 +50,40 @@ const dict: Record<string, Record<Lang, string>> = {
   status_ok:        { ko: 'OK',                 en: 'OK',                    ja: 'OK',                      zh: '正常' },
   status_warning:   { ko: '경고',               en: 'Warning',               ja: '警告',                    zh: '警告' },
   status_blocked:   { ko: '차단',               en: 'Blocked',               ja: 'ブロック',                 zh: '已屏蔽' },
+  // 대시보드 버튼
+  open_dashboard:   { ko: '대시보드 열기',       en: 'Open Dashboard',        ja: 'ダッシュボードを開く',     zh: '打开仪表板' },
+  // 대시보드 섹션 헤더
+  burn_rate:        { ko: '소모율',              en: 'Burn Rate',             ja: '消費率',                  zh: '消耗率' },
+  safe_until_label: { ko: '안전 시간',           en: 'Safe Until',            ja: '安全期限',                zh: '安全至' },
+  util_trend:       { ko: '사용량 추세',          en: 'Utilization Trend',     ja: '使用量トレンド',           zh: '使用率趋势' },
+  scope_label:      { ko: '범위',               en: 'Scope',                 ja: '範囲',                    zh: '范围' },
+  daily_cost:       { ko: '일별 비용 (최근 7일)', en: 'Daily Cost (Last 7 Days)', ja: '日別コスト (直近7日)',  zh: '每日费用（近7天）' },
+  model_breakdown:  { ko: '모델별 분석 (오늘)',   en: 'Model Breakdown (Today)', ja: 'モデル別分析 (今日)',    zh: '模型分析（今天）' },
+  cache_efficiency: { ko: '캐시 효율 (오늘)',     en: 'Cache Efficiency (Today)', ja: 'キャッシュ効率 (今日)', zh: '缓存效率（今天）' },
+  tool_usage:       { ko: '도구 사용 (최근 7일)', en: 'Tool Usage (Last 7 Days)', ja: 'ツール使用 (直近7日)',  zh: '工具使用（近7天）' },
+  recently_edited:  { ko: '최근 편집 파일',       en: 'Recently Edited Files', ja: '最近編集したファイル',     zh: '最近编辑的文件' },
+  recent_sessions:  { ko: '최근 세션',           en: 'Recent Sessions',       ja: '最近のセッション',         zh: '最近会话' },
+  // 대시보드 수치 라벨
+  remaining_label:  { ko: '남음',               en: 'remaining',             ja: '残り',                    zh: '剩余' },
+  used_label:       { ko: '사용됨',              en: 'used',                  ja: '使用済',                  zh: '已用' },
+  after_reset:      { ko: '리셋 후',             en: 'After reset',           ja: 'リセット後',               zh: '重置后' },
+  left_at_reset:    { ko: '리셋 시 남음',         en: 'left at reset',         ja: 'リセット時残量',           zh: '重置时剩余' },
+  est_label:        { ko: '추정',               en: 'est.',                  ja: '推定',                    zh: '估算' },
+  // 대시보드 캐시 라벨
+  hit_rate_today:   { ko: '히트율 (오늘)',        en: 'Hit Rate (Today)',      ja: 'ヒット率 (今日)',           zh: '命中率（今天）' },
+  saved_today:      { ko: '절약 (오늘)',          en: 'Saved (Today)',         ja: '節約額 (今日)',             zh: '节省（今天）' },
+  seven_day_rate:   { ko: '7일 히트율',           en: '7-Day Hit Rate',        ja: '7日間ヒット率',            zh: '7天命中率' },
+  // 빈 상태 메시지
+  collecting_data:  { ko: '데이터 수집 중…',      en: 'Collecting data…',      ja: 'データ収集中…',            zh: '收集数据中…' },
+  collecting_poll:  { ko: '데이터 수집 중… (다음 폴링 ~5분 후)', en: 'Collecting data… (next poll in ~5 min)', ja: 'データ収集中… (次回ポーリング約5分後)', zh: '收集数据中…（下次轮询约5分钟后）' },
+  no_scope_data:    { ko: '선택 범위에 데이터 없음 — 더 넓은 범위로 시도', en: 'No data in selected scope — try a wider range', ja: '選択範囲にデータなし — 範囲を広げてください', zh: '所选范围无数据 — 请尝试更宽范围' },
+  no_usage_today2:  { ko: '오늘 사용량 없음…',    en: 'No usage today…',       ja: '本日の使用量なし…',         zh: '今日无使用记录…' },
+  no_cache_data:    { ko: '캐시 데이터 없음…',    en: 'No cache data…',        ja: 'キャッシュデータなし…',     zh: '无缓存数据…' },
+  no_tool_data:     { ko: '도구 데이터 없음…',    en: 'No tool data…',         ja: 'ツールデータなし…',         zh: '无工具数据…' },
+  no_files_yet:     { ko: '파일 없음…',           en: 'No files yet…',         ja: 'ファイルなし…',            zh: '暂无文件…' },
+  no_sessions_yet:  { ko: '세션 없음…',           en: 'No sessions yet…',      ja: 'セッションなし…',          zh: '暂无会话…' },
+  no_usage_yet:     { ko: '아직 사용량 없음',      en: 'No usage yet',          ja: 'まだ使用量なし',           zh: '暂无使用记录' },
+  waiting_poll:     { ko: '첫 폴링 대기 중… (≈5분) 또는 ↻ 클릭', en: 'Waiting for first poll… (≈5 min) or click ↻', ja: '初回ポーリング待機中… (約5分) または ↻ をクリック', zh: '等待首次轮询…（约5分钟）或点击 ↻' },
 };
 
 function detectLang(): Lang {

@@ -3,7 +3,7 @@
 import { Chart, registerables } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { GetRateLimit, GetUsageSummary, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestRefresh } from '../messaging/contracts';
+import { GetLang, GetRateLimit, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestOpenDashboard, RequestRefresh, RequestSetLang } from '../messaging/contracts';
 import type { DailyUsage, PollerError, RateLimitSnapshot, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
 import { getLang, setLang, t } from './i18n';
 
@@ -64,7 +64,7 @@ function fmtTime(date: Date): string {
 function statusColor(status: UnifiedWindow['status']): string {
   if (status === 'blocked') return 'var(--c-danger)';
   if (status === 'allowed_warning') return 'var(--c-warn)';
-  return 'var(--c-haiku)';
+  return 'var(--c-sonnet)';
 }
 
 function statusLabel(status: UnifiedWindow['status']): string {
@@ -252,8 +252,12 @@ function initSidebar(): void {
     root!.querySelectorAll<HTMLSelectElement>('.js-lang-select').forEach(sel => {
       sel.addEventListener('change', () => {
         setLang(sel.value as Parameters<typeof setLang>[0]);
+        messenger.sendNotification(RequestSetLang, HOST_EXTENSION, sel.value);
         renderSidebar(lastSnapshot, lastError);
       });
+    });
+    root!.querySelectorAll<HTMLButtonElement>('.js-open-dashboard').forEach(btn => {
+      btn.addEventListener('click', () => messenger.sendNotification(RequestOpenDashboard, HOST_EXTENSION));
     });
   }
 }
@@ -488,6 +492,9 @@ function buildSidebarHtml(
 
       ${overageSection}
       <div class="sb-spacer"></div>
+      <div class="sb-dashboard-wrap">
+        <button class="sb-dashboard-btn js-open-dashboard">⚡ ${t('open_dashboard')}</button>
+      </div>
 
     </div>`;
 }
@@ -507,6 +514,34 @@ let modelChart: Chart | null = null;
 let toolChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
 let panelUsage: UsageSummary | null = null;
+let lastPanelSnapshot: RateLimitSnapshot | null = null;
+
+function destroyCharts(): void {
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
+  if (modelChart) { modelChart.destroy(); modelChart = null; }
+  if (toolChart) { toolChart.destroy(); toolChart = null; }
+}
+
+function wirePanelButtons(messenger: InstanceType<typeof Messenger>): void {
+  document.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
+    btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
+  });
+  document.querySelectorAll<HTMLButtonElement>('.scope-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      chartScopeMin = Number(btn.dataset.scope) || 120;
+      document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateTrendChart();
+    });
+  });
+}
+
+function rebuildPanelDom(messenger: InstanceType<typeof Messenger>): void {
+  destroyCharts();
+  if (root) root.innerHTML = buildPanelShell();
+  wirePanelButtons(messenger);
+}
 
 function initPanel(): void {
   if (!root) return;
@@ -523,6 +558,7 @@ function initPanel(): void {
   }
 
   messenger.onNotification(PushRateLimit, (snapshot) => {
+    lastPanelSnapshot = snapshot;
     recordHistory(snapshot);
     updatePanel(snapshot);
   });
@@ -530,6 +566,13 @@ function initPanel(): void {
   messenger.onNotification(PushUsageSummary, (usage) => {
     panelUsage = usage;
     updateUsageSection();
+  });
+
+  messenger.onNotification(PushLang, (lang) => {
+    setLang(lang as Parameters<typeof setLang>[0]);
+    rebuildPanelDom(messenger);
+    if (lastPanelSnapshot) updatePanel(lastPanelSnapshot);
+    if (panelUsage) updateUsageSection();
   });
 
   try {
@@ -540,6 +583,16 @@ function initPanel(): void {
     return;
   }
 
+  // 초기 언어 동기화: extension 저장값 우선
+  void messenger.sendRequest(GetLang, HOST_EXTENSION, undefined)
+    .then((lang) => {
+      if (lang && lang !== 'auto') {
+        setLang(lang as Parameters<typeof setLang>[0]);
+        rebuildPanelDom(messenger);
+      }
+    })
+    .catch(() => undefined);
+
   void messenger.sendRequest(GetUsageSummary, HOST_EXTENSION, undefined)
     .then((usage) => {
       if (usage) { panelUsage = usage; updateUsageSection(); }
@@ -548,26 +601,16 @@ function initPanel(): void {
 
   messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
     .then((snapshot) => {
+      lastPanelSnapshot = snapshot;
       recordHistory(snapshot);
       updatePanel(snapshot);
     })
     .catch(() => {
       const el = document.getElementById('panel-status');
-      if (el) el.innerHTML = `<span style="color:#8a8a8a;font-size:12px;">Waiting for first poll... (≈5 min) or click ↻</span>`;
+      if (el) el.innerHTML = `<span style="color:#8a8a8a;font-size:12px;">${t('waiting_poll')}</span>`;
     });
 
-  document.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
-    btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
-  });
-
-  document.querySelectorAll<HTMLButtonElement>('.scope-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      chartScopeMin = Number(btn.dataset.scope) || 120;
-      document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      updateTrendChart();
-    });
-  });
+  wirePanelButtons(messenger);
 }
 
 function recordHistory(snapshot: RateLimitSnapshot): void {
@@ -584,7 +627,7 @@ function buildPanelShell(): string {
       <div class="panel-header">
         <span class="panel-title">Claude Code Gauge</span>
         <span id="panel-plan-badge"></span>
-        <span class="status-badge" id="panel-status" style="margin-left:6px;"></span>
+        <span class="status-badge" id="panel-status"></span>
         <div class="panel-header-spacer"></div>
         <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
       </div>
@@ -593,7 +636,7 @@ function buildPanelShell(): string {
       <!-- 4-카드 메트릭 그리드 -->
       <div class="panel-metric-grid">
         <div class="card panel-metric-card" id="panel-fh-card">
-          <div class="panel-metric-label">Session (5h)</div>
+          <div class="panel-metric-label">${t('session_5h')}</div>
           <div class="panel-metric-value" id="fh-remaining">—</div>
           <div class="panel-metric-bar">
             <div class="rate-bar">
@@ -603,7 +646,7 @@ function buildPanelShell(): string {
           <div class="panel-metric-sub" id="fh-reset">—</div>
         </div>
         <div class="card panel-metric-card" id="panel-sd-card">
-          <div class="panel-metric-label">Weekly (7d)</div>
+          <div class="panel-metric-label">${t('weekly_7d')}</div>
           <div class="panel-metric-value" id="sd-remaining">—</div>
           <div class="panel-metric-bar">
             <div class="rate-bar">
@@ -613,76 +656,76 @@ function buildPanelShell(): string {
           <div class="panel-metric-sub" id="sd-reset">—</div>
         </div>
         <div class="card panel-metric-card">
-          <div class="panel-metric-label">Burn Rate</div>
+          <div class="panel-metric-label">${t('burn_rate')}</div>
           <div class="panel-metric-value" id="burn-rate-val">—</div>
-          <div class="panel-metric-sub" id="burn-rate-hr">Collecting data…</div>
+          <div class="panel-metric-sub" id="burn-rate-hr">${t('collecting_data')}</div>
         </div>
         <div class="card panel-metric-card">
-          <div class="panel-metric-label">Safe Until</div>
+          <div class="panel-metric-label">${t('safe_until_label')}</div>
           <div class="panel-metric-value" id="safe-until-val">—</div>
-          <div class="panel-metric-sub" id="safe-until-proj">Collecting data…</div>
+          <div class="panel-metric-sub" id="safe-until-proj">${t('collecting_data')}</div>
         </div>
       </div>
 
       <!-- 추세 차트 -->
       <div class="card panel-trend-card">
-        <div class="panel-chart-header">Utilization Trend</div>
+        <div class="panel-chart-header">${t('util_trend')}</div>
         <div class="chart-scope-row">
-          <span class="chart-scope-label">Scope:</span>
+          <span class="chart-scope-label">${t('scope_label')}:</span>
           <button class="scope-btn" data-scope="30">30m</button>
           <button class="scope-btn active" data-scope="120">2h</button>
           <button class="scope-btn" data-scope="1440">24h</button>
         </div>
         <div class="panel-trend-wrap">
           <canvas id="chart-trend"></canvas>
-          <div class="panel-empty" id="trend-empty" style="display:none">Collecting data…</div>
+          <div class="panel-empty" id="trend-empty" style="display:none">${t('collecting_data')}</div>
         </div>
       </div>
 
       <!-- 7일 사용량 바 차트 -->
       <div class="card panel-trend-card" id="panel-daily-card">
-        <div class="panel-chart-header">Daily Cost (Last 7 Days)</div>
+        <div class="panel-chart-header">${t('daily_cost')}</div>
         <div class="panel-trend-wrap">
           <canvas id="chart-daily"></canvas>
-          <div class="panel-empty" id="daily-empty">Collecting usage data…</div>
+          <div class="panel-empty" id="daily-empty">${t('collecting_data')}</div>
         </div>
       </div>
 
       <!-- 모델별 사용량 -->
       <div class="card panel-trend-card" id="panel-model-card">
-        <div class="panel-chart-header">Model Breakdown (Today)</div>
+        <div class="panel-chart-header">${t('model_breakdown')}</div>
         <div class="panel-model-body" id="panel-model-body">
-          <div class="panel-empty">No usage today…</div>
+          <div class="panel-empty">${t('no_usage_today2')}</div>
         </div>
       </div>
 
       <!-- 캐시 효율 -->
       <div class="card panel-cache-card" id="panel-cache-card">
-        <div class="panel-chart-header">Cache Efficiency (Today)</div>
+        <div class="panel-chart-header">${t('cache_efficiency')}</div>
         <div class="panel-cache-body" id="panel-cache-body">
-          <div class="panel-empty">No cache data…</div>
+          <div class="panel-empty">${t('no_cache_data')}</div>
         </div>
       </div>
 
       <!-- 도구 사용 히스토그램 -->
       <div class="card panel-trend-card" id="panel-tool-card">
-        <div class="panel-chart-header">Tool Usage (Last 7 Days)</div>
+        <div class="panel-chart-header">${t('tool_usage')}</div>
         <div class="panel-trend-wrap" style="height:160px;">
           <canvas id="chart-tools"></canvas>
-          <div class="panel-empty" id="tools-empty">No tool data…</div>
+          <div class="panel-empty" id="tools-empty">${t('no_tool_data')}</div>
         </div>
       </div>
 
       <!-- 최근 편집 파일 -->
       <div class="card panel-files-card" id="panel-files-card">
-        <div class="panel-chart-header">Recently Edited Files</div>
-        <div id="panel-files-list"><div class="panel-empty">No files yet…</div></div>
+        <div class="panel-chart-header">${t('recently_edited')}</div>
+        <div id="panel-files-list"><div class="panel-empty">${t('no_files_yet')}</div></div>
       </div>
 
       <!-- 세션 목록 -->
       <div class="card panel-session-card" id="panel-session-card">
-        <div class="panel-chart-header">Recent Sessions</div>
-        <div id="panel-session-list"><div class="panel-empty">No sessions yet…</div></div>
+        <div class="panel-chart-header">${t('recent_sessions')}</div>
+        <div id="panel-session-list"><div class="panel-empty">${t('no_sessions_yet')}</div></div>
       </div>
     </div>`;
 }
@@ -769,7 +812,7 @@ function updateModelBreakdown(): void {
 
   const breakdown = panelUsage?.modelBreakdown ?? [];
   if (breakdown.length === 0) {
-    bodyEl.innerHTML = '<div class="panel-empty">No usage today…</div>';
+    bodyEl.innerHTML = `<div class="panel-empty">${t('no_usage_today2')}</div>`;
     if (modelChart) { modelChart.destroy(); modelChart = null; }
     return;
   }
@@ -841,7 +884,7 @@ function updateCacheSection(): void {
   const last7 = panelUsage?.last7Days ?? [];
 
   if (!cache || cache.hitRate === 0) {
-    bodyEl.innerHTML = '<div class="panel-empty">No cache data…</div>';
+    bodyEl.innerHTML = `<div class="panel-empty">${t('no_cache_data')}</div>`;
     return;
   }
 
@@ -856,17 +899,17 @@ function updateCacheSection(): void {
   bodyEl.innerHTML = `
     <div class="cache-kpi-row">
       <div class="cache-kpi-item">
-        <div class="cache-kpi-label">Hit Rate (Today)</div>
+        <div class="cache-kpi-label">${t('hit_rate_today')}</div>
         <div class="cache-kpi-value mono">${hitPct}%</div>
       </div>
       <div class="cache-kpi-item">
-        <div class="cache-kpi-label">Saved (Today)</div>
+        <div class="cache-kpi-label">${t('saved_today')}</div>
         <div class="cache-kpi-value mono" style="color:var(--c-haiku);">${savedStr}</div>
       </div>
     </div>
     ${hasSparkData ? `
     <div class="cache-spark-wrap">
-      <div class="panel-chart-header" style="font-size:var(--fs-label);margin-bottom:var(--sp-1);">7-Day Hit Rate</div>
+      <div class="panel-chart-header" style="font-size:var(--fs-label);margin-bottom:var(--sp-1);">${t('seven_day_rate')}</div>
       <div style="height:60px;position:relative;">
         <canvas id="chart-cache-spark"></canvas>
       </div>
@@ -999,17 +1042,19 @@ function updateFilesList(): void {
 
   const files = panelUsage?.recentEditedFiles ?? [];
   if (files.length === 0) {
-    listEl.innerHTML = '<div class="panel-empty">No files yet…</div>';
+    listEl.innerHTML = `<div class="panel-empty">${t('no_files_yet')}</div>`;
     return;
   }
 
   listEl.innerHTML = files.map(fp => {
-    const parts = fp.split('/');
+    const parts = fp.split(/[/\\]/);
     const fileName = parts[parts.length - 1] ?? fp;
     const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
     return `<div class="file-row">
-      <span class="file-name" title="${escapeHtml(fp)}">${escapeHtml(fileName)}</span>
-      ${dir ? `<span class="file-dir" title="${escapeHtml(fp)}">${escapeHtml(dir)}</span>` : ''}
+      <div class="file-info">
+        <span class="file-name" title="${escapeHtml(fp)}">${escapeHtml(fileName)}</span>
+        ${dir ? `<span class="file-dir" title="${escapeHtml(fp)}">${escapeHtml(dir)}</span>` : ''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -1020,7 +1065,7 @@ function updateSessionList(): void {
 
   const sessions = panelUsage?.recentSessions ?? [];
   if (sessions.length === 0) {
-    listEl.innerHTML = '<div class="panel-empty">No sessions yet…</div>';
+    listEl.innerHTML = `<div class="panel-empty">${t('no_sessions_yet')}</div>`;
     return;
   }
 
@@ -1054,7 +1099,7 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   // Plan 배지
   const planBadgeEl = document.getElementById('panel-plan-badge');
   if (planBadgeEl && snapshot.plan?.subscriptionType) {
-    planBadgeEl.innerHTML = `<span class="plan-badge" style="margin-left:8px;">${escapeHtml(fmtPlanTier(snapshot.plan.subscriptionType, snapshot.plan.rateLimitTier))}</span>`;
+    planBadgeEl.innerHTML = `<span class="plan-badge">${escapeHtml(fmtPlanTier(snapshot.plan.subscriptionType, snapshot.plan.rateLimitTier))}</span>`;
   }
 
   // Fallback 배너
@@ -1072,12 +1117,12 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   const fhRemEl = document.getElementById('fh-remaining');
   const fhBarFill = document.getElementById('fh-bar-fill') as HTMLElement | null;
   const fhResetEl = document.getElementById('fh-reset');
-  if (fhRemEl) fhRemEl.textContent = `${fmtPct(1 - fh.utilization)} remaining`;
+  if (fhRemEl) fhRemEl.textContent = `${fmtPct(1 - fh.utilization)} ${t('remaining_label')}`;
   if (fhBarFill) {
     fhBarFill.style.cssText = barFillWidth(fh.utilization);
     fhBarFill.dataset.status = fh.status;
   }
-  if (fhResetEl) fhResetEl.textContent = `Resets in ${fmtReset(fh.msUntilReset)} · used ${fmtPct(fh.utilization)}`;
+  if (fhResetEl) fhResetEl.textContent = `${t('resets_in')} ${fmtReset(fh.msUntilReset)} · ${t('used_label')} ${fmtPct(fh.utilization)}`;
 
   // WEEKLY (7d) 카드 — 병목 하이라이트 + 임계값 배지
   const sdCard = document.getElementById('panel-sd-card');
@@ -1086,7 +1131,7 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   const sdRemEl = document.getElementById('sd-remaining');
   const sdBarFill = document.getElementById('sd-bar-fill') as HTMLElement | null;
   const sdResetEl = document.getElementById('sd-reset');
-  if (sdRemEl) sdRemEl.textContent = `${fmtPct(1 - sd.utilization)} remaining`;
+  if (sdRemEl) sdRemEl.textContent = `${fmtPct(1 - sd.utilization)} ${t('remaining_label')}`;
   if (sdBarFill) {
     sdBarFill.style.cssText = barFillWidth(sd.utilization);
     sdBarFill.dataset.status = sd.status;
@@ -1095,7 +1140,7 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
     const thBadge = snapshot.sevenDaySurpassedThreshold !== undefined
       ? ` <span class="threshold-badge">&gt;${Math.round(snapshot.sevenDaySurpassedThreshold * 100)}%</span>`
       : '';
-    sdResetEl.innerHTML = `Resets in ${fmtReset(sd.msUntilReset)} · used ${fmtPct(sd.utilization)}${thBadge}`;
+    sdResetEl.innerHTML = `${t('resets_in')} ${fmtReset(sd.msUntilReset)} · ${t('used_label')} ${fmtPct(sd.utilization)}${thBadge}`;
   }
 
   // BURN RATE 카드
@@ -1108,11 +1153,11 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   if (burnRate !== null && burnRate > 0) {
     if (burnRateEl) burnRateEl.textContent = `${(burnRate * 100).toFixed(2)}%/min`;
     if (burnHrEl) burnHrEl.textContent = isEstimate
-      ? `${(burnRate * 100 * 60).toFixed(1)}%/hr (est.)`
+      ? `${(burnRate * 100 * 60).toFixed(1)}%/hr (${t('est_label')})`
       : `${(burnRate * 100 * 60).toFixed(1)}%/hr`;
   } else {
     if (burnRateEl) burnRateEl.textContent = '—';
-    if (burnHrEl) burnHrEl.textContent = fh.utilization === 0 ? 'No usage yet' : 'Collecting data…';
+    if (burnHrEl) burnHrEl.textContent = fh.utilization === 0 ? t('no_usage_yet') : t('collecting_data');
   }
 
   // SAFE UNTIL 카드
@@ -1122,11 +1167,11 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
     const resetAt = new Date(Date.now() + fh.msUntilReset);
     const safeUntil = calcSafeUntil(fh.utilization, burnRate, resetAt);
     const projRemaining = calcProjAtReset(fh.utilization, burnRate, fh.msUntilReset);
-    if (safeEl) safeEl.textContent = safeUntil ? fmtTime(safeUntil) : 'After reset';
-    if (safeProjEl) safeProjEl.textContent = `proj ${fmtPct(projRemaining)} left at reset${isEstimate ? ' (est.)' : ''}`;
+    if (safeEl) safeEl.textContent = safeUntil ? fmtTime(safeUntil) : t('after_reset');
+    if (safeProjEl) safeProjEl.textContent = `${t('proj')} ${fmtPct(projRemaining)} ${t('left_at_reset')}${isEstimate ? ` (${t('est_label')})` : ''}`;
   } else {
     if (safeEl) safeEl.textContent = '—';
-    if (safeProjEl) safeProjEl.textContent = fh.utilization === 0 ? 'No usage yet' : 'Collecting data…';
+    if (safeProjEl) safeProjEl.textContent = fh.utilization === 0 ? t('no_usage_yet') : t('collecting_data');
   }
 
   updateTrendChart();
@@ -1146,9 +1191,7 @@ function updateTrendChart(): void {
     canvas.style.display = 'none';
     if (emptyEl) {
       emptyEl.style.display = '';
-      emptyEl.textContent = fhHistory.length < 2
-        ? 'Collecting data… (next poll in ~5 min)'
-        : 'No data in selected scope — try a wider range';
+      emptyEl.textContent = fhHistory.length < 2 ? t('collecting_poll') : t('no_scope_data');
     }
     if (trendChart) { trendChart.destroy(); trendChart = null; }
     return;

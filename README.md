@@ -10,8 +10,8 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 ## Features
 
 ### Rate Limit Monitor (API headers)
-- **StatusBar**: Always-visible `⚡ 29% · 98%` — session and weekly usage at a glance
-- **Sidebar**: `used% · left%` dual display + status-colored progress bars (teal OK / amber Warning / red Blocked) + overall status badge inline with title
+- **StatusBar**: Two independent items — `5H 🟦🟦⬜⬜⬜ 28%` and `7D 🟦⬜⬜⬜⬜ 14%` — each with its own emoji gauge (🟦 normal · 🟨 warning · 🟥 danger) and background color (yellow=warning / red=blocked)
+- **Sidebar**: `used% · left%` dual display + status-colored progress bars (blue OK / amber Warning / red Blocked) + overall status badge inline with title
 - **Plan badge**: Your subscription tier (e.g. `Max 5x`) shown in the header — read from local credentials, no extra API call
 - **Burn Rate**: `%/min` consumption speed — estimated from session elapsed time on first open, then refined from poll history
 - **Safe Until**: Predicted time when your 5h quota runs out at current burn rate
@@ -36,7 +36,12 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ### Language Support (v0.0.72+)
 - **4-language UI**: Switch between 한국어 / English / 日本語 / 中文 via the compact dropdown in the sidebar header — all labels, section names, error messages, and burn-rate strings update instantly
-- **Auto-detection**: Defaults to your system language (`navigator.language`) on first install; persists your choice in local storage
+- **Full dashboard translation**: Dashboard panel section headers, metric labels, chart titles, and empty states are all translated (v0.0.73+)
+- **Real-time sync**: Changing language in the sidebar instantly updates the dashboard panel without reopening — broadcast via extension messaging (v0.0.73+)
+- **Auto-detection**: Defaults to your system language (`navigator.language`) on first install; persists your choice across sessions via extension `globalState`
+
+### Sidebar Navigation (v0.0.73+)
+- **Open Dashboard button**: Persistent button at the bottom of the sidebar — tactile depth styling with gradient and press effect — opens the full Dashboard Panel in one click
 
 ### Action Insights — *what Claude did* (local `.jsonl` — v0.0.70+)
 - **Tool usage chips** (sidebar): `Edit N · Write N · Bash N · 🔍 N` — today's tool call counts at a glance, color-coded by type
