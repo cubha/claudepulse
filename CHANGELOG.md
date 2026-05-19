@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.77] - 2026-05-19
+
+### Changed
+- **Status color thresholds**: Color decisions (StatusBar emoji 🟦🟨🟥 / background / font, Sidebar section dots / % text / progress bars, Dashboard progress bars / badge) now use fixed utilization % thresholds instead of raw Anthropic API status headers — 0–80 % blue · 80–90 % amber · 90–100 % red. API status header parsing is preserved in code for future re-enablement.
+
 ## [0.0.76] - 2026-05-19
 
 ### Changed
