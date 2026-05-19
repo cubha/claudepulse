@@ -17,7 +17,7 @@ function makePoller(onSnapshot: (s: RateLimitSnapshot) => void): TestablePoller 
 }
 
 describe('RateLimitPoller — 헤더 파싱', () => {
-  it('5h/7d utilization, reset, status를 파싱한다', () => {
+  it('5h/7d utilization, reset, status를 파싱한다 (% 임계값 기준)', () => {
     const snapshots: RateLimitSnapshot[] = [];
     const poller = makePoller((s) => snapshots.push(s));
 
@@ -26,33 +26,35 @@ describe('RateLimitPoller — 헤더 파싱', () => {
     const sdReset = now + 86400 * 3;
 
     const headers: Record<string, string> = {
-      'anthropic-ratelimit-unified-5h-utilization': '0.84',
+      'anthropic-ratelimit-unified-5h-utilization': '0.84', // 0.84 >= 0.80 → allowed_warning
       'anthropic-ratelimit-unified-5h-reset': String(fhReset),
-      'anthropic-ratelimit-unified-5h-status': 'allowed_warning',
-      'anthropic-ratelimit-unified-7d-utilization': '0.93',
+      'anthropic-ratelimit-unified-5h-status': 'allowed', // API status 무시됨
+      'anthropic-ratelimit-unified-7d-utilization': '0.93', // 0.93 >= 0.90 → blocked
       'anthropic-ratelimit-unified-7d-reset': String(sdReset),
-      'anthropic-ratelimit-unified-7d-status': 'allowed_warning',
+      'anthropic-ratelimit-unified-7d-status': 'allowed', // API status 무시됨
     };
 
     const snap = poller.exposedParseHeaders(headers);
 
     expect(snap.fiveHour.utilization).toBeCloseTo(0.84, 2);
-    expect(snap.fiveHour.status).toBe('allowed_warning');
+    expect(snap.fiveHour.status).toBe('allowed_warning'); // 0.84 >= 0.80
     expect(snap.sevenDay.utilization).toBeCloseTo(0.93, 2);
-    expect(snap.sevenDay.status).toBe('allowed_warning');
-    expect(snap.overallStatus).toBe('allowed_warning');
+    expect(snap.sevenDay.status).toBe('blocked');          // 0.93 >= 0.90
+    expect(snap.overallStatus).toBe('blocked');            // worst(warning, blocked)
   });
 
-  it('blocked 상태가 allowed_warning보다 우선한다', () => {
+  it('% 임계값으로 blocked가 allowed_warning보다 우선한다', () => {
     const poller = makePoller(() => {});
     const snap = poller.exposedParseHeaders({
-      'anthropic-ratelimit-unified-5h-utilization': '1.0',
+      'anthropic-ratelimit-unified-5h-utilization': '1.0',  // 1.0 >= 0.90 → blocked
       'anthropic-ratelimit-unified-5h-reset': '9999999999',
-      'anthropic-ratelimit-unified-5h-status': 'blocked',
-      'anthropic-ratelimit-unified-7d-utilization': '0.5',
+      'anthropic-ratelimit-unified-5h-status': 'allowed',   // 무시됨
+      'anthropic-ratelimit-unified-7d-utilization': '0.85', // 0.85 >= 0.80 → allowed_warning
       'anthropic-ratelimit-unified-7d-reset': '9999999999',
-      'anthropic-ratelimit-unified-7d-status': 'allowed',
+      'anthropic-ratelimit-unified-7d-status': 'allowed',   // 무시됨
     });
+    expect(snap.fiveHour.status).toBe('blocked');
+    expect(snap.sevenDay.status).toBe('allowed_warning');
     expect(snap.overallStatus).toBe('blocked');
   });
 

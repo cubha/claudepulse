@@ -191,21 +191,30 @@ export class RateLimitPoller {
   protected parseWindow(
     utilizationStr: string | undefined,
     resetStr: string | undefined,
-    statusStr: string | undefined,
+    _statusStr: string | undefined, // API status — 미래 재활성화용으로 보존, 현재는 % 임계값 우선
     now: Date
   ): UnifiedWindow {
     const utilization = utilizationStr ? parseFloat(utilizationStr) : 0;
     const resetAt = resetStr ? new Date(Number(resetStr) * 1000) : now;
     const msUntilReset = Math.max(0, resetAt.getTime() - now.getTime());
-    const status = this.parseStatus(statusStr);
+    const status = this.utilizationToStatus(utilization); // % 임계값 기반
+    // const status = this.parseStatus(_statusStr); // API status 기반 — 필요 시 교체
     return { utilization, resetAt, msUntilReset, status };
   }
 
-  private parseStatus(s: string | undefined): UnifiedWindow['status'] {
-    if (s === 'blocked') return 'blocked';
-    if (s === 'allowed_warning') return 'allowed_warning';
+  /** utilization % → 표시 status (0~80% 파랑 / 80~90% 노랑 / 90~100% 빨강) */
+  private utilizationToStatus(pct: number): UnifiedWindow['status'] {
+    if (pct >= 0.90) return 'blocked';
+    if (pct >= 0.80) return 'allowed_warning';
     return 'allowed';
   }
+
+  // API status 헤더 파싱 — 미래 재활성화용으로 보존
+  // private parseStatus(s: string | undefined): UnifiedWindow['status'] {
+  //   if (s === 'blocked') return 'blocked';
+  //   if (s === 'allowed_warning') return 'allowed_warning';
+  //   return 'allowed';
+  // }
 
   private worstStatus(a: UnifiedWindow['status'], b: UnifiedWindow['status']): UnifiedWindow['status'] {
     if (a === 'blocked' || b === 'blocked') return 'blocked';
