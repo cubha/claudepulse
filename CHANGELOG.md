@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.76] - 2026-05-19
+
+### Changed
+- **Status color unification**: StatusBar emoji gauge (🟦🟨🟥), background, font color and Sidebar section dots, utilization % text, progress bars now all derive color exclusively from the Anthropic API status value (`allowed` → blue · `allowed_warning` → amber · `blocked` → red). The previous utilization-% fallback thresholds (60%/80%) for preemptive color changes have been removed — color changes only when the API signals a state change.
+
 ## [0.0.75] - 2026-05-18
 
 ### Fixed

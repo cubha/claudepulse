@@ -452,10 +452,10 @@ function buildSidebarHtml(
 
       <!-- 5h 세션 섹션 -->
       <div class="sb-section-hdr">
-        <span class="sb-section-dot" style="background:var(--c-sonnet);"></span>
+        <span class="sb-section-dot" style="background:${statusColor(fh.status)};"></span>
         <span class="sb-section-label">${t('session_5h')}</span>
         <span class="sb-section-right">
-          <span class="mono">${fmtPct(fh.utilization)}</span>
+          <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(fh.utilization)}</span>
           <span class="sb-section-sep">·</span>
           <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(1 - fh.utilization)} ${t('left')}</span>
         </span>
@@ -472,10 +472,10 @@ function buildSidebarHtml(
 
       <!-- 7d 주간 섹션 -->
       <div class="sb-section-hdr">
-        <span class="sb-section-dot" style="background:var(--c-opus);"></span>
+        <span class="sb-section-dot" style="background:${statusColor(sd.status)};"></span>
         <span class="sb-section-label">${t('weekly_7d')}${thresholdBadge}</span>
         <span class="sb-section-right">
-          <span class="mono">${fmtPct(sd.utilization)}</span>
+          <span class="mono" style="color:${statusColor(sd.status)};">${fmtPct(sd.utilization)}</span>
           <span class="sb-section-sep">·</span>
           <span class="mono" style="color:${statusColor(sd.status)};">${fmtPct(1 - sd.utilization)} ${t('left')}</span>
         </span>
