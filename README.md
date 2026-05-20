@@ -13,14 +13,14 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ### Rate Limit Monitor (API headers)
 - **StatusBar**: Two independent items — `5H 🟦🟦⬜⬜⬜ 28%` and `7D 🟦⬜⬜⬜⬜ 14%` — emoji fill count based on utilization %; color (🟦🟨🟥), background, and font based on utilization thresholds (0–80 % blue · 80–90 % amber · 90–<100 % red Danger · 100 % red Blocked)
-- **Sidebar**: `used% · left%` dual display + status-colored progress bars (blue OK / amber Warning / red Danger·Blocked) + overall status badge inline with title
+- **Sidebar**: Three labeled sections — **세션사용량 (5h)** · **주간사용량 (7d)** · **초과사용량** — each with `used% · left%` display + status-colored progress bars (blue OK / amber Warning / red Danger·Blocked) + overall status badge inline with title
 - **Plan badge**: Your subscription tier (e.g. `Max 5x`) shown in the header — read from local credentials, no extra API call
 - **Burn Rate**: `%/min` consumption speed — estimated from session elapsed time on first open, then refined from poll history
 - **Safe Until**: Predicted time when your 5h quota runs out at current burn rate
 - **Dashboard Panel**: SESSION · WEEKLY · BURN RATE · SAFE UNTIL 4-card layout + utilization trend chart
 - **Trend Chart Scope**: Toggle 30m / 2h / 24h view window directly on the chart
 - **Bottleneck highlight**: The currently limiting window (5h or 7d) is outlined in amber so you instantly see what's constraining you
-- **Overage section**: Progress bar + status chip for your overage (extra usage) quota when active
+- **Overage section**: Progress bar + utilization percentage + status chip for your overage (extra usage) quota — percentage displayed even when blocked (e.g. `101%`), colored red for blocked / amber for active
 - **Fallback banner**: Inline warning when Claude throttles to reduced speed (e.g. 50%)
 - **7d threshold badge**: Red badge on the Weekly card when a usage threshold has been surpassed
 - **Threshold alerts**: Native VS Code warning notification when usage exceeds your configured limit

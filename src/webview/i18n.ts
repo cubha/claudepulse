@@ -35,15 +35,15 @@ const dict: Record<string, Record<Lang, string>> = {
   no_usage_today:   { ko: '오늘 사용량 없음',   en: 'No usage today',        ja: '本日の使用量なし',         zh: '今日无使用记录' },
   tokens:           { ko: '토큰',               en: 'tokens',                ja: 'トークン',                 zh: '令牌' },
   // 섹션
-  session_5h:       { ko: '세션 (5h)',           en: 'Session (5h)',           ja: 'セッション (5h)',           zh: '会话 (5h)' },
-  weekly_7d:        { ko: '주간 (7d)',           en: 'Weekly (7d)',            ja: '週間 (7d)',                zh: '每周 (7d)' },
+  session_5h:       { ko: '세션사용량 (5h)',       en: 'Session Usage (5h)',     ja: 'セッション使用量 (5h)',     zh: '会话用量 (5h)' },
+  weekly_7d:        { ko: '주간사용량 (7d)',       en: 'Weekly Usage (7d)',      ja: '週間使用量 (7d)',           zh: '每周用量 (7d)' },
   resets_in:        { ko: '재설정까지',          en: 'resets in',             ja: 'リセットまで',             zh: '重置于' },
   left:             { ko: '남음',                en: 'left',                  ja: '残り',                    zh: '剩余' },
   burn:             { ko: '소모율',              en: 'Burn',                  ja: '消費率',                   zh: '消耗率' },
   safe_until:       { ko: '안전 시간',           en: 'Safe until',            ja: '安全期限',                 zh: '安全至' },
   proj:             { ko: '예측',               en: 'proj',                  ja: '予測',                    zh: '预测' },
   // Overage
-  overage:          { ko: '초과',               en: 'Overage',               ja: '超過',                    zh: '超额' },
+  overage:          { ko: '초과사용량',           en: 'Overage Usage',         ja: '超過使用量',               zh: '超额用量' },
   overage_active:   { ko: '활성',               en: 'Active',                ja: 'アクティブ',               zh: '活跃' },
   overage_blocked:  { ko: '차단됨',             en: 'Blocked',               ja: 'ブロック',                 zh: '已屏蔽' },
   // 상태 배지
