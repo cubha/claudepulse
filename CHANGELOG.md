@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.79] - 2026-05-20
+
+### Fixed
+- **Danger status color**: `danger` CSS class rules were missing — status badge, progress bar fill, progress bar outline, and rate-status chip now correctly render red (same as `blocked`) for the 90–<100 % range.
+
 ## [0.0.78] - 2026-05-20
 
 ### Changed
