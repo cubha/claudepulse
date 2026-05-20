@@ -49,6 +49,7 @@ const dict: Record<string, Record<Lang, string>> = {
   // 상태 배지
   status_ok:        { ko: 'OK',                 en: 'OK',                    ja: 'OK',                      zh: '正常' },
   status_warning:   { ko: '경고',               en: 'Warning',               ja: '警告',                    zh: '警告' },
+  status_danger:    { ko: '위험',               en: 'Danger',                ja: '危険',                    zh: '危险' },
   status_blocked:   { ko: '차단',               en: 'Blocked',               ja: 'ブロック',                 zh: '已屏蔽' },
   // 대시보드 버튼
   open_dashboard:   { ko: '대시보드 열기',       en: 'Open Dashboard',        ja: 'ダッシュボードを開く',     zh: '打开仪表板' },

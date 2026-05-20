@@ -12,8 +12,8 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 ## Features
 
 ### Rate Limit Monitor (API headers)
-- **StatusBar**: Two independent items — `5H 🟦🟦⬜⬜⬜ 28%` and `7D 🟦⬜⬜⬜⬜ 14%` — emoji fill count based on utilization %; color (🟦🟨🟥), background, and font based on utilization thresholds (0–80 % blue · 80–90 % amber · 90–100 % red)
-- **Sidebar**: `used% · left%` dual display + status-colored progress bars (blue OK / amber Warning / red Blocked) + overall status badge inline with title
+- **StatusBar**: Two independent items — `5H 🟦🟦⬜⬜⬜ 28%` and `7D 🟦⬜⬜⬜⬜ 14%` — emoji fill count based on utilization %; color (🟦🟨🟥), background, and font based on utilization thresholds (0–80 % blue · 80–90 % amber · 90–<100 % red Danger · 100 % red Blocked)
+- **Sidebar**: `used% · left%` dual display + status-colored progress bars (blue OK / amber Warning / red Danger·Blocked) + overall status badge inline with title
 - **Plan badge**: Your subscription tier (e.g. `Max 5x`) shown in the header — read from local credentials, no extra API call
 - **Burn Rate**: `%/min` consumption speed — estimated from session elapsed time on first open, then refined from poll history
 - **Safe Until**: Predicted time when your 5h quota runs out at current burn rate
