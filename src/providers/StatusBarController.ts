@@ -43,13 +43,13 @@ export class StatusBarController {
   }
 
   private windowBackground(w: UnifiedWindow): vscode.ThemeColor | undefined {
-    if (w.status === 'blocked') return new vscode.ThemeColor('statusBarItem.errorBackground');
+    if (w.status === 'blocked' || w.status === 'danger') return new vscode.ThemeColor('statusBarItem.errorBackground');
     if (w.status === 'allowed_warning') return new vscode.ThemeColor('statusBarItem.warningBackground');
     return undefined;
   }
 
   private windowColor(w: UnifiedWindow): string | undefined {
-    if (w.status === 'blocked' || w.status === 'allowed_warning') return undefined;
+    if (w.status === 'blocked' || w.status === 'danger' || w.status === 'allowed_warning') return undefined;
     return '#3B82F6';
   }
 
@@ -60,7 +60,7 @@ export class StatusBarController {
       : pct < 0.70 ? 3
       : pct < 0.90 ? 4
       : 5;
-    const sq = status === 'blocked' ? '🟥' : status === 'allowed_warning' ? '🟨' : '🟦';
+    const sq = (status === 'blocked' || status === 'danger') ? '🟥' : status === 'allowed_warning' ? '🟨' : '🟦';
     return sq.repeat(filled) + '⬜'.repeat(5 - filled);
   }
 

@@ -202,9 +202,10 @@ export class RateLimitPoller {
     return { utilization, resetAt, msUntilReset, status };
   }
 
-  /** utilization % → 표시 status (0~80% 파랑 / 80~90% 노랑 / 90~100% 빨강) */
+  /** utilization % → 표시 status (0~80% 파랑 / 80~90% 노랑 / 90~<100% 빨강 위험 / 100% 빨강 차단) */
   private utilizationToStatus(pct: number): UnifiedWindow['status'] {
-    if (pct >= 0.90) return 'blocked';
+    if (pct >= 1.0) return 'blocked';
+    if (pct >= 0.90) return 'danger';
     if (pct >= 0.80) return 'allowed_warning';
     return 'allowed';
   }
@@ -218,6 +219,7 @@ export class RateLimitPoller {
 
   private worstStatus(a: UnifiedWindow['status'], b: UnifiedWindow['status']): UnifiedWindow['status'] {
     if (a === 'blocked' || b === 'blocked') return 'blocked';
+    if (a === 'danger' || b === 'danger') return 'danger';
     if (a === 'allowed_warning' || b === 'allowed_warning') return 'allowed_warning';
     return 'allowed';
   }

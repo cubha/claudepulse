@@ -9,7 +9,7 @@ export interface UnifiedWindow {
   /** 재설정까지 남은 ms */
   msUntilReset: number;
   /** API 상태값 */
-  status: 'allowed' | 'allowed_warning' | 'blocked';
+  status: 'allowed' | 'allowed_warning' | 'danger' | 'blocked';
 }
 
 /** 플랜 정보 (credentials.json 기반). */
@@ -37,7 +37,7 @@ export interface RateLimitSnapshot {
   fiveHour: UnifiedWindow;
   sevenDay: UnifiedWindow;
   /** 종합 상태 (worst-case) */
-  overallStatus: 'allowed' | 'allowed_warning' | 'blocked';
+  overallStatus: 'allowed' | 'allowed_warning' | 'danger' | 'blocked';
   generatedAt: Date;
   /** 플랜 정보 (credentials에 있을 때만) */
   plan?: PlanInfo;

@@ -62,13 +62,14 @@ function fmtTime(date: Date): string {
 }
 
 function statusColor(status: UnifiedWindow['status']): string {
-  if (status === 'blocked') return 'var(--c-danger)';
+  if (status === 'blocked' || status === 'danger') return 'var(--c-danger)';
   if (status === 'allowed_warning') return 'var(--c-warn)';
   return 'var(--c-sonnet)';
 }
 
 function statusLabel(status: UnifiedWindow['status']): string {
   if (status === 'blocked') return t('status_blocked');
+  if (status === 'danger') return t('status_danger');
   if (status === 'allowed_warning') return t('status_warning');
   return t('status_ok');
 }

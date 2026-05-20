@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.78] - 2026-05-20
+
+### Changed
+- **Status label refinement**: 90–100 % now displays **Danger** (위험) instead of Blocked — reserved **Blocked** (차단) exclusively for 100 % reached. Color scheme unchanged (both red). Applies consistently across StatusBar, Sidebar, and Dashboard Panel. A new `'danger'` status value was introduced in the internal type system; `worstStatus` priority order is `blocked > danger > allowed_warning > allowed`.
+
 ## [0.0.77] - 2026-05-19
 
 ### Changed
