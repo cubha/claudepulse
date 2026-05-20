@@ -420,18 +420,29 @@ function buildSidebarHtml(
 
   // Overage 섹션
   const overageSection = snapshot.overage
-    ? `<div class="sb-overage-wrap">
-        <div class="sb-overage-card">
-          <div class="overage-header-row">
-            <span class="overage-label">${t('overage')}</span>
-            <span class="overage-status-chip ${snapshot.overage.status}">${snapshot.overage.status === 'allowed' ? t('overage_active') : t('overage_blocked')}</span>
+    ? (() => {
+        const ov = snapshot.overage!;
+        const ovPct = fmtPct(ov.utilization);
+        const ovColor = ov.status === 'rejected' ? 'var(--c-danger)' : 'var(--c-warn)';
+        const ovDataStatus = ov.status === 'rejected' ? 'blocked' : 'allowed';
+        return `<div class="sb-overage-wrap">
+          <div class="sb-section-hdr">
+            <span class="sb-section-dot" style="background:${ovColor};"></span>
+            <span class="sb-section-label">${t('overage')}</span>
+            <span class="sb-section-right">
+              <span class="mono" style="color:${ovColor};">${ovPct}</span>
+              <span class="sb-section-sep">·</span>
+              <span class="overage-status-chip ${ov.status}">${ov.status === 'allowed' ? t('overage_active') : t('overage_blocked')}</span>
+            </span>
           </div>
-          <div class="rate-bar">
-            <div class="rate-bar-fill" id="sb-ov-bar" data-status="${snapshot.overage.status === 'rejected' ? 'blocked' : 'allowed'}"></div>
+          <div class="sb-rate-card">
+            <div class="rate-bar">
+              <div class="rate-bar-fill" id="sb-ov-bar" data-status="${ovDataStatus}"></div>
+            </div>
+            ${ov.disabledReason ? `<div class="overage-disabled-reason">${escapeHtml(ov.disabledReason)}</div>` : ''}
           </div>
-          ${snapshot.overage.disabledReason ? `<div class="overage-disabled-reason">${escapeHtml(snapshot.overage.disabledReason)}</div>` : ''}
-        </div>
-      </div>`
+        </div>`;
+      })()
     : '';
 
   const lang = getLang();

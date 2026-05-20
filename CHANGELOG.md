@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.80] - 2026-05-21
+
+### Fixed
+- **Overage usage %**: Sidebar overage section now displays the actual utilization percentage (e.g., 101%) alongside the status chip. Previously only the "차단됨/활성" badge was shown with no numeric value.
+
+### Changed
+- **Section label clarity**: Renamed sidebar/panel labels — `세션 (5h)` → `세션사용량 (5h)`, `주간 (7d)` → `주간사용량 (7d)`, `초과` → `초과사용량`. Same change applied to all supported languages (en/ja/zh).
+
 ## [0.0.79] - 2026-05-20
 
 ### Fixed
