@@ -713,6 +713,7 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
 }
 .rate-bar:has(.rate-bar-fill[data-status="allowed"])         { outline-color: rgba(59,130,246,.55); }
 .rate-bar:has(.rate-bar-fill[data-status="allowed_warning"]) { outline-color: rgba(245,158,11,.65); }
+.rate-bar:has(.rate-bar-fill[data-status="danger"])          { outline-color: rgba(244,63,94,.65); }
 .rate-bar:has(.rate-bar-fill[data-status="blocked"])         { outline-color: rgba(244,63,94,.65); }
 .rate-bar-fill {
   height: 100%;
@@ -723,16 +724,19 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
 }
 .rate-bar-fill[data-status="allowed"]         { background: var(--c-sonnet); }
 .rate-bar-fill[data-status="allowed_warning"] { background: var(--c-warn); }
+.rate-bar-fill[data-status="danger"]          { background: var(--c-danger); }
 .rate-bar-fill[data-status="blocked"]         { background: var(--c-danger); }
 
 /* Status badge color classes (inline style 대체) */
 .status-badge.allowed         { background: rgba(59,130,246,.13);  color: var(--c-sonnet); border-color: rgba(59,130,246,.27); }
 .status-badge.allowed_warning { background: rgba(245,158,11,.13);  color: var(--c-warn);   border-color: rgba(245,158,11,.27); }
+.status-badge.danger          { background: rgba(244,63,94,.13);   color: var(--c-danger); border-color: rgba(244,63,94,.27); }
 .status-badge.blocked         { background: rgba(244,63,94,.13);   color: var(--c-danger); border-color: rgba(244,63,94,.27); }
 
 /* Rate status chip color classes */
 .rate-status-chip.allowed         { background: rgba(59,130,246,.13);  color: var(--c-sonnet); }
 .rate-status-chip.allowed_warning { background: rgba(245,158,11,.13);  color: var(--c-warn); }
+.rate-status-chip.danger          { background: rgba(244,63,94,.13);   color: var(--c-danger); }
 .rate-status-chip.blocked         { background: rgba(244,63,94,.13);   color: var(--c-danger); }
 
 /* Burn rate row (sidebar) */
