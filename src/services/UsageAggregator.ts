@@ -1,5 +1,5 @@
 import { findPricing } from '../utils/pricing';
-import type { CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, ToolUseCounts, UsageSummary } from '../types';
+import type { BranchUsage, CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, ToolUseCounts, UsageSummary } from '../types';
 
 export class UsageAggregator {
   aggregate(records: SessionRecord[]): UsageSummary {
@@ -10,6 +10,7 @@ export class UsageAggregator {
     const bySession = new Map<string, SessionSummary>();
     const byModel = new Map<string, { tokens: number; costUsd: number }>();
     const byDayTools = new Map<string, DailyToolStats>();
+    const byBranch = new Map<string, BranchUsage>();
 
     // 오늘 집계용
     let todayCacheRead = 0;
@@ -65,6 +66,22 @@ export class UsageAggregator {
       s.costUsd += r.costUsd;
       s.messageCount += 1;
 
+      // 브랜치별 집계
+      if (r.gitBranch) {
+        const b = byBranch.get(r.gitBranch) ?? {
+          branch: r.gitBranch,
+          costUsd: 0,
+          totalTokens: 0,
+          sessionCount: 0,
+          lastActive: r.timestamp,
+        };
+        b.costUsd += r.costUsd;
+        b.totalTokens += r.usage.input_tokens + r.usage.output_tokens
+          + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
+        if (r.timestamp > b.lastActive) b.lastActive = r.timestamp;
+        byBranch.set(r.gitBranch, b);
+      }
+
       // 편집 파일 추적
       for (const fp of r.editedFiles) {
         const prev = fileLastSeen.get(fp);
@@ -101,6 +118,19 @@ export class UsageAggregator {
         todayTools.webSearch += r.toolCounts.webSearch;
         todayTools.other += r.toolCounts.other;
       }
+    }
+
+    // 브랜치별 세션 수 집계 (세션 ID × 브랜치 조합 기준)
+    const branchSessionSets = new Map<string, Set<string>>();
+    for (const r of records) {
+      if (!r.gitBranch) continue;
+      const set = branchSessionSets.get(r.gitBranch) ?? new Set<string>();
+      set.add(r.sessionId);
+      branchSessionSets.set(r.gitBranch, set);
+    }
+    for (const [branch, sessions] of branchSessionSets) {
+      const b = byBranch.get(branch);
+      if (b) b.sessionCount = sessions.size;
     }
 
     // 일별 캐시 히트율 계산
@@ -142,6 +172,16 @@ export class UsageAggregator {
       .slice(0, 20)
       .map(([fp]) => fp);
 
+    // 브랜치별 집계 (비용 내림차순)
+    const branchBreakdown = [...byBranch.values()]
+      .sort((a, b) => b.costUsd - a.costUsd);
+
+    // 가장 최근 활성 브랜치 (마지막 레코드의 gitBranch)
+    const lastRecord = records.length > 0
+      ? records.reduce((a, b) => a.timestamp > b.timestamp ? a : b)
+      : null;
+    const activeBranch = lastRecord?.gitBranch ?? '';
+
     return {
       today,
       last7Days,
@@ -151,6 +191,8 @@ export class UsageAggregator {
       todayToolCounts: todayTools,
       last7DaysTools,
       recentEditedFiles,
+      branchBreakdown,
+      activeBranch,
       generatedAt: now.toISOString(),
     };
   }

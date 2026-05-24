@@ -86,6 +86,7 @@ export interface SessionRecord {
   model: string;
   timestamp: string;    // ISO8601
   cwd: string;
+  gitBranch: string;    // jsonl entry.gitBranch (없으면 빈 문자열)
   usage: JournalUsage;
   costUsd: number;      // LiteLLM 기반 계산값
   toolCounts: ToolUseCounts;  // 이 메시지의 도구 사용 카운트
@@ -146,6 +147,15 @@ export interface DailyToolStats {
   webSearch: number;
 }
 
+/** 브랜치별 사용량 집계. */
+export interface BranchUsage {
+  branch: string;        // 브랜치명
+  costUsd: number;       // 누적 비용
+  totalTokens: number;   // 누적 토큰
+  sessionCount: number;  // 세션 수
+  lastActive: string;    // 가장 최근 timestamp (ISO8601)
+}
+
 /** Webview로 전달하는 전체 사용량 요약. */
 export interface UsageSummary {
   today: DailyUsage;
@@ -156,5 +166,7 @@ export interface UsageSummary {
   todayToolCounts: ToolUseCounts;    // 오늘 도구 사용 집계
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
   recentEditedFiles: string[];       // 최근 편집 파일 목록 (top 20)
+  branchBreakdown: BranchUsage[];    // 브랜치별 비용 집계 (비용 내림차순)
+  activeBranch: string;              // 가장 최근 활성 브랜치명 (사이드바 칩용)
   generatedAt: string;               // ISO8601
 }

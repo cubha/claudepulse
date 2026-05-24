@@ -290,7 +290,7 @@ function modelAccentClass(model: string): string {
 
 function buildUsageRowHtml(usage: UsageSummary | null): string {
   if (!usage) return '';
-  const { today, modelBreakdown, cacheStats, todayToolCounts } = usage;
+  const { today, modelBreakdown, cacheStats, todayToolCounts, activeBranch, branchBreakdown } = usage;
   if (today.totalTokens === 0 && today.costUsd === 0) {
     return `<div class="sb-usage-row">${t('no_usage_today')}</div>`;
   }
@@ -303,6 +303,15 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
   const cacheChip = cacheStats.hitRate > 0
     ? `<span class="sb-chip sb-chip--cache" title="캐시 절약 ${fmtCost(cacheStats.savedUsd)}">⚡ ${(cacheStats.hitRate * 100).toFixed(0)}%</span>`
     : '';
+
+  // 브랜치 칩: 활성 브랜치 + 해당 브랜치 누적 비용
+  let branchChip = '';
+  if (activeBranch) {
+    const branchData = branchBreakdown.find(b => b.branch === activeBranch);
+    const branchCost = branchData ? ` · ${fmtCost(branchData.costUsd)}` : '';
+    branchChip = `<span class="sb-chip sb-chip--branch" title="${t('branch_cost')}">`
+      + `⎇ ${escapeHtml(activeBranch)}${branchCost}</span>`;
+  }
 
   // 도구 칩 행: 오늘 사용된 도구만 표시
   const toolChips: string[] = [];
@@ -331,7 +340,8 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
     <span class="sb-usage-cost mono">${fmtCost(today.costUsd)}</span>
   </div>
   ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}
-  ${toolRow}`;
+  ${toolRow}
+  ${branchChip ? `<div class="sb-chip-row sb-branch-row">${branchChip}</div>` : ''}`;
 }
 
 function buildLangSelect(currentLang: string): string {
@@ -739,6 +749,12 @@ function buildPanelShell(): string {
         <div class="panel-chart-header">${t('recent_sessions')}</div>
         <div id="panel-session-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
+
+      <!-- Git ROI — 브랜치별 비용 -->
+      <div class="card panel-branch-card" id="panel-branch-card">
+        <div class="panel-chart-header">${t('git_roi')}</div>
+        <div id="panel-branch-list"><div class="panel-loading">${t('collecting_data')}</div></div>
+      </div>
     </div>`;
 }
 
@@ -753,6 +769,7 @@ function updateUsageSection(): void {
   updateToolChart();
   updateFilesList();
   updateSessionList();
+  updateBranchSection();
 }
 
 function updateDailyChart(): void {
@@ -1082,6 +1099,39 @@ function updateSessionList(): void {
   }
 
   listEl.innerHTML = sessions.map(s => buildSessionRow(s)).join('');
+}
+
+function updateBranchSection(): void {
+  const listEl = document.getElementById('panel-branch-list');
+  if (!listEl) return;
+
+  const branches = panelUsage?.branchBreakdown ?? [];
+  if (branches.length === 0) {
+    listEl.innerHTML = `<div class="panel-empty">${t('no_branch_data')}</div>`;
+    return;
+  }
+
+  const headerRow = `<div class="branch-row branch-header">
+    <span class="branch-name">${t('branch_label')}</span>
+    <span class="branch-cost mono">${t('daily_cost').split(' ')[0]}</span>
+    <span class="branch-tokens mono">${t('tokens')}</span>
+    <span class="branch-sessions mono">${t('sessions_label')}</span>
+    <span class="branch-last mono">${t('last_active')}</span>
+  </div>`;
+
+  const rows = branches.map(b => {
+    const lastDate = new Date(b.lastActive);
+    const lastStr = lastDate.toISOString().slice(0, 10);
+    return `<div class="branch-row">
+      <span class="branch-name" title="${escapeHtml(b.branch)}">⎇ ${escapeHtml(b.branch)}</span>
+      <span class="branch-cost mono">${fmtCost(b.costUsd)}</span>
+      <span class="branch-tokens mono">${fmtTokens(b.totalTokens)}</span>
+      <span class="branch-sessions mono">${b.sessionCount}</span>
+      <span class="branch-last mono">${escapeHtml(lastStr)}</span>
+    </div>`;
+  }).join('');
+
+  listEl.innerHTML = headerRow + rows;
 }
 
 function buildSessionRow(s: SessionSummary): string {

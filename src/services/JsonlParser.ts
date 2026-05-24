@@ -143,6 +143,7 @@ export class JsonlParser {
           model,
           timestamp: String(entry['timestamp'] ?? new Date().toISOString()),
           cwd: String(entry['cwd'] ?? ''),
+          gitBranch: String(entry['gitBranch'] ?? ''),
           usage: journalUsage,
           costUsd: this.calcCost(model, journalUsage),
           toolCounts,
