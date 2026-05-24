@@ -74,6 +74,13 @@ const dict: Record<string, Record<Lang, string>> = {
   hit_rate_today:   { ko: '히트율 (오늘)',        en: 'Hit Rate (Today)',      ja: 'ヒット率 (今日)',           zh: '命中率（今天）' },
   saved_today:      { ko: '절약 (오늘)',          en: 'Saved (Today)',         ja: '節約額 (今日)',             zh: '节省（今天）' },
   seven_day_rate:   { ko: '7일 히트율',           en: '7-Day Hit Rate',        ja: '7日間ヒット率',            zh: '7天命中率' },
+  // Git / 브랜치
+  branch_cost:       { ko: '브랜치 비용',          en: 'Branch Cost',           ja: 'ブランチコスト',           zh: '分支费用' },
+  git_roi:           { ko: 'Git ROI',              en: 'Git ROI',               ja: 'Git ROI',                 zh: 'Git ROI' },
+  branch_label:      { ko: '브랜치',               en: 'Branch',                ja: 'ブランチ',                 zh: '分支' },
+  sessions_label:    { ko: '세션',                 en: 'Sessions',              ja: 'セッション',               zh: '会话' },
+  last_active:       { ko: '최근 활동',             en: 'Last Active',           ja: '最終活動',                 zh: '最近活动' },
+  no_branch_data:    { ko: '브랜치 데이터 없음…',   en: 'No branch data…',       ja: 'ブランチデータなし…',      zh: '暂无分支数据…' },
   // 빈 상태 메시지
   collecting_data:  { ko: '데이터 수집 중…',      en: 'Collecting data…',      ja: 'データ収集中…',            zh: '收集数据中…' },
   collecting_poll:  { ko: '데이터 수집 중… (다음 폴링 ~5분 후)', en: 'Collecting data… (next poll in ~5 min)', ja: 'データ収集中… (次回ポーリング約5分後)', zh: '收集数据中…（下次轮询约5分钟后）' },

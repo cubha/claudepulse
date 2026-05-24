@@ -7,7 +7,7 @@
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/cubha.claude-code-gauge?color=22c55e)](https://marketplace.visualstudio.com/items?itemName=cubha.claude-code-gauge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, and **what Claude actually did** — with burn rate predictions, tool usage breakdowns, and edited file history — without leaving your editor.
+Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, **what Claude actually did**, and **which branch cost how much** — with burn rate predictions, tool usage breakdowns, and Git branch ROI — without leaving your editor.
 
 ## Features
 
@@ -49,6 +49,10 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Tool usage chips** (sidebar): `Edit N · Write N · Bash N · 🔍 N` — today's tool call counts at a glance, color-coded by type
 - **Tool usage histogram** (dashboard): Stacked bar chart of Edit / Write / Bash / Search per day for the last 7 days — spot heavy editing vs. execution sessions
 - **Recently edited files** (dashboard): Up to 20 files touched in recent sessions, ordered by last activity — filename + full path
+
+### Git Branch ROI (local `.jsonl` — v0.1.0+)
+- **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency
+- **Git ROI table** (dashboard): Full branch breakdown — **Branch · Cost · Tokens · Sessions · Last Active** — sorted by cost so your most expensive branches surface first
 
 ## How it works
 

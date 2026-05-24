@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-24
+
+### Added
+- **Git ROI — Branch cost tracking**: Every assistant response in `~/.claude/projects/**/*.jsonl` now includes a `gitBranch` field. Claude Code Gauge parses it directly — no `vscode.git` API needed.
+- **Sidebar branch chip**: Active branch name + cumulative cost for that branch displayed as a `⎇ main · $0.42` chip below the tool usage row.
+- **Dashboard Git ROI table**: New "Git ROI" section at the bottom of the Dashboard Panel — lists all branches with **Cost · Tokens · Sessions · Last Active** columns, sorted by cost descending.
+- **Branch aggregation**: `UsageAggregator` now emits `branchBreakdown` (cost-sorted array) and `activeBranch` (most recent branch from latest record) in every `UsageSummary` push.
+- **i18n**: 6 new translation keys (`branch_cost`, `git_roi`, `branch_label`, `sessions_label`, `last_active`, `no_branch_data`) added in all 4 supported languages (ko/en/ja/zh).
+
 ## [0.0.80] - 2026-05-21
 
 ### Fixed
