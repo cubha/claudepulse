@@ -168,5 +168,6 @@ export interface UsageSummary {
   recentEditedFiles: string[];       // 최근 편집 파일 목록 (top 20)
   branchBreakdown: BranchUsage[];    // 브랜치별 비용 집계 (비용 내림차순)
   activeBranch: string;              // 가장 최근 활성 브랜치명 (사이드바 칩용)
+  historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601
 }

@@ -333,6 +333,26 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
     ? `<div class="sb-chip-row sb-tool-row">${toolChips.join('')}</div>`
     : '';
 
+  // 이번달 비용 칩
+  let monthlyChip = '';
+  const histDays = usage.historicalDays ?? [];
+  if (histDays.length > 0) {
+    const now = new Date();
+    const monthPrefix = now.toISOString().slice(0, 7);
+    const thisMonthDays = histDays.filter(d => d.date.startsWith(monthPrefix));
+    const thisMonthCost = thisMonthDays.reduce((sum, d) => sum + d.costUsd, 0);
+    if (thisMonthCost >= 0.01) {
+      const dayOfMonth = now.getUTCDate();
+      const daysInMonth = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 0).getDate();
+      const projectedCost = dayOfMonth > 0 ? (thisMonthCost / dayOfMonth) * daysInMonth : 0;
+      monthlyChip = `<div class="sb-chip-row sb-monthly-row">
+        <span class="sb-chip sb-chip--monthly" title="${t('this_month')} ${fmtCost(thisMonthCost)} / ${t('projected')} ${fmtCost(projectedCost)}">
+          ◑ ${t('this_month')} ${fmtCost(thisMonthCost)} / ≈${fmtCost(projectedCost)}
+        </span>
+      </div>`;
+    }
+  }
+
   return `<div class="sb-usage-row">
     <span class="sb-usage-icon">◎</span>
     <span class="sb-usage-tokens">${fmtTokens(today.totalTokens)} ${t('tokens')}</span>
@@ -341,7 +361,8 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
   </div>
   ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}
   ${toolRow}
-  ${branchChip ? `<div class="sb-chip-row sb-branch-row">${branchChip}</div>` : ''}`;
+  ${branchChip ? `<div class="sb-chip-row sb-branch-row">${branchChip}</div>` : ''}
+  ${monthlyChip}`;
 }
 
 function buildLangSelect(currentLang: string): string {
@@ -534,7 +555,10 @@ let trendChart: Chart | null = null;
 let dailyChart: Chart | null = null;
 let modelChart: Chart | null = null;
 let toolChart: Chart | null = null;
+let longTermChart: Chart | null = null;
+let monthlyChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
+let longTermScopeDays = 30;
 let panelUsage: UsageSummary | null = null;
 let lastPanelSnapshot: RateLimitSnapshot | null = null;
 
@@ -543,6 +567,8 @@ function destroyCharts(): void {
   if (dailyChart) { dailyChart.destroy(); dailyChart = null; }
   if (modelChart) { modelChart.destroy(); modelChart = null; }
   if (toolChart) { toolChart.destroy(); toolChart = null; }
+  if (longTermChart) { longTermChart.destroy(); longTermChart = null; }
+  if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
 }
 
 function wirePanelButtons(messenger: InstanceType<typeof Messenger>): void {
@@ -555,6 +581,14 @@ function wirePanelButtons(messenger: InstanceType<typeof Messenger>): void {
       document.querySelectorAll('.scope-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       updateTrendChart();
+    });
+  });
+  document.querySelectorAll<HTMLButtonElement>('.lt-scope-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      longTermScopeDays = Number(btn.dataset.scope) || 30;
+      document.querySelectorAll('.lt-scope-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateLongTermSection();
     });
   });
 }
@@ -755,6 +789,30 @@ function buildPanelShell(): string {
         <div class="panel-chart-header">${t('git_roi')}</div>
         <div id="panel-branch-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
+
+      <!-- 장기 비용 트렌드 -->
+      <div class="card panel-trend-card" id="panel-longterm-card">
+        <div class="panel-chart-header">${t('long_term_trend')}</div>
+        <div class="chart-scope-row">
+          <span class="chart-scope-label">${t('scope_label')}:</span>
+          <button class="lt-scope-btn active" data-scope="30">${t('scope_30d')}</button>
+          <button class="lt-scope-btn" data-scope="90">${t('scope_90d')}</button>
+          <button class="lt-scope-btn" data-scope="180">${t('scope_180d')}</button>
+        </div>
+        <div class="panel-trend-wrap">
+          <canvas id="chart-longterm" style="display:none"></canvas>
+          <div class="panel-loading" id="longterm-empty">${t('collecting_data')}</div>
+        </div>
+      </div>
+
+      <!-- 월별 비용 -->
+      <div class="card panel-trend-card" id="panel-monthly-card">
+        <div class="panel-chart-header">${t('monthly_cost')}</div>
+        <div class="panel-trend-wrap">
+          <canvas id="chart-monthly" style="display:none"></canvas>
+          <div class="panel-loading" id="monthly-empty">${t('collecting_data')}</div>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -770,6 +828,8 @@ function updateUsageSection(): void {
   updateFilesList();
   updateSessionList();
   updateBranchSection();
+  updateLongTermSection();
+  updateMonthlyChart();
 }
 
 function updateDailyChart(): void {
@@ -1132,6 +1192,141 @@ function updateBranchSection(): void {
   }).join('');
 
   listEl.innerHTML = headerRow + rows;
+}
+
+function updateLongTermSection(): void {
+  const canvas = document.getElementById('chart-longterm') as HTMLCanvasElement | null;
+  const emptyEl = document.getElementById('longterm-empty');
+  if (!canvas) return;
+
+  const allDays = panelUsage?.historicalDays ?? [];
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - longTermScopeDays);
+  const cutoffKey = cutoff.toISOString().slice(0, 10);
+  const filtered = allDays.filter(d => d.date >= cutoffKey);
+  const hasData = filtered.some(d => d.costUsd > 0);
+
+  if (!hasData) {
+    canvas.style.display = 'none';
+    if (emptyEl) { emptyEl.className = 'panel-empty'; emptyEl.textContent = t('no_history_data'); emptyEl.style.display = ''; }
+    if (longTermChart) { longTermChart.destroy(); longTermChart = null; }
+    return;
+  }
+  canvas.style.display = '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const labels = filtered.map(d => d.date.slice(5));
+  const data = filtered.map(d => Number(d.costUsd.toFixed(4)));
+  const lineColor = getCssVar('--c-sonnet');
+  const axisColor = getCssVar('--vscode-descriptionForeground');
+  const gridColor = getCssVar('--vscode-panel-border');
+
+  const datasets = [{
+    label: 'Cost (USD)',
+    data,
+    borderColor: lineColor,
+    backgroundColor: lineColor + '22',
+    borderWidth: 1.5,
+    fill: true,
+    tension: 0.2,
+    pointRadius: filtered.length <= 30 ? 2 : 0,
+  }];
+
+  if (longTermChart) {
+    longTermChart.data.labels = labels;
+    longTermChart.data.datasets = datasets;
+    longTermChart.update();
+  } else {
+    longTermChart = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            ticks: { color: axisColor, font: { size: 10 }, maxTicksLimit: 10, maxRotation: 0 },
+            grid: { color: gridColor },
+          },
+          y: {
+            ticks: { color: axisColor, font: { size: 10 }, callback: (v) => `$${Number(v).toFixed(2)}` },
+            grid: { color: gridColor },
+          },
+        },
+      },
+    });
+  }
+}
+
+function updateMonthlyChart(): void {
+  const canvas = document.getElementById('chart-monthly') as HTMLCanvasElement | null;
+  const emptyEl = document.getElementById('monthly-empty');
+  if (!canvas) return;
+
+  const allDays = panelUsage?.historicalDays ?? [];
+  if (allDays.length === 0) {
+    canvas.style.display = 'none';
+    if (emptyEl) { emptyEl.className = 'panel-loading'; emptyEl.textContent = t('collecting_data'); emptyEl.style.display = ''; }
+    if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+    return;
+  }
+
+  // 월별 집계
+  const byMonth = new Map<string, number>();
+  for (const d of allDays) {
+    const monthKey = d.date.slice(0, 7); // YYYY-MM
+    byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + d.costUsd);
+  }
+  const sortedMonths = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const hasData = sortedMonths.some(([, v]) => v > 0);
+
+  if (!hasData) {
+    canvas.style.display = 'none';
+    if (emptyEl) { emptyEl.className = 'panel-empty'; emptyEl.textContent = t('no_history_data'); emptyEl.style.display = ''; }
+    if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+    return;
+  }
+  canvas.style.display = '';
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  const labels = sortedMonths.map(([k]) => k);
+  const data = sortedMonths.map(([, v]) => Number(v.toFixed(4)));
+  const barColor = getCssVar('--c-opus');
+  const axisColor = getCssVar('--vscode-descriptionForeground');
+  const gridColor = getCssVar('--vscode-panel-border');
+
+  const datasets = [{
+    label: 'Monthly Cost (USD)',
+    data,
+    backgroundColor: barColor + 'bb',
+    borderColor: barColor,
+    borderWidth: 1,
+    borderRadius: 3,
+  }];
+
+  if (monthlyChart) {
+    monthlyChart.data.labels = labels;
+    monthlyChart.data.datasets = datasets;
+    monthlyChart.update();
+  } else {
+    monthlyChart = new Chart(canvas, {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
+          y: {
+            ticks: { color: axisColor, font: { size: 10 }, callback: (v) => `$${Number(v).toFixed(0)}` },
+            grid: { color: gridColor },
+          },
+        },
+      },
+    });
+  }
 }
 
 function buildSessionRow(s: SessionSummary): string {
