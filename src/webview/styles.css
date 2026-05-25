@@ -1218,6 +1218,19 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
 }
 .theme-light .sb-chip--branch { background: rgba(100,116,139,0.08); }
 
+/* ── 이번달 비용 칩 ── */
+.sb-monthly-row { padding-bottom: var(--sp-2); }
+.sb-chip--monthly {
+  font-family: var(--ff-mono);
+  background: rgba(59,130,246,0.10);
+  color: var(--c-sonnet);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.theme-light .sb-chip--monthly { background: rgba(59,130,246,0.07); }
+
 /* ── 대시보드 모델 분해 ── */
 .panel-model-layout {
   display: flex;

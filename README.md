@@ -50,6 +50,12 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Tool usage histogram** (dashboard): Stacked bar chart of Edit / Write / Bash / Search per day for the last 7 days — spot heavy editing vs. execution sessions
 - **Recently edited files** (dashboard): Up to 20 files touched in recent sessions, ordered by last activity — filename + full path
 
+### Long-term Cost Tracking (local persistence — v0.1.1+)
+- **CacheStore**: Daily usage snapshots persist to `globalStorageUri/ccg-history.json` — survives jsonl rotation so history accumulates across months
+- **Long-term trend chart** (dashboard): Daily cost line chart with 30d / 90d / 180d scope toggle — see spending patterns across months
+- **Monthly cost bar chart** (dashboard): Month-by-month cost aggregation — spot your most expensive periods
+- **This-month chip** (sidebar): `◑ This month $X.XX / ≈$Y.YY` — current month spend + projected end-of-month cost (linear extrapolation)
+
 ### Git Branch ROI (local `.jsonl` — v0.1.0+)
 - **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency
 - **Git ROI table** (dashboard): Full branch breakdown — **Branch · Cost · Tokens · Sessions · Last Active** — sorted by cost so your most expensive branches surface first

@@ -19,6 +19,7 @@ import { FileWatcher } from './services/FileWatcher';
 import { JsonlParser } from './services/JsonlParser';
 import { UsageAggregator } from './services/UsageAggregator';
 import { WorkspaceMapper } from './services/WorkspaceMapper';
+import { CacheStore } from './services/CacheStore';
 import { PushPollerError, PushRateLimit, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
 import { PRICING } from './utils/pricing';
@@ -43,13 +44,21 @@ export function activate(context: vscode.ExtensionContext): void {
   const aggregator = new UsageAggregator();
   const workspaceMapper = new WorkspaceMapper();
   const fileWatcher = new FileWatcher();
+  const cacheStore = new CacheStore(context.globalStorageUri.fsPath);
   let allRecords: SessionRecord[] = [];
+
+  // 영구 이력 초기 로드
+  void cacheStore.load();
 
   async function refreshUsage(): Promise<void> {
     const files = workspaceMapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
     allRecords = perFile.flat();
     lastUsageSummary = aggregator.aggregate(allRecords);
+    // 오늘 포함 최근 7일 데이터를 CacheStore에 영구 저장
+    await cacheStore.merge(lastUsageSummary.last7Days);
+    // 전체 이력을 UsageSummary에 주입
+    lastUsageSummary.historicalDays = cacheStore.getAll();
     messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
   }
 

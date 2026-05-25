@@ -193,6 +193,7 @@ export class UsageAggregator {
       recentEditedFiles,
       branchBreakdown,
       activeBranch,
+      historicalDays: [],  // extension.ts에서 CacheStore 데이터로 채워짐
       generatedAt: now.toISOString(),
     };
   }

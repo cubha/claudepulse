@@ -81,6 +81,15 @@ const dict: Record<string, Record<Lang, string>> = {
   sessions_label:    { ko: '세션',                 en: 'Sessions',              ja: 'セッション',               zh: '会话' },
   last_active:       { ko: '최근 활동',             en: 'Last Active',           ja: '最終活動',                 zh: '最近活动' },
   no_branch_data:    { ko: '브랜치 데이터 없음…',   en: 'No branch data…',       ja: 'ブランチデータなし…',      zh: '暂无分支数据…' },
+  // 장기 트렌드
+  this_month:       { ko: '이번달',              en: 'This Month',            ja: '今月',                    zh: '本月' },
+  projected:        { ko: '예상',               en: 'Projected',             ja: '予測',                    zh: '预测' },
+  long_term_trend:  { ko: '장기 비용 트렌드',     en: 'Long-term Cost Trend',  ja: '長期コストトレンド',       zh: '长期费用趋势' },
+  monthly_cost:     { ko: '월별 비용',            en: 'Monthly Cost',          ja: '月別コスト',              zh: '月度费用' },
+  scope_30d:        { ko: '30일',               en: '30d',                   ja: '30日',                    zh: '30天' },
+  scope_90d:        { ko: '90일',               en: '90d',                   ja: '90日',                    zh: '90天' },
+  scope_180d:       { ko: '180일',              en: '180d',                  ja: '180日',                   zh: '180天' },
+  no_history_data:  { ko: '이력 데이터 없음…',    en: 'No history data…',      ja: '履歴データなし…',          zh: '暂无历史数据…' },
   // 빈 상태 메시지
   collecting_data:  { ko: '데이터 수집 중…',      en: 'Collecting data…',      ja: 'データ収集中…',            zh: '收集数据中…' },
   collecting_poll:  { ko: '데이터 수집 중… (다음 폴링 ~5분 후)', en: 'Collecting data… (next poll in ~5 min)', ja: 'データ収集中… (次回ポーリング約5分後)', zh: '收集数据中…（下次轮询约5分钟后）' },

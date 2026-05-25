@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-05-25
+
+### Added
+- **Long-term cost persistence** (`CacheStore`): Daily usage snapshots are now saved to `globalStorageUri/ccg-history.json`. Each `refreshUsage()` cycle merges the latest 7 days into the store — data survives jsonl rotation (30-day rolling window) so 6-month and 1-year views are possible.
+- **Long-term trend chart** (Dashboard): New section below Git ROI — line chart showing daily cost over 30 / 90 / 180 days (scope toggle). Data comes from `CacheStore` so it accumulates across sessions.
+- **Monthly cost bar chart** (Dashboard): Aggregates historical daily data by YYYY-MM and renders a bar chart — see at a glance which month was most expensive.
+- **This-month chip** (Sidebar): New `◑ this month $X.XX / ≈$Y.YY` chip below the branch row — current month accumulated cost plus a projected end-of-month estimate (linear extrapolation from elapsed days).
+- **i18n**: 8 new translation keys for long-term trend UI (`this_month`, `projected`, `long_term_trend`, `monthly_cost`, `scope_30d`, `scope_90d`, `scope_180d`, `no_history_data`) in all 4 languages.
+
+### Changed
+- `UsageSummary` gains a new `historicalDays: DailyUsage[]` field — all persisted daily snapshots from `CacheStore`, sorted by date ascending and injected by the extension before each broadcast.
+- Login command reverted to simple `claude login` in an integrated terminal (no platform-specific path detection — straightforward and works for the majority of setups).
+
 ## [0.1.0] - 2026-05-24
 
 ### Added
