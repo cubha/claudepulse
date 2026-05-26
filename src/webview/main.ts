@@ -9,6 +9,14 @@ import { getLang, setLang, t } from './i18n';
 
 Chart.register(...registerables);
 
+const OVERAGE_VISIBLE_KEY = 'ccg-show-overage';
+function getShowOverage(): boolean {
+  try { return localStorage.getItem(OVERAGE_VISIBLE_KEY) !== 'false'; } catch { return true; }
+}
+function setShowOverage(v: boolean): void {
+  try { localStorage.setItem(OVERAGE_VISIBLE_KEY, String(v)); } catch { /* ignore */ }
+}
+
 // esbuild가 vscode-messenger-webview 내부의 acquireVsCodeApi를 빈 모듈로 번들링하는 문제 우회.
 // 글로벌에서 직접 호출해 캐싱 후 Messenger 생성자에 전달한다.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -260,6 +268,12 @@ function initSidebar(): void {
     root!.querySelectorAll<HTMLButtonElement>('.js-open-dashboard').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestOpenDashboard, HOST_EXTENSION));
     });
+    root!.querySelectorAll<HTMLButtonElement>('.js-toggle-overage').forEach(btn => {
+      btn.addEventListener('click', () => {
+        setShowOverage(!getShowOverage());
+        renderSidebar(lastSnapshot, lastError);
+      });
+    });
   }
 }
 
@@ -456,22 +470,24 @@ function buildSidebarHtml(
         const ovPct = fmtPct(ov.utilization);
         const ovColor = ov.status === 'rejected' ? 'var(--c-danger)' : 'var(--c-warn)';
         const ovDataStatus = ov.status === 'rejected' ? 'blocked' : 'allowed';
+        const showOv = getShowOverage();
         return `<div class="sb-overage-wrap">
           <div class="sb-section-hdr">
             <span class="sb-section-dot" style="background:${ovColor};"></span>
             <span class="sb-section-label">${t('overage')}</span>
             <span class="sb-section-right">
-              <span class="mono" style="color:${ovColor};">${ovPct}</span>
+              ${showOv ? `<span class="mono" style="color:${ovColor};">${ovPct}</span>
               <span class="sb-section-sep">·</span>
-              <span class="overage-status-chip ${ov.status}">${ov.status === 'allowed' ? t('overage_active') : t('overage_blocked')}</span>
+              <span class="overage-status-chip ${ov.status}">${ov.status === 'allowed' ? t('overage_active') : t('overage_blocked')}</span>` : ''}
+              <button class="overage-toggle${showOv ? ' on' : ''} js-toggle-overage" title="${showOv ? 'Hide overage' : 'Show overage'}" aria-pressed="${showOv}"></button>
             </span>
           </div>
-          <div class="sb-rate-card">
+          ${showOv ? `<div class="sb-rate-card">
             <div class="rate-bar">
               <div class="rate-bar-fill" id="sb-ov-bar" data-status="${ovDataStatus}"></div>
             </div>
             ${ov.disabledReason ? `<div class="overage-disabled-reason">${escapeHtml(ov.disabledReason)}</div>` : ''}
-          </div>
+          </div>` : ''}
         </div>`;
       })()
     : '';
