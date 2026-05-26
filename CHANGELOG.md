@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-05-26
+
+### Changed
+- **Overage Usage section redesign** (Sidebar): Removed show/hide pill toggle. Status is now always visible as a chip (`ACTIVE` / `BLOCKED`). Replaced `disabledReason` text with a `Usage Credits →` link button that opens `claude.ai/settings/billing` directly in the browser.
+
+### Added
+- `RequestOpenBillingSettings` message contract — webview notifies extension host, which calls `vscode.env.openExternal` to open the billing settings page.
+
 ## [0.1.2] - 2026-05-26
 
 ### Added

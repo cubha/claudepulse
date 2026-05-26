@@ -76,6 +76,7 @@ export function activate(context: vscode.ExtensionContext): void {
     () => { poller?.poll(); },
     () => vscode.commands.executeCommand(COMMANDS.login),
     () => { void vscode.commands.executeCommand(COMMANDS.openDashboard); },
+    () => { void vscode.env.openExternal(vscode.Uri.parse('https://claude.ai/settings/billing')); },
     () => currentLang,
     (lang) => {
       currentLang = lang;

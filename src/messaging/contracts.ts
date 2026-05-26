@@ -31,6 +31,11 @@ export const RequestOpenDashboard: NotificationType<void> = {
   method: 'requestOpenDashboard'
 };
 
+/** Notification: webview → extension. claude.ai 사용 크레딧 설정 페이지 열기 요청. */
+export const RequestOpenBillingSettings: NotificationType<void> = {
+  method: 'requestOpenBillingSettings'
+};
+
 /** Notification: webview → extension. 언어 변경 요청 (언어 코드: 'ko'|'en'|'ja'|'zh'). */
 export const RequestSetLang: NotificationType<string> = {
   method: 'requestSetLang'
