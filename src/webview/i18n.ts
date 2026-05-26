@@ -46,6 +46,7 @@ const dict: Record<string, Record<Lang, string>> = {
   overage:          { ko: '초과사용량',           en: 'Overage Usage',         ja: '超過使用量',               zh: '超额用量' },
   overage_active:   { ko: '활성',               en: 'Active',                ja: 'アクティブ',               zh: '活跃' },
   overage_blocked:  { ko: '차단됨',             en: 'Blocked',               ja: 'ブロック',                 zh: '已屏蔽' },
+  billing_settings: { ko: '사용 크레딧 설정 →', en: 'Usage Credits →',       ja: '使用クレジット設定 →',      zh: '使用积分设置 →' },
   // 상태 배지
   status_ok:        { ko: 'OK',                 en: 'OK',                    ja: 'OK',                      zh: '正常' },
   status_warning:   { ko: '경고',               en: 'Warning',               ja: '警告',                    zh: '警告' },

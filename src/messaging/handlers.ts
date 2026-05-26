@@ -1,7 +1,7 @@
 import { Messenger } from 'vscode-messenger';
 import { BROADCAST } from 'vscode-messenger-common';
 import type { RateLimitSnapshot, UsageSummary } from '../types';
-import { GetLang, GetRateLimit, GetUsageSummary, PushLang, RequestLogin, RequestOpenDashboard, RequestRefresh, RequestSetLang } from './contracts';
+import { GetLang, GetRateLimit, GetUsageSummary, PushLang, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
@@ -10,6 +10,7 @@ export function registerHandlers(
   onRefresh: () => void,
   onLogin: () => void,
   onOpenDashboard: () => void,
+  onOpenBillingSettings: () => void,
   getLang: () => string,
   setLang: (lang: string) => void
 ): void {
@@ -23,6 +24,7 @@ export function registerHandlers(
   messenger.onNotification(RequestRefresh, () => { void onRefresh(); });
   messenger.onNotification(RequestLogin, () => { onLogin(); });
   messenger.onNotification(RequestOpenDashboard, () => { onOpenDashboard(); });
+  messenger.onNotification(RequestOpenBillingSettings, () => { onOpenBillingSettings(); });
   messenger.onNotification(RequestSetLang, (lang) => {
     setLang(lang);
     messenger.sendNotification(PushLang, BROADCAST, lang);

@@ -1107,43 +1107,21 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
 }
 .overage-status-chip.allowed  { background: rgba(59,130,246,0.13);  color: var(--c-sonnet); }
 .overage-status-chip.rejected { background: rgba(244,63,94,0.13);   color: var(--c-danger); }
-.overage-disabled-reason {
-  font-size: var(--fs-label);
-  color: var(--vscode-descriptionForeground);
+.overage-billing-link {
+  display: inline-block;
   margin-top: var(--sp-1);
-  font-family: var(--ff-mono);
-}
-.overage-toggle {
-  display: inline-flex;
-  align-items: center;
-  width: 28px;
-  height: 15px;
-  background: var(--vscode-panel-border);
-  border-radius: 8px;
+  font-size: var(--fs-label);
+  color: var(--vscode-textLink-foreground);
+  background: transparent;
   border: none;
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-  transition: background 150ms ease;
   padding: 0;
-  margin-left: 6px;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
-.overage-toggle::after {
-  content: '';
-  position: absolute;
-  left: 2px;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--vscode-descriptionForeground);
-  transition: transform 150ms ease, background 150ms ease;
-}
-.overage-toggle.on {
-  background: var(--c-sonnet);
-}
-.overage-toggle.on::after {
-  transform: translateX(13px);
-  background: #fff;
+.overage-billing-link:hover {
+  opacity: 0.8;
 }
 
 /* Chart scope selector */
