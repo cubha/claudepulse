@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-05-26
+
+### Added
+- **Overage section toggle** (Sidebar): Pill-style on/off toggle switch added to the Overage Usage section header. When toggled off, the progress bar and status chip are hidden while the header row remains visible for re-activation. Preference is persisted in `localStorage` (`ccg-show-overage`) and survives page reloads.
+
 ## [0.1.1] - 2026-05-25
 
 ### Added
