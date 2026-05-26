@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.31] - 2026-05-26
+
+### Fixed
+- **Overage billing link URL**: Corrected link target from `claude.ai/settings/billing` to `claude.ai/settings/usage` where the Usage Credits toggle actually lives.
+- **Overage link label**: Updated text from "사용 크레딧 설정 →" to "사용량 설정 →" to match the correct page.
+
 ## [0.1.3] - 2026-05-26
 
 ### Changed
