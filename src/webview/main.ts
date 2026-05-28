@@ -3,7 +3,7 @@
 import { Chart, registerables } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { GetLang, GetRateLimit, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from '../messaging/contracts';
+import { GetLang, GetPollHistory, GetRateLimit, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from '../messaging/contracts';
 import type { DailyUsage, PollerError, RateLimitSnapshot, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
 import { getLang, setLang, t } from './i18n';
 
@@ -659,7 +659,16 @@ function initPanel(): void {
     })
     .catch(() => undefined);
 
-  messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined)
+  void messenger.sendRequest(GetPollHistory, HOST_EXTENSION, undefined)
+    .then((history) => {
+      history.forEach(p => {
+        fhHistory.push({ t: new Date(p.t), v: p.fh });
+        sdHistory.push({ t: new Date(p.t), v: p.sd });
+      });
+      if (fhHistory.length > MAX_HISTORY) fhHistory.splice(0, fhHistory.length - MAX_HISTORY);
+      if (sdHistory.length > MAX_HISTORY) sdHistory.splice(0, sdHistory.length - MAX_HISTORY);
+      return messenger.sendRequest(GetRateLimit, HOST_EXTENSION, undefined);
+    })
     .then((snapshot) => {
       lastPanelSnapshot = snapshot;
       recordHistory(snapshot);

@@ -1,5 +1,5 @@
 import { NotificationType, RequestType } from 'vscode-messenger-common';
-import type { RateLimitSnapshot, UsageSummary } from '../types';
+import type { PollHistoryPoint, RateLimitSnapshot, UsageSummary } from '../types';
 
 /** Request: webview → extension. 현재 Rate Limit 스냅샷 요청. */
 export const GetRateLimit: RequestType<void, RateLimitSnapshot> = {
@@ -49,6 +49,11 @@ export const GetLang: RequestType<void, string> = {
 /** Notification: extension → webview. 언어 변경 브로드캐스트. */
 export const PushLang: NotificationType<string> = {
   method: 'pushLang'
+};
+
+/** Request: webview → extension. 폴링 히스토리 요청 (대시보드 첫 오픈 시 pre-hydrate용). */
+export const GetPollHistory: RequestType<void, PollHistoryPoint[]> = {
+  method: 'getPollHistory'
 };
 
 /** Request: webview → extension. 현재 사용량 요약 요청. */
