@@ -171,3 +171,10 @@ export interface UsageSummary {
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601
 }
+
+/** extension → webview 전달용 폴링 히스토리 포인트. JSON 직렬화 안전. */
+export interface PollHistoryPoint {
+  t: string;   // ISO8601
+  fh: number;  // fiveHour.utilization (0.0~1.0)
+  sd: number;  // sevenDay.utilization (0.0~1.0)
+}

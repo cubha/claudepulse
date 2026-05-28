@@ -23,7 +23,7 @@ import { CacheStore } from './services/CacheStore';
 import { PushPollerError, PushRateLimit, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
 import { PRICING } from './utils/pricing';
-import type { PollerError, RateLimitSnapshot, SessionRecord, UsageSummary } from './types';
+import type { PollHistoryPoint, PollerError, RateLimitSnapshot, SessionRecord, UsageSummary } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger('Claude Code Gauge');
@@ -38,6 +38,9 @@ export function activate(context: vscode.ExtensionContext): void {
   let lastUsageSummary: UsageSummary | null = null;
   let poller: RateLimitPoller | null = null;
   let currentLang: string = context.globalState.get<string>('ccg-lang') ?? 'auto';
+
+  const MAX_POLL_HISTORY = 60;
+  const snapshotHistory: PollHistoryPoint[] = [];
 
   // jsonl 파이프라인
   const jsonlParser = new JsonlParser(PRICING);
@@ -72,6 +75,7 @@ export function activate(context: vscode.ExtensionContext): void {
   registerHandlers(
     messenger,
     () => lastSnapshot,
+    () => snapshotHistory,
     () => lastUsageSummary,
     () => { poller?.poll(); },
     () => vscode.commands.executeCommand(COMMANDS.login),
@@ -123,6 +127,8 @@ export function activate(context: vscode.ExtensionContext): void {
       credReader, credentialsPath, logger,
       (snapshot) => {
         lastSnapshot = snapshot;
+        snapshotHistory.push({ t: snapshot.generatedAt.toISOString(), fh: snapshot.fiveHour.utilization, sd: snapshot.sevenDay.utilization });
+        if (snapshotHistory.length > MAX_POLL_HISTORY) snapshotHistory.shift();
         statusBar.update(snapshot, lastUsageSummary?.today.costUsd);
         messenger.sendNotification(PushRateLimit, BROADCAST, snapshot);
         checkThreshold(snapshot);

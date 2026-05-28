@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-05-28
+
+### Fixed
+- **Usage Trend chart on first open**: Dashboard now pre-hydrates the trend chart with historical poll data on first open, eliminating the "Collecting data…" placeholder that appeared before the first manual refresh. The extension maintains a rolling buffer of up to 60 poll snapshots (`PollHistoryPoint[]`) and delivers them via the new `GetPollHistory` RPC before the initial `GetRateLimit` request, ensuring the chart renders immediately if the extension has been running.
+
 ## [0.1.31] - 2026-05-26
 
 ### Fixed
