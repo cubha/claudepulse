@@ -191,12 +191,21 @@ export class JsonlParser {
   private findPricing(model: string): PricingModel | undefined {
     if (this.pricing[model]) return this.pricing[model];
 
-    // 접두사 매칭: "claude-sonnet-4-6" → "claude-sonnet-4-5" fallback
     const lm = model.toLowerCase();
+
+    // 가장 긴 접두사 우선: claude-opus-4-1 > claude-opus-4 (utils/pricing.ts와 동일 로직)
+    let best: string | undefined;
     for (const key of Object.keys(this.pricing)) {
-      if (lm.startsWith(key) || key.startsWith(lm.split('-').slice(0, 3).join('-'))) {
-        return this.pricing[key];
+      if (lm.startsWith(key) && (best === undefined || key.length > best.length)) {
+        best = key;
       }
+    }
+    if (best !== undefined) return this.pricing[best];
+
+    // 폴백: 동일 패밀리(첫 3세그먼트) → 첫 매칭 키
+    const family = lm.split('-').slice(0, 3).join('-');
+    for (const key of Object.keys(this.pricing)) {
+      if (key.startsWith(family)) return this.pricing[key];
     }
     return undefined;
   }

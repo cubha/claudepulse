@@ -30,6 +30,7 @@
   --ff-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 
   /* Brand accents (model + status, never hardcoded as fg/bg) */
+  --c-fable: #E0529C;
   --c-opus: #8B5CF6;
   --c-sonnet: #3B82F6;
   --c-haiku: #14B8A6;
@@ -225,9 +226,11 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.badge.fable  { background: rgba(224,82,156,0.14); color: #F9A8D4; }
 .badge.opus   { background: rgba(139,92,246,0.14); color: #C4B5FD; }
 .badge.sonnet { background: rgba(59,130,246,0.14); color: #93C5FD; }
 .badge.haiku  { background: rgba(20,184,166,0.14); color: #5EEAD4; }
+.theme-light .badge.fable  { background: rgba(224,82,156,0.10); color: #BE185D; }
 .theme-light .badge.opus   { background: rgba(139,92,246,0.10); color: #6D28D9; }
 .theme-light .badge.sonnet { background: rgba(59,130,246,0.10); color: #1D4ED8; }
 .theme-light .badge.haiku  { background: rgba(20,184,166,0.10); color: #0F766E; }
@@ -1189,10 +1192,12 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
+.sb-chip--model.fable  { background: rgba(224,82,156,0.14); color: #F9A8D4; }
 .sb-chip--model.opus   { background: rgba(139,92,246,0.14); color: #C4B5FD; }
 .sb-chip--model.sonnet { background: rgba(59,130,246,0.14);  color: #93C5FD; }
 .sb-chip--model.haiku  { background: rgba(20,184,166,0.14);  color: #5EEAD4; }
 .sb-chip--model.slate  { background: rgba(100,116,139,0.14); color: #94A3B8; }
+.theme-light .sb-chip--model.fable  { background: rgba(224,82,156,0.10); color: #BE185D; }
 .theme-light .sb-chip--model.opus   { background: rgba(139,92,246,0.10); color: #6D28D9; }
 .theme-light .sb-chip--model.sonnet { background: rgba(59,130,246,0.10);  color: #1D4ED8; }
 .theme-light .sb-chip--model.haiku  { background: rgba(20,184,166,0.10);  color: #0F766E; }

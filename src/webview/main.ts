@@ -279,6 +279,7 @@ function fmtCost(usd: number): string {
 }
 
 function modelShortName(model: string): string {
+  if (model.includes('fable')) return 'Fable';
   if (model.includes('opus')) return 'Opus';
   if (model.includes('sonnet')) return 'Sonnet';
   if (model.includes('haiku')) return 'Haiku';
@@ -286,6 +287,7 @@ function modelShortName(model: string): string {
 }
 
 function modelAccentClass(model: string): string {
+  if (model.includes('fable')) return 'fable';
   if (model.includes('opus')) return 'opus';
   if (model.includes('sonnet')) return 'sonnet';
   if (model.includes('haiku')) return 'haiku';
@@ -902,6 +904,7 @@ function updateDailyChart(): void {
 }
 
 function modelColor(model: string): string {
+  if (model.includes('fable')) return getCssVar('--c-fable');
   if (model.includes('opus')) return getCssVar('--c-opus');
   if (model.includes('sonnet')) return getCssVar('--c-sonnet');
   if (model.includes('haiku')) return getCssVar('--c-haiku');

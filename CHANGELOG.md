@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-06-11
+
+### Added
+- **Claude Fable 5 model support**: New top-tier model `claude-fable-5` (above Opus) is now recognized across pricing, sidebar chip, and dashboard model breakdown. Pricing: $10 / $50 per MTok (input / output). Added a dedicated brand accent `--c-fable` (#E0529C, rose) with dark/light badge + chip variants (6+1 accent cap, agreed 2026-06).
+
+### Fixed
+- **Model pricing accuracy**: Refreshed the embedded price snapshot to current Anthropic rates. Corrected the legacy `claude-opus-4` entry ($15/$75) — current Opus 4.5–4.8 are now priced at $5/$25, fixing a ~3× cost over-estimation for current Opus usage. Added explicit entries for Opus 4.5–4.8, Sonnet 4.5/4.6, and kept legacy Opus 4.0/4.1 at $15/$75.
+- **`findPricing` prefix matching**: Reworked model→price resolution to longest-prefix matching so versioned IDs resolve correctly (e.g. `claude-opus-4-1-20250805` → legacy $15/$75 instead of falling through to a current-Opus entry). Covered by new unit tests (`test/unit/pricing.test.ts`).
+
 ## [0.1.32] - 2026-05-28
 
 ### Fixed

@@ -8,7 +8,7 @@
 
 1. **VS Code CSS 변수 우선** — 모든 표면(background/foreground/border)은 `var(--vscode-*)`만 사용. 하드코딩 색상 0개 목표
 2. **다크/라이트 자동 적응** — `.theme-dark` / `.theme-light` 컨테이너 클래스로 한 번에 토글
-3. **액센트는 모델·상태 식별 전용** — 페이지 배경·본문 텍스트로 사용 금지 (5색 cap)
+3. **액센트는 모델·상태 식별 전용** — 페이지 배경·본문 텍스트로 사용 금지 (6+1 cap: fable·opus·sonnet·haiku·warn·danger + slate)
 4. **WCAG AA 4.5:1** — 액센트 색상 모두 양 테마 카드 배경 대비 통과
 5. **시스템 폰트만** — 외부 폰트 임포트 금지
 
@@ -68,6 +68,7 @@
 
 | Token | Hex | 용도 |
 |---|---|---|
+| `--c-fable` | `#E0529C` | Fable 모델 식별 (rose) — Opus 위 최상위 티어, 2026-06 합의 추가 |
 | `--c-opus` | `#8B5CF6` | Opus 모델 식별 (violet) |
 | `--c-sonnet` | `#3B82F6` | Sonnet 모델 식별 (blue) — primary brand |
 | `--c-haiku` | `#14B8A6` | Haiku 모델 식별 (teal) |
@@ -189,7 +190,7 @@
 - `.btn-ghost` — 투명 + 보더, hover 시 `var(--vscode-list-hoverBackground)`
 
 ### Badge (Model)
-18px 높이, mono uppercase, accent 14%/10% 배경 + tint-300/shade-700 텍스트. `.opus` / `.sonnet` / `.haiku`.
+18px 높이, mono uppercase, accent 14%/10% 배경 + tint-300/shade-700 텍스트. `.fable` / `.opus` / `.sonnet` / `.haiku`.
 
 ### Chip (Filter · Status)
 20-24px 높이, 보더 라운드 10px, 옵션 dot/icon 좌측. cost 경고 변형: amber 보더.
@@ -230,7 +231,7 @@
 
 - 하드코딩 색상 (특히 `#000`, `#FFF`) — `--vscode-foreground/background` 사용
 - elevation `box-shadow` (Tooltip 외) — VS Code 평면 톤 위배
-- 5번째 액센트 추가 — 5+1색 cap (slate 포함) 초과 금지
+- 합의 없는 신규 액센트 추가 — 6+1색 cap (fable·opus·sonnet·haiku·warn·danger + slate) 초과 금지
 - `unsafe-eval` 의존 차트 라이브러리 — Webview CSP 위배
 - 외부 폰트 임포트 (Inter / Roboto / Geist 등) — 시스템 폰트만
 - elevation animation (translateY/scale) — `opacity`만 허용
@@ -241,5 +242,5 @@
 
 1. styles.css 수정 → 본 문서 동시 갱신 (drift 방지)
 2. 신규 토큰 추가 시 다크/라이트 페어 모두 정의 의무
-3. 액센트는 합의 후만 추가 (5+1 cap 의식)
+3. 액센트는 합의 후만 추가 (6+1 cap 의식)
 4. WCAG AA 검증 도구로 콘트라스트 재확인

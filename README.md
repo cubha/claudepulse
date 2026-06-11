@@ -28,13 +28,13 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ### Token & Cost Analytics (local `.jsonl` — v0.0.5+)
 - **Today's usage**: Sidebar shows "N tokens · ~$X.XX" — parsed directly from `~/.claude/projects/**/*.jsonl`, no API call
-- **Model chip**: Color-coded Opus / Sonnet / Haiku chip showing today's primary model in the sidebar
+- **Model chip**: Color-coded Fable / Opus / Sonnet / Haiku chip showing today's primary model in the sidebar
 - **Cache hit rate chip**: Today's cache hit rate (e.g. `⚡ 72%`) with saved cost in tooltip — pure local calculation
 - **7-day cost bar chart**: Dashboard panel shows daily spend for the past 7 days
 - **Model breakdown**: Doughnut chart + bar list showing per-model cost share for today (v0.0.60)
 - **Cache efficiency**: Hit rate KPI, cumulative saved cost, and 7-day sparkline in the dashboard (v0.0.60)
 - **Session history**: Up to 20 recent sessions with start time, working directory, token count, and estimated cost
-- **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (opus-4 / sonnet-4-5 / haiku-4-5)
+- **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (fable-5 / opus-4.5–4.8 / sonnet-4.5–4.6 / haiku-4.5, with legacy fallbacks)
 
 ### Language Support (v0.0.72+)
 - **4-language UI**: Switch between 한국어 / English / 日本語 / 中文 via the compact dropdown in the sidebar header — all labels, section names, error messages, and burn-rate strings update instantly
