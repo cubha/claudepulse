@@ -29,7 +29,7 @@ describe('RateLimitPoller — 헤더 파싱', () => {
       'anthropic-ratelimit-unified-5h-utilization': '0.84', // 0.84 >= 0.80 → allowed_warning
       'anthropic-ratelimit-unified-5h-reset': String(fhReset),
       'anthropic-ratelimit-unified-5h-status': 'allowed', // API status 무시됨
-      'anthropic-ratelimit-unified-7d-utilization': '0.93', // 0.93 >= 0.90 → blocked
+      'anthropic-ratelimit-unified-7d-utilization': '0.93', // 0.90 <= 0.93 < 1.0 → danger (blocked는 100%만)
       'anthropic-ratelimit-unified-7d-reset': String(sdReset),
       'anthropic-ratelimit-unified-7d-status': 'allowed', // API status 무시됨
     };
@@ -39,8 +39,8 @@ describe('RateLimitPoller — 헤더 파싱', () => {
     expect(snap.fiveHour.utilization).toBeCloseTo(0.84, 2);
     expect(snap.fiveHour.status).toBe('allowed_warning'); // 0.84 >= 0.80
     expect(snap.sevenDay.utilization).toBeCloseTo(0.93, 2);
-    expect(snap.sevenDay.status).toBe('blocked');          // 0.93 >= 0.90
-    expect(snap.overallStatus).toBe('blocked');            // worst(warning, blocked)
+    expect(snap.sevenDay.status).toBe('danger');           // 0.90 <= 0.93 < 1.0 (blocked는 100%만)
+    expect(snap.overallStatus).toBe('danger');             // worst(allowed_warning, danger) = danger
   });
 
   it('% 임계값으로 blocked가 allowed_warning보다 우선한다', () => {

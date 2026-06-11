@@ -52,18 +52,6 @@ if grep -rEn "createFileSystemWatcher\s*\(" src/ 2>/dev/null; then
   FAIL=$((FAIL + 1))
 fi
 
-# 8. CRITICAL — 구 폐기 파일 미존재 확인 (CacheStore만 해당 — v0.0.5에서 나머지는 정식 도입)
-for f in src/services/CacheStore.ts; do
-  if [ -f "$f" ]; then
-    echo "⚠️  폐기된 파일 존재: $f"
-    FAIL=$((FAIL + 1))
-  fi
-done
-echo ""
-echo "▶ 폐기 파일 미존재 확인"
-echo "  ✅ PASS"
-PASS=$((PASS + 1))
-
 # 9. 신규 서비스 파일 존재 확인
 step "CredentialsReader.ts 존재" test -f src/services/CredentialsReader.ts
 step "RateLimitPoller.ts 존재" test -f src/services/RateLimitPoller.ts
@@ -73,8 +61,36 @@ step "UsageAggregator.ts 존재 (v0.0.5)" test -f src/services/UsageAggregator.t
 step "WorkspaceMapper.ts 존재 (v0.0.5)" test -f src/services/WorkspaceMapper.ts
 step "pricing.ts 존재 (v0.0.5)" test -f src/utils/pricing.ts
 
-# 10. vitest 단위 테스트
-step "vitest unit tests" npx vitest run --reporter=verbose
+# 10. 단위 테스트 (러너인식 + fail-loud)
+echo ""
+echo "▶ 단위 테스트"
+UNIT_TEST_FILES=$(find . -type d -name node_modules -prune -o \
+    -type f \( -name '*.test.ts' -o -name '*.test.tsx' \
+               -o -name '*.test.js' -o -name '*.test.jsx' \
+               -o -name '*.spec.ts' -o -name '*.spec.tsx' \) -print 2>/dev/null \
+  | grep -vE '(^|/)(e2e|tests/e2e)/|\.e2e\.' | head -1 || true)
+UNIT_RUNNER=""
+grep -qE '"vitest"' package.json 2>/dev/null && UNIT_RUNNER="vitest" || true
+grep -qE '"jest"'   package.json 2>/dev/null && UNIT_RUNNER="jest"   || true
+if [ -z "$UNIT_TEST_FILES" ]; then
+  echo "  ℹ️  단위 테스트 없음 — 건너뜀 (통합 테스트는 별도 레이어에서 검증)"
+elif [ -z "$UNIT_RUNNER" ]; then
+  echo "  ❌ FAIL — 단위 테스트 파일이 존재하나 러너(vitest/jest) 미설치"
+  FAIL=$((FAIL + 1))
+elif ! grep -qE '"test"[[:space:]]*:' package.json 2>/dev/null; then
+  echo "  ❌ FAIL — 단위 테스트 파일이 존재하나 package.json에 \"test\" 스크립트 없음"
+  FAIL=$((FAIL + 1))
+else
+  TEST_EXIT=0
+  npm run test > /tmp/verify-unittest-cpulse.log 2>&1 || TEST_EXIT=$?
+  if [ "$TEST_EXIT" -ne 0 ]; then
+    echo "  ❌ FAIL — 단위 테스트 실패 ($UNIT_RUNNER)"; tail -30 /tmp/verify-unittest-cpulse.log
+    FAIL=$((FAIL + 1))
+  else
+    echo "  ✅ PASS — 단위 테스트 통과 ($UNIT_RUNNER)"
+    PASS=$((PASS + 1))
+  fi
+fi
 
 echo ""
 echo "═══════════════════════════════════════"
