@@ -98,6 +98,9 @@ export interface SessionRecord {
   costUsd: number;      // LiteLLM 기반 계산값
   toolCounts: ToolUseCounts;  // 이 메시지의 도구 사용 카운트
   editedFiles: string[];      // Edit/Write 도구의 file_path 목록
+  attributionSkill?: string;  // jsonl entry.attributionSkill (스킬 귀속, 없으면 미정의)
+  isSidechain: boolean;       // jsonl entry.isSidechain (서브에이전트 소비 여부)
+  agentId?: string;           // jsonl entry.agentId (서브에이전트 식별자)
 }
 
 /** 하루 집계 (UTC 날짜 기준). */
@@ -158,6 +161,22 @@ export interface DailyToolStats {
   webSearch: number;
 }
 
+/** 스킬별 사용량 집계 (attributionSkill 기준, 비용 내림차순). */
+export interface SkillUsage {
+  skill: string;         // attributionSkill 값
+  costUsd: number;       // 누적 비용
+  totalTokens: number;   // 누적 토큰
+  share: number;         // 0.0 ~ 1.0 (귀속된 비용 중 비율)
+}
+
+/** 서브에이전트 vs 메인 소비 분리 통계. */
+export interface SubagentStats {
+  mainCostUsd: number;       // isSidechain=false 비용
+  subagentCostUsd: number;   // isSidechain=true 비용
+  subagentShare: number;     // 0.0 ~ 1.0 (전체 비용 중 서브에이전트 비중)
+  subagentCount: number;     // 고유 agentId 수
+}
+
 /** 브랜치별 사용량 집계. */
 export interface BranchUsage {
   branch: string;        // 브랜치명
@@ -178,6 +197,8 @@ export interface UsageSummary {
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
   recentEditedFiles: string[];       // 최근 편집 파일 목록 (top 20)
   branchBreakdown: BranchUsage[];    // 브랜치별 비용 집계 (비용 내림차순)
+  skillBreakdown: SkillUsage[];      // 스킬별 비용 집계 (비용 내림차순)
+  subagentStats: SubagentStats;      // 서브에이전트 vs 메인 소비 분리
   activeBranch: string;              // 가장 최근 활성 브랜치명 (사이드바 칩용)
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601

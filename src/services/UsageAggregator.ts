@@ -1,6 +1,6 @@
 import { findPricing } from '../utils/pricing';
 import { emptyToolCounts } from './JsonlParser';
-import type { BranchUsage, CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, ToolUseCounts, UsageSummary } from '../types';
+import type { BranchUsage, CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
 
 export class UsageAggregator {
   aggregate(records: SessionRecord[]): UsageSummary {
@@ -187,6 +187,17 @@ export class UsageAggregator {
       : null;
     const activeBranch = lastRecord?.gitBranch ?? '';
 
+    // 스킬별 비용 분해 (#7) — TODO(GREEN): attributionSkill 집계
+    const skillBreakdown: SkillUsage[] = [];
+
+    // 서브에이전트 vs 메인 소비 분리 (#8) — TODO(GREEN): isSidechain 집계
+    const subagentStats: SubagentStats = {
+      mainCostUsd: 0,
+      subagentCostUsd: 0,
+      subagentShare: 0,
+      subagentCount: 0,
+    };
+
     return {
       today,
       last7Days,
@@ -197,6 +208,8 @@ export class UsageAggregator {
       last7DaysTools,
       recentEditedFiles,
       branchBreakdown,
+      skillBreakdown,
+      subagentStats,
       activeBranch,
       historicalDays: [],  // extension.ts에서 CacheStore 데이터로 채워짐
       generatedAt: now.toISOString(),

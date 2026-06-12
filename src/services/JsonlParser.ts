@@ -165,6 +165,9 @@ export class JsonlParser {
           costUsd: calcCost(model, journalUsage),
           toolCounts,
           editedFiles,
+          attributionSkill: entry['attributionSkill'] !== undefined ? String(entry['attributionSkill']) : undefined,
+          isSidechain: entry['isSidechain'] === true,
+          agentId: entry['agentId'] !== undefined ? String(entry['agentId']) : undefined,
         };
 
         // 같은 requestId → 마지막 엔트리로 교체 (스트리밍 중복 처리)
