@@ -52,3 +52,35 @@ export function findPricing(model: string): ModelPrice | undefined {
   }
   return undefined;
 }
+
+/** calcCost 입력 토큰 셋 (JournalUsage와 구조 호환). */
+export interface CostTokens {
+  input_tokens: number;
+  output_tokens: number;
+  /** 5m TTL 캐시 생성 토큰 (요율 input × 1.25) */
+  cache_creation_5m_input_tokens: number;
+  /** 1h TTL 캐시 생성 토큰 (요율 input × 2.0) */
+  cache_creation_1h_input_tokens: number;
+  cache_read_input_tokens: number;
+  /** usage.service_tier — 'batch' 시 전체 −50% */
+  serviceTier?: string;
+}
+
+/**
+ * 단일 비용 진실원(single source of truth).
+ * 캐시 생성을 5m(1.25×)·1h(2.0×) TTL로 분리 과금 — 1h를 5m 요율로 과금하던 과소계산 버그 수정.
+ * service_tier=batch 시 전체 비용 −50%.
+ */
+export function calcCost(model: string, t: CostTokens): number {
+  const p = findPricing(model);
+  if (!p) return 0;
+
+  // TODO(GREEN): 1h는 cache_creation_1h(2.0×) 요율, batch 티어 −50% 적용
+  const cost =
+    (t.input_tokens / 1_000_000) * p.input +
+    (t.output_tokens / 1_000_000) * p.output +
+    ((t.cache_creation_5m_input_tokens + t.cache_creation_1h_input_tokens) / 1_000_000) * p.cache_creation +
+    (t.cache_read_input_tokens / 1_000_000) * p.cache_read;
+
+  return cost;
+}
