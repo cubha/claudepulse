@@ -141,8 +141,12 @@ export interface ToolUseCounts {
   edit: number;
   write: number;
   bash: number;
-  webSearch: number;
-  other: number;
+  read: number;       // Read
+  grep: number;       // Grep + Glob (검색)
+  webSearch: number;  // WebSearch + server_tool_use.web_search_requests
+  webFetch: number;   // WebFetch + server_tool_use.web_fetch_requests
+  mcp: number;        // mcp__* 도구 그룹
+  other: number;      // Task/Skill/Agent 등 기타
 }
 
 /** 일별 도구 사용 집계 (히스토그램용). */

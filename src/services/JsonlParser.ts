@@ -12,6 +12,21 @@ interface ParseCache {
 
 const SKIP_TYPES = new Set(['progress', 'file-history-snapshot', 'attachment', 'permission-mode']);
 
+/** 모든 도구 카테고리를 0으로 초기화. */
+export function emptyToolCounts(): ToolUseCounts {
+  return { edit: 0, write: 0, bash: 0, read: 0, grep: 0, webSearch: 0, webFetch: 0, mcp: 0, other: 0 };
+}
+
+/** tool_use 블록 name → ToolUseCounts 카테고리. */
+export function classifyToolName(name: string): keyof ToolUseCounts {
+  if (name === 'Edit' || name === 'MultiEdit') return 'edit';
+  if (name === 'Write') return 'write';
+  if (name === 'Bash') return 'bash';
+  if (name === 'WebSearch' || name === 'web_search') return 'webSearch';
+  // TODO(GREEN): Read/Grep/Glob/WebFetch/mcp__* 세분화
+  return 'other';
+}
+
 export class JsonlParser {
   private readonly cache = new Map<string, ParseCache>();
 
