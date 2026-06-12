@@ -331,8 +331,20 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
     if (todayToolCounts.bash > 0) {
       toolChips.push(`<span class="sb-chip sb-chip--tool tool-bash" title="Bash">Bash ${todayToolCounts.bash}</span>`);
     }
+    if (todayToolCounts.read > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool" title="Read">Read ${todayToolCounts.read}</span>`);
+    }
+    if (todayToolCounts.grep > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool" title="Grep/Glob">Grep ${todayToolCounts.grep}</span>`);
+    }
     if (todayToolCounts.webSearch > 0) {
       toolChips.push(`<span class="sb-chip sb-chip--tool tool-search" title="WebSearch">🔍 ${todayToolCounts.webSearch}</span>`);
+    }
+    if (todayToolCounts.webFetch > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool" title="WebFetch">🌐 ${todayToolCounts.webFetch}</span>`);
+    }
+    if (todayToolCounts.mcp > 0) {
+      toolChips.push(`<span class="sb-chip sb-chip--tool" title="MCP 도구">MCP ${todayToolCounts.mcp}</span>`);
     }
   }
   const toolRow = toolChips.length > 0

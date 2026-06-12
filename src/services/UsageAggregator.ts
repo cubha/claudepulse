@@ -1,4 +1,5 @@
 import { findPricing } from '../utils/pricing';
+import { emptyToolCounts } from './JsonlParser';
 import type { BranchUsage, CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, ToolUseCounts, UsageSummary } from '../types';
 
 export class UsageAggregator {
@@ -17,7 +18,7 @@ export class UsageAggregator {
     let todayCacheCreation = 0;
     let todayInput = 0;
     let todaySavedUsd = 0;
-    const todayTools: ToolUseCounts = { edit: 0, write: 0, bash: 0, webSearch: 0, other: 0 };
+    const todayTools: ToolUseCounts = emptyToolCounts();
 
     // 편집 파일 최근순 수집 (파일 경로 → 최근 timestamp)
     const fileLastSeen = new Map<string, string>();
@@ -115,7 +116,11 @@ export class UsageAggregator {
         todayTools.edit += r.toolCounts.edit;
         todayTools.write += r.toolCounts.write;
         todayTools.bash += r.toolCounts.bash;
+        todayTools.read += r.toolCounts.read;
+        todayTools.grep += r.toolCounts.grep;
         todayTools.webSearch += r.toolCounts.webSearch;
+        todayTools.webFetch += r.toolCounts.webFetch;
+        todayTools.mcp += r.toolCounts.mcp;
         todayTools.other += r.toolCounts.other;
       }
     }

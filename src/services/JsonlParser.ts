@@ -22,8 +22,11 @@ export function classifyToolName(name: string): keyof ToolUseCounts {
   if (name === 'Edit' || name === 'MultiEdit') return 'edit';
   if (name === 'Write') return 'write';
   if (name === 'Bash') return 'bash';
+  if (name === 'Read') return 'read';
+  if (name === 'Grep' || name === 'Glob') return 'grep';
   if (name === 'WebSearch' || name === 'web_search') return 'webSearch';
-  // TODO(GREEN): Read/Grep/Glob/WebFetch/mcp__* 세분화
+  if (name === 'WebFetch' || name === 'web_fetch') return 'webFetch';
+  if (name.startsWith('mcp__')) return 'mcp';
   return 'other';
 }
 
@@ -123,13 +126,16 @@ export class JsonlParser {
           serviceTier,
         };
 
-        // server_tool_use.web_search_requests (API usage 필드)
+        // server_tool_use 카운트 (API usage 필드)
         const serverToolUse = usage['server_tool_use'] as Record<string, unknown> | undefined;
         const webSearchCount = Number(serverToolUse?.['web_search_requests'] ?? 0);
+        const webFetchCount = Number(serverToolUse?.['web_fetch_requests'] ?? 0);
 
         // content 배열에서 tool_use 블록 파싱
         const content = msg['content'];
-        const toolCounts: ToolUseCounts = { edit: 0, write: 0, bash: 0, webSearch: webSearchCount, other: 0 };
+        const toolCounts = emptyToolCounts();
+        toolCounts.webSearch = webSearchCount;
+        toolCounts.webFetch = webFetchCount;
         const editedFiles: string[] = [];
 
         if (Array.isArray(content)) {
@@ -137,20 +143,11 @@ export class JsonlParser {
             if (block['type'] !== 'tool_use') continue;
             const name = String(block['name'] ?? '');
             const input = block['input'] as Record<string, unknown> | undefined;
-            if (name === 'Edit' || name === 'MultiEdit') {
-              toolCounts.edit++;
+            const cat = classifyToolName(name);
+            toolCounts[cat]++;
+            if (cat === 'edit' || cat === 'write') {
               const fp = String(input?.['file_path'] ?? '');
               if (fp) editedFiles.push(fp);
-            } else if (name === 'Write') {
-              toolCounts.write++;
-              const fp = String(input?.['file_path'] ?? '');
-              if (fp) editedFiles.push(fp);
-            } else if (name === 'Bash') {
-              toolCounts.bash++;
-            } else if (name === 'WebSearch' || name === 'web_search') {
-              toolCounts.webSearch++;
-            } else {
-              toolCounts.other++;
             }
           }
         }
