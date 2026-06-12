@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as readline from 'node:readline';
 import type { JournalUsage, SessionRecord, ToolUseCounts } from '../types';
+import { calcCost } from '../utils/pricing';
 
 /** mtime+offset 캐시 엔트리 */
 interface ParseCache {
@@ -9,18 +10,10 @@ interface ParseCache {
   records: SessionRecord[];
 }
 
-type PricingModel = { input: number; output: number; cache_creation: number; cache_read: number };
-type PricingMap = Record<string, PricingModel>;
-
 const SKIP_TYPES = new Set(['progress', 'file-history-snapshot', 'attachment', 'permission-mode']);
 
 export class JsonlParser {
   private readonly cache = new Map<string, ParseCache>();
-  private readonly pricing: PricingMap;
-
-  constructor(pricing: PricingMap) {
-    this.pricing = pricing;
-  }
 
   /**
    * 지정 파일에서 새 레코드만 증분 파싱.
@@ -96,11 +89,23 @@ export class JsonlParser {
         const requestId = String(entry['requestId'] ?? messageId);
         if (!messageId) return;
 
+        // 캐시 생성 TTL 분리: usage.cache_creation.{ephemeral_5m,ephemeral_1h}_input_tokens
+        // 구버전 로그(객체 없음)는 평면 cache_creation_input_tokens를 전량 5m로 간주 → 기존 동작 보존.
+        const flatCacheCreate = Number(usage['cache_creation_input_tokens'] ?? 0);
+        const cacheCreation = usage['cache_creation'] as Record<string, unknown> | undefined;
+        const cc5m = cacheCreation ? Number(cacheCreation['ephemeral_5m_input_tokens'] ?? 0) : flatCacheCreate;
+        const cc1h = cacheCreation ? Number(cacheCreation['ephemeral_1h_input_tokens'] ?? 0) : 0;
+        const serviceTier = usage['service_tier'] !== undefined ? String(usage['service_tier']) : undefined;
+
         const journalUsage: JournalUsage = {
           input_tokens: Number(usage['input_tokens'] ?? 0),
           output_tokens: Number(usage['output_tokens'] ?? 0),
-          cache_creation_input_tokens: Number(usage['cache_creation_input_tokens'] ?? 0),
+          // 평면 합계는 분해 정보가 있으면 5m+1h로 정규화(집계 토큰 카운트 일관성)
+          cache_creation_input_tokens: cacheCreation ? cc5m + cc1h : flatCacheCreate,
+          cache_creation_5m_input_tokens: cc5m,
+          cache_creation_1h_input_tokens: cc1h,
           cache_read_input_tokens: Number(usage['cache_read_input_tokens'] ?? 0),
+          serviceTier,
         };
 
         // server_tool_use.web_search_requests (API usage 필드)
@@ -145,7 +150,7 @@ export class JsonlParser {
           cwd: String(entry['cwd'] ?? ''),
           gitBranch: String(entry['gitBranch'] ?? ''),
           usage: journalUsage,
-          costUsd: this.calcCost(model, journalUsage),
+          costUsd: calcCost(model, journalUsage),
           toolCounts,
           editedFiles,
         };
@@ -174,40 +179,6 @@ export class JsonlParser {
       }
     }
     return [...seen.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  }
-
-  private calcCost(model: string, usage: JournalUsage): number {
-    const pricing = this.findPricing(model);
-    if (!pricing) return 0;
-
-    const inputCost = (usage.input_tokens / 1_000_000) * pricing.input;
-    const outputCost = (usage.output_tokens / 1_000_000) * pricing.output;
-    const cacheCreateCost = (usage.cache_creation_input_tokens / 1_000_000) * pricing.cache_creation;
-    const cacheReadCost = (usage.cache_read_input_tokens / 1_000_000) * pricing.cache_read;
-
-    return inputCost + outputCost + cacheCreateCost + cacheReadCost;
-  }
-
-  private findPricing(model: string): PricingModel | undefined {
-    if (this.pricing[model]) return this.pricing[model];
-
-    const lm = model.toLowerCase();
-
-    // 가장 긴 접두사 우선: claude-opus-4-1 > claude-opus-4 (utils/pricing.ts와 동일 로직)
-    let best: string | undefined;
-    for (const key of Object.keys(this.pricing)) {
-      if (lm.startsWith(key) && (best === undefined || key.length > best.length)) {
-        best = key;
-      }
-    }
-    if (best !== undefined) return this.pricing[best];
-
-    // 폴백: 동일 패밀리(첫 3세그먼트) → 첫 매칭 키
-    const family = lm.split('-').slice(0, 3).join('-');
-    for (const key of Object.keys(this.pricing)) {
-      if (key.startsWith(family)) return this.pricing[key];
-    }
-    return undefined;
   }
 
   clearCache(): void {

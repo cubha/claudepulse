@@ -4,7 +4,7 @@ import { PRICING, findPricing, calcCost } from '../../src/utils/pricing';
 describe('findPricing', () => {
   it('fable-5 정확 매칭', () => {
     const p = findPricing('claude-fable-5');
-    expect(p).toEqual({ input: 10.0, output: 50.0, cache_creation: 12.5, cache_read: 1.0 });
+    expect(p).toEqual({ input: 10.0, output: 50.0, cache_creation: 12.5, cache_creation_1h: 20.0, cache_read: 1.0 });
   });
 
   it('현행 Opus 4.x는 $5/$25로 매칭 (날짜 접미사 포함)', () => {

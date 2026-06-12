@@ -74,8 +74,15 @@ export type PollerError = 'credentials_missing' | 'token_expired' | 'network_err
 export interface JournalUsage {
   input_tokens: number;
   output_tokens: number;
+  /** 캐시 생성 토큰 합계 (5m + 1h) — 집계 토큰 카운트용. */
   cache_creation_input_tokens: number;
+  /** 5m TTL 캐시 생성 토큰 (요율 input × 1.25). usage.cache_creation.ephemeral_5m_input_tokens */
+  cache_creation_5m_input_tokens: number;
+  /** 1h TTL 캐시 생성 토큰 (요율 input × 2.0). usage.cache_creation.ephemeral_1h_input_tokens */
+  cache_creation_1h_input_tokens: number;
   cache_read_input_tokens: number;
+  /** usage.service_tier — 'standard' | 'batch' | 'priority' 등. batch 시 비용 −50%. */
+  serviceTier?: string;
 }
 
 /** dedup+비용 계산 후 남은 단일 assistant 레코드. */
