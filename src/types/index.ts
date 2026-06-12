@@ -74,8 +74,15 @@ export type PollerError = 'credentials_missing' | 'token_expired' | 'network_err
 export interface JournalUsage {
   input_tokens: number;
   output_tokens: number;
+  /** 캐시 생성 토큰 합계 (5m + 1h) — 집계 토큰 카운트용. */
   cache_creation_input_tokens: number;
+  /** 5m TTL 캐시 생성 토큰 (요율 input × 1.25). usage.cache_creation.ephemeral_5m_input_tokens */
+  cache_creation_5m_input_tokens: number;
+  /** 1h TTL 캐시 생성 토큰 (요율 input × 2.0). usage.cache_creation.ephemeral_1h_input_tokens */
+  cache_creation_1h_input_tokens: number;
   cache_read_input_tokens: number;
+  /** usage.service_tier — 'standard' | 'batch' | 'priority' 등. batch 시 비용 −50%. */
+  serviceTier?: string;
 }
 
 /** dedup+비용 계산 후 남은 단일 assistant 레코드. */
@@ -91,6 +98,9 @@ export interface SessionRecord {
   costUsd: number;      // LiteLLM 기반 계산값
   toolCounts: ToolUseCounts;  // 이 메시지의 도구 사용 카운트
   editedFiles: string[];      // Edit/Write 도구의 file_path 목록
+  attributionSkill?: string;  // jsonl entry.attributionSkill (스킬 귀속, 없으면 미정의)
+  isSidechain: boolean;       // jsonl entry.isSidechain (서브에이전트 소비 여부)
+  agentId?: string;           // jsonl entry.agentId (서브에이전트 식별자)
 }
 
 /** 하루 집계 (UTC 날짜 기준). */
@@ -134,8 +144,12 @@ export interface ToolUseCounts {
   edit: number;
   write: number;
   bash: number;
-  webSearch: number;
-  other: number;
+  read: number;       // Read
+  grep: number;       // Grep + Glob (검색)
+  webSearch: number;  // WebSearch + server_tool_use.web_search_requests
+  webFetch: number;   // WebFetch + server_tool_use.web_fetch_requests
+  mcp: number;        // mcp__* 도구 그룹
+  other: number;      // Task/Skill/Agent 등 기타
 }
 
 /** 일별 도구 사용 집계 (히스토그램용). */
@@ -145,6 +159,22 @@ export interface DailyToolStats {
   write: number;
   bash: number;
   webSearch: number;
+}
+
+/** 스킬별 사용량 집계 (attributionSkill 기준, 비용 내림차순). */
+export interface SkillUsage {
+  skill: string;         // attributionSkill 값
+  costUsd: number;       // 누적 비용
+  totalTokens: number;   // 누적 토큰
+  share: number;         // 0.0 ~ 1.0 (귀속된 비용 중 비율)
+}
+
+/** 서브에이전트 vs 메인 소비 분리 통계. */
+export interface SubagentStats {
+  mainCostUsd: number;       // isSidechain=false 비용
+  subagentCostUsd: number;   // isSidechain=true 비용
+  subagentShare: number;     // 0.0 ~ 1.0 (전체 비용 중 서브에이전트 비중)
+  subagentCount: number;     // 고유 agentId 수
 }
 
 /** 브랜치별 사용량 집계. */
@@ -167,6 +197,8 @@ export interface UsageSummary {
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
   recentEditedFiles: string[];       // 최근 편집 파일 목록 (top 20)
   branchBreakdown: BranchUsage[];    // 브랜치별 비용 집계 (비용 내림차순)
+  skillBreakdown: SkillUsage[];      // 스킬별 비용 집계 (비용 내림차순)
+  subagentStats: SubagentStats;      // 서브에이전트 vs 메인 소비 분리
   activeBranch: string;              // 가장 최근 활성 브랜치명 (사이드바 칩용)
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601

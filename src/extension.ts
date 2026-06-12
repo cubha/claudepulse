@@ -22,7 +22,6 @@ import { WorkspaceMapper } from './services/WorkspaceMapper';
 import { CacheStore } from './services/CacheStore';
 import { PushPollerError, PushRateLimit, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
-import { PRICING } from './utils/pricing';
 import type { PollHistoryPoint, PollerError, RateLimitSnapshot, SessionRecord, UsageSummary } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -43,7 +42,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const snapshotHistory: PollHistoryPoint[] = [];
 
   // jsonl 파이프라인
-  const jsonlParser = new JsonlParser(PRICING);
+  const jsonlParser = new JsonlParser();
   const aggregator = new UsageAggregator();
   const workspaceMapper = new WorkspaceMapper();
   const fileWatcher = new FileWatcher();

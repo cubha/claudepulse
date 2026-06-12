@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-06-12
+
+### Fixed
+- **Cache-creation cost accuracy (P0)**: Cache-creation tokens are now billed per TTL — 5-minute writes at 1.25× input and 1-hour writes at 2.0× input — instead of charging everything at the 5m rate. Real-history sampling showed 1h cache dominant (53.2M vs 9.8M tokens), so the old flat calculation under-counted cache-creation cost by ~50%. The parser reads `usage.cache_creation.{ephemeral_5m_input_tokens, ephemeral_1h_input_tokens}`; legacy logs without the breakdown fall back to the prior (5m) behavior. Cost math is consolidated into a single `calcCost()` source of truth.
+
+### Added
+- **`service_tier` awareness**: Parses `usage.service_tier`; `batch` tier applies a −50% cost multiplier (currently all traffic is `standard`, so no present-day impact — future-proofing).
+- **Tool-count granularity**: The catch-all `other` bucket is split into `Read` (previously the largest hidden bucket), `Grep`/`Glob`, `WebFetch` (incl. `server_tool_use.web_fetch_requests`), and `MCP` (`mcp__*` tools). New categories surface as neutral sidebar chips (existing 6+1 accent cap preserved).
+- **Cost by Skill**: New dashboard card breaks down cost by `attributionSkill` (sh-dev-loop, ship, plan, …) as a ranked single-accent bar list — a differentiator no competing IDE extension offers.
+- **Subagent vs. main split**: Aggregates `isSidechain`/`agentId` to show subagent consumption share, cost, and unique-agent count.
+
+### Notes
+- Thinking-token separation was evaluated and deferred: `thinking` blocks are present but empty by default (`display: omitted`) and no separate thinking-token count is exposed in `usage` (folded into `output_tokens`) — data not available.
+
 ## [0.1.33] - 2026-06-11
 
 ### Added

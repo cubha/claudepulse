@@ -1,5 +1,6 @@
 import { findPricing } from '../utils/pricing';
-import type { BranchUsage, CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, ToolUseCounts, UsageSummary } from '../types';
+import { emptyToolCounts } from './JsonlParser';
+import type { BranchUsage, CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
 
 export class UsageAggregator {
   aggregate(records: SessionRecord[]): UsageSummary {
@@ -11,13 +12,19 @@ export class UsageAggregator {
     const byModel = new Map<string, { tokens: number; costUsd: number }>();
     const byDayTools = new Map<string, DailyToolStats>();
     const byBranch = new Map<string, BranchUsage>();
+    const bySkill = new Map<string, { costUsd: number; totalTokens: number }>();
+
+    // 서브에이전트 분리 집계
+    let mainCostUsd = 0;
+    let subagentCostUsd = 0;
+    const subagentIds = new Set<string>();
 
     // 오늘 집계용
     let todayCacheRead = 0;
     let todayCacheCreation = 0;
     let todayInput = 0;
     let todaySavedUsd = 0;
-    const todayTools: ToolUseCounts = { edit: 0, write: 0, bash: 0, webSearch: 0, other: 0 };
+    const todayTools: ToolUseCounts = emptyToolCounts();
 
     // 편집 파일 최근순 수집 (파일 경로 → 최근 timestamp)
     const fileLastSeen = new Map<string, string>();
@@ -82,6 +89,23 @@ export class UsageAggregator {
         byBranch.set(r.gitBranch, b);
       }
 
+      // 스킬별 집계 (#7) — attributionSkill 있는 레코드만
+      if (r.attributionSkill) {
+        const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0 };
+        sk.costUsd += r.costUsd;
+        sk.totalTokens += r.usage.input_tokens + r.usage.output_tokens
+          + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
+        bySkill.set(r.attributionSkill, sk);
+      }
+
+      // 서브에이전트 vs 메인 분리 (#8)
+      if (r.isSidechain) {
+        subagentCostUsd += r.costUsd;
+        if (r.agentId) subagentIds.add(r.agentId);
+      } else {
+        mainCostUsd += r.costUsd;
+      }
+
       // 편집 파일 추적
       for (const fp of r.editedFiles) {
         const prev = fileLastSeen.get(fp);
@@ -115,7 +139,11 @@ export class UsageAggregator {
         todayTools.edit += r.toolCounts.edit;
         todayTools.write += r.toolCounts.write;
         todayTools.bash += r.toolCounts.bash;
+        todayTools.read += r.toolCounts.read;
+        todayTools.grep += r.toolCounts.grep;
         todayTools.webSearch += r.toolCounts.webSearch;
+        todayTools.webFetch += r.toolCounts.webFetch;
+        todayTools.mcp += r.toolCounts.mcp;
         todayTools.other += r.toolCounts.other;
       }
     }
@@ -182,6 +210,26 @@ export class UsageAggregator {
       : null;
     const activeBranch = lastRecord?.gitBranch ?? '';
 
+    // 스킬별 비용 분해 (#7) — 비용 내림차순, share는 귀속 비용 총합 기준
+    const skillTotalCost = [...bySkill.values()].reduce((sum, v) => sum + v.costUsd, 0);
+    const skillBreakdown: SkillUsage[] = [...bySkill.entries()]
+      .map(([skill, v]) => ({
+        skill,
+        costUsd: v.costUsd,
+        totalTokens: v.totalTokens,
+        share: skillTotalCost > 0 ? v.costUsd / skillTotalCost : 0,
+      }))
+      .sort((a, b) => b.costUsd - a.costUsd);
+
+    // 서브에이전트 vs 메인 소비 분리 (#8)
+    const totalAttributedCost = mainCostUsd + subagentCostUsd;
+    const subagentStats: SubagentStats = {
+      mainCostUsd,
+      subagentCostUsd,
+      subagentShare: totalAttributedCost > 0 ? subagentCostUsd / totalAttributedCost : 0,
+      subagentCount: subagentIds.size,
+    };
+
     return {
       today,
       last7Days,
@@ -192,6 +240,8 @@ export class UsageAggregator {
       last7DaysTools,
       recentEditedFiles,
       branchBreakdown,
+      skillBreakdown,
+      subagentStats,
       activeBranch,
       historicalDays: [],  // extension.ts에서 CacheStore 데이터로 채워짐
       generatedAt: now.toISOString(),

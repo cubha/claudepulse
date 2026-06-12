@@ -7,7 +7,7 @@
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/cubha.claude-code-gauge?color=22c55e)](https://marketplace.visualstudio.com/items?itemName=cubha.claude-code-gauge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, **what Claude actually did**, and **which branch cost how much** — with burn rate predictions, tool usage breakdowns, and Git branch ROI — without leaving your editor.
+Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, **what Claude actually did**, **which skill & branch cost how much**, and **how much your subagents spend** — with burn rate predictions, tool usage breakdowns, per-skill cost attribution, and Git branch ROI — without leaving your editor.
 
 ## Features
 
@@ -46,9 +46,13 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Open Dashboard button**: Persistent button at the bottom of the sidebar — tactile depth styling with gradient and press effect — opens the full Dashboard Panel in one click
 
 ### Action Insights — *what Claude did* (local `.jsonl` — v0.0.70+)
-- **Tool usage chips** (sidebar): `Edit N · Write N · Bash N · 🔍 N` — today's tool call counts at a glance, color-coded by type
+- **Tool usage chips** (sidebar): `Edit N · Write N · Bash N · Read N · Grep N · 🔍 N · 🌐 N · MCP N` — today's tool call counts at a glance, with `Read`, `Grep`/`Glob`, `WebFetch`, and `MCP` (`mcp__*`) broken out from the old catch-all bucket (v0.1.34)
 - **Tool usage histogram** (dashboard): Stacked bar chart of Edit / Write / Bash / Search per day for the last 7 days — spot heavy editing vs. execution sessions
 - **Recently edited files** (dashboard): Up to 20 files touched in recent sessions, ordered by last activity — filename + full path
+
+### Cost Attribution — *where the cost went* (local `.jsonl` — v0.1.34+)
+- **Cost by Skill** (dashboard): Ranked bar list of cost per `attributionSkill` (sh-dev-loop, ship, plan, research, …) — see which Claude Code skills drive your spend
+- **Subagent vs. main split** (dashboard): Subagent consumption share, cost, and unique-agent count from `isSidechain`/`agentId` — separate background subagent usage from your main session
 
 ### Long-term Cost Tracking (local persistence — v0.1.1+)
 - **CacheStore**: Daily usage snapshots persist to `globalStorageUri/ccg-history.json` — survives jsonl rotation so history accumulates across months
