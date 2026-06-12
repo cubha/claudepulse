@@ -817,6 +817,12 @@ function buildPanelShell(): string {
         <div id="panel-branch-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
+      <!-- 비용 귀속 — 스킬별 비용 + 서브에이전트 소비 -->
+      <div class="card panel-skill-card" id="panel-skill-card">
+        <div class="panel-chart-header">${t('skill_attribution')}</div>
+        <div id="panel-skill-list"><div class="panel-loading">${t('collecting_data')}</div></div>
+      </div>
+
       <!-- 장기 비용 트렌드 -->
       <div class="card panel-trend-card" id="panel-longterm-card">
         <div class="panel-chart-header">${t('long_term_trend')}</div>
@@ -855,6 +861,7 @@ function updateUsageSection(): void {
   updateFilesList();
   updateSessionList();
   updateBranchSection();
+  updateSkillSection();
   updateLongTermSection();
   updateMonthlyChart();
 }
@@ -1220,6 +1227,43 @@ function updateBranchSection(): void {
   }).join('');
 
   listEl.innerHTML = headerRow + rows;
+}
+
+function updateSkillSection(): void {
+  const listEl = document.getElementById('panel-skill-list');
+  if (!listEl) return;
+
+  const skills = panelUsage?.skillBreakdown ?? [];
+  const sub = panelUsage?.subagentStats;
+
+  // 서브에이전트 소비 요약 라인 (#8)
+  let subLine = '';
+  if (sub && sub.subagentCostUsd > 0) {
+    const pct = (sub.subagentShare * 100).toFixed(0);
+    subLine = `<div class="skill-subagent-line">
+      <span>${t('subagent_consumption')}</span>
+      <span class="mono">${pct}% · ${fmtCost(sub.subagentCostUsd)} · ${sub.subagentCount} ${t('agents_label')}</span>
+    </div>`;
+  }
+
+  if (skills.length === 0) {
+    listEl.innerHTML = subLine || `<div class="panel-empty">${t('no_skill_data')}</div>`;
+    return;
+  }
+
+  // 비용 비중 바 (단일 액센트 — 6+1 cap 준수)
+  const top = skills.slice(0, 8);
+  const maxShare = top[0]?.share || 1;
+  const rows = top.map(s => {
+    const w = Math.max(2, (s.share / maxShare) * 100);
+    return `<div class="skill-row" title="${escapeHtml(s.skill)} · ${(s.share * 100).toFixed(1)}%">
+      <span class="skill-name">${escapeHtml(s.skill)}</span>
+      <span class="skill-bar-wrap"><span class="skill-bar" style="width:${w}%"></span></span>
+      <span class="skill-cost mono">${fmtCost(s.costUsd)}</span>
+    </div>`;
+  }).join('');
+
+  listEl.innerHTML = subLine + rows;
 }
 
 function updateLongTermSection(): void {

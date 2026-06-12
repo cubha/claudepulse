@@ -12,6 +12,12 @@ export class UsageAggregator {
     const byModel = new Map<string, { tokens: number; costUsd: number }>();
     const byDayTools = new Map<string, DailyToolStats>();
     const byBranch = new Map<string, BranchUsage>();
+    const bySkill = new Map<string, { costUsd: number; totalTokens: number }>();
+
+    // 서브에이전트 분리 집계
+    let mainCostUsd = 0;
+    let subagentCostUsd = 0;
+    const subagentIds = new Set<string>();
 
     // 오늘 집계용
     let todayCacheRead = 0;
@@ -81,6 +87,23 @@ export class UsageAggregator {
           + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
         if (r.timestamp > b.lastActive) b.lastActive = r.timestamp;
         byBranch.set(r.gitBranch, b);
+      }
+
+      // 스킬별 집계 (#7) — attributionSkill 있는 레코드만
+      if (r.attributionSkill) {
+        const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0 };
+        sk.costUsd += r.costUsd;
+        sk.totalTokens += r.usage.input_tokens + r.usage.output_tokens
+          + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
+        bySkill.set(r.attributionSkill, sk);
+      }
+
+      // 서브에이전트 vs 메인 분리 (#8)
+      if (r.isSidechain) {
+        subagentCostUsd += r.costUsd;
+        if (r.agentId) subagentIds.add(r.agentId);
+      } else {
+        mainCostUsd += r.costUsd;
       }
 
       // 편집 파일 추적
@@ -187,15 +210,24 @@ export class UsageAggregator {
       : null;
     const activeBranch = lastRecord?.gitBranch ?? '';
 
-    // 스킬별 비용 분해 (#7) — TODO(GREEN): attributionSkill 집계
-    const skillBreakdown: SkillUsage[] = [];
+    // 스킬별 비용 분해 (#7) — 비용 내림차순, share는 귀속 비용 총합 기준
+    const skillTotalCost = [...bySkill.values()].reduce((sum, v) => sum + v.costUsd, 0);
+    const skillBreakdown: SkillUsage[] = [...bySkill.entries()]
+      .map(([skill, v]) => ({
+        skill,
+        costUsd: v.costUsd,
+        totalTokens: v.totalTokens,
+        share: skillTotalCost > 0 ? v.costUsd / skillTotalCost : 0,
+      }))
+      .sort((a, b) => b.costUsd - a.costUsd);
 
-    // 서브에이전트 vs 메인 소비 분리 (#8) — TODO(GREEN): isSidechain 집계
+    // 서브에이전트 vs 메인 소비 분리 (#8)
+    const totalAttributedCost = mainCostUsd + subagentCostUsd;
     const subagentStats: SubagentStats = {
-      mainCostUsd: 0,
-      subagentCostUsd: 0,
-      subagentShare: 0,
-      subagentCount: 0,
+      mainCostUsd,
+      subagentCostUsd,
+      subagentShare: totalAttributedCost > 0 ? subagentCostUsd / totalAttributedCost : 0,
+      subagentCount: subagentIds.size,
     };
 
     return {

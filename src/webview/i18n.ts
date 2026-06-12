@@ -82,6 +82,12 @@ const dict: Record<string, Record<Lang, string>> = {
   sessions_label:    { ko: '세션',                 en: 'Sessions',              ja: 'セッション',               zh: '会话' },
   last_active:       { ko: '최근 활동',             en: 'Last Active',           ja: '最終活動',                 zh: '最近活动' },
   no_branch_data:    { ko: '브랜치 데이터 없음…',   en: 'No branch data…',       ja: 'ブランチデータなし…',      zh: '暂无分支数据…' },
+  // 비용 귀속 (스킬·서브에이전트)
+  skill_attribution: { ko: '스킬별 비용',           en: 'Cost by Skill',         ja: 'スキル別コスト',           zh: '按技能成本' },
+  skill_label:       { ko: '스킬',                 en: 'Skill',                 ja: 'スキル',                  zh: '技能' },
+  no_skill_data:     { ko: '스킬 귀속 데이터 없음…', en: 'No skill data…',        ja: 'スキルデータなし…',        zh: '暂无技能数据…' },
+  subagent_consumption: { ko: '서브에이전트 소비',  en: 'Subagent usage',        ja: 'サブエージェント消費',      zh: '子代理消耗' },
+  agents_label:      { ko: '에이전트',             en: 'agents',                ja: 'エージェント',             zh: '代理' },
   // 장기 트렌드
   this_month:       { ko: '이번달',              en: 'This Month',            ja: '今月',                    zh: '本月' },
   projected:        { ko: '예상',               en: 'Projected',             ja: '予測',                    zh: '预测' },
