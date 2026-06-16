@@ -46,6 +46,8 @@ const dict: Record<string, Record<Lang, string>> = {
   overage:          { ko: '초과사용량',           en: 'Overage Usage',         ja: '超過使用量',               zh: '超额用量' },
   overage_active:   { ko: '활성',               en: 'Active',                ja: 'アクティブ',               zh: '活跃' },
   overage_blocked:  { ko: '차단됨',             en: 'Blocked',               ja: 'ブロック',                 zh: '已屏蔽' },
+  overage_disabled: { ko: '비활성',             en: 'Disabled',              ja: '無効',                     zh: '已禁用' },
+  overage_tooltip:  { ko: '기본 5h/7d 한도를 초과해 사용한 overage 비율입니다. claude.ai 사용 크레딧($ 지출)과는 다른 지표입니다.', en: 'Share of overage rate-limit used after your base 5h/7d quota is exhausted. Different from claude.ai Usage Credits ($ spend).', ja: '基本5h/7d上限を超えて使用したoverage割合です。claude.aiの使用クレジット($支出)とは別の指標です。', zh: '基础5h/7d额度用尽后使用的overage比例。与claude.ai使用额度($支出)是不同指标。' },
   billing_settings: { ko: '사용량 설정 →',     en: 'Usage Settings →',      ja: '使用量設定 →',              zh: '使用量设置 →' },
   // 상태 배지
   status_ok:        { ko: 'OK',                 en: 'OK',                    ja: 'OK',                      zh: '正常' },

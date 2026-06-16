@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-06-16
+
+### Fixed
+- **Overage section no longer shows misleading "0%" when disabled**: When extra-usage (overage) is disabled/rejected (`anthropic-ratelimit-unified-overage-status: rejected`, e.g. `org_level_disabled`), the API omits the `overage-utilization` header, which the parser correctly defaulted to `0` — but rendering it as "0%" implied "0% used" rather than "unavailable". The sidebar now shows a **`DISABLED` chip** instead of a percentage when overage is rejected; the utilization percentage is shown **only when overage is active**.
+
+### Added
+- **Overage label tooltip**: The "Overage Usage" section label now carries a help tooltip clarifying that this percentage is the *overage rate-limit utilization* (how much of the overage allowance is used after the base 5h/7d quota is exhausted) — a **different metric** from the claude.ai Usage Credits ($ spend / monthly cap) shown on the web usage page. Localized in all 4 languages (ko/en/ja/zh).
+
+### Notes
+- The claude.ai "Usage Credits" percentage (e.g. `$3.80 / $30 ≈ 13%`) is a dollar-spend-vs-cap figure produced by claude.ai's internal usage API and is **not exposed in any official rate-limit header**; verified empirically that `overage-utilization` reports `0.0` even with overage enabled while the web page showed 13%. The two are distinct metrics, and the official header value is reported faithfully.
+
 ## [0.1.34] - 2026-06-12
 
 ### Fixed
