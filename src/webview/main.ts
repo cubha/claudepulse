@@ -472,17 +472,23 @@ function buildSidebarHtml(
   const overageSection = snapshot.overage
     ? (() => {
         const ov = snapshot.overage!;
+        const ovDisabled = ov.status === 'rejected';
         const ovPct = fmtPct(ov.utilization);
-        const ovColor = ov.status === 'rejected' ? 'var(--c-danger)' : 'var(--c-warn)';
-        const ovDataStatus = ov.status === 'rejected' ? 'blocked' : 'allowed';
+        const ovColor = ovDisabled ? 'var(--c-danger)' : 'var(--c-warn)';
+        const ovDataStatus = ovDisabled ? 'blocked' : 'allowed';
+        // 비활성(rejected)일 때는 오해 유발하는 "0%" 대신 비활성 칩만 표시.
+        // 활성일 때만 overage rate-limit 사용률(%)을 노출 — claude.ai "사용 크레딧"($ 지출)과 다른 지표라 툴팁으로 명시.
+        const ovRight = ovDisabled
+          ? `<span class="overage-status-chip rejected">${t('overage_disabled')}</span>`
+          : `<span class="mono" style="color:${ovColor};">${ovPct}</span>
+              <span class="sb-section-sep">·</span>
+              <span class="overage-status-chip allowed">${t('overage_active')}</span>`;
         return `<div class="sb-overage-wrap">
           <div class="sb-section-hdr">
             <span class="sb-section-dot" style="background:${ovColor};"></span>
-            <span class="sb-section-label">${t('overage')}</span>
+            <span class="sb-section-label" title="${t('overage_tooltip')}" style="cursor:help;">${t('overage')}</span>
             <span class="sb-section-right">
-              <span class="mono" style="color:${ovColor};">${ovPct}</span>
-              <span class="sb-section-sep">·</span>
-              <span class="overage-status-chip ${ov.status}">${ov.status === 'allowed' ? t('overage_active') : t('overage_blocked')}</span>
+              ${ovRight}
             </span>
           </div>
           <div class="sb-rate-card">

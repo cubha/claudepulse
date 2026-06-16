@@ -20,7 +20,7 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Dashboard Panel**: SESSION · WEEKLY · BURN RATE · SAFE UNTIL 4-card layout + utilization trend chart
 - **Trend Chart Scope**: Toggle 30m / 2h / 24h view window directly on the chart
 - **Bottleneck highlight**: The currently limiting window (5h or 7d) is outlined in amber so you instantly see what's constraining you
-- **Overage section**: Progress bar + utilization percentage + status chip for your overage (extra usage) quota — percentage displayed even when blocked (e.g. `101%`), colored red for blocked / amber for active
+- **Overage section**: Progress bar + status chip for your overage (extra usage) quota — shows the overage rate-limit utilization **only when active** (amber), and a `DISABLED` chip when overage is rejected/disabled instead of a misleading "0%". A help tooltip clarifies this is the overage *rate-limit* usage (consumed after your base 5h/7d quota is exhausted), distinct from the claude.ai "Usage Credits" dollar-spend figure
 - **Fallback banner**: Inline warning when Claude throttles to reduced speed (e.g. 50%)
 - **7d threshold badge**: Red badge on the Weekly card when a usage threshold has been surpassed
 - **Threshold alerts**: Native VS Code warning notification when usage exceeds your configured limit
