@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-06-17
+
+### Fixed
+- **Cost by Skill card layout**: the dashboard card stretched full-width with no padding, unlike every other card — now aligned with the rest of the dashboard.
+- **Lower CPU/IO on live updates**: incremental `.jsonl` parsing was silently re-reading each file in full on every change; it now reads only newly appended data, and rapid bursts of file changes are debounced into a single refresh. Noticeably lighter during active Claude Code sessions.
+- **Memory leak on the cache hit-rate sparkline**: the chart was recreated without disposing the previous instance, leaking on every dashboard refresh — fixed for long-running windows.
+
+### Changed
+- Internal cleanup only (model-label/branch aggregation dedup); no behavior change, no new colors or tokens.
+
 ## [0.1.35] - 2026-06-16
 
 ### Fixed

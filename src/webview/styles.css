@@ -1416,6 +1416,10 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
 .branch-last  { color: var(--vscode-descriptionForeground); text-align: right; }
 
 /* 비용 귀속 — 스킬별 비용 + 서브에이전트 (v0.1.34) */
+.panel-skill-card {
+  margin: 0 var(--sp-4) var(--sp-4);
+  padding: var(--sp-3);
+}
 .skill-subagent-line {
   display: flex;
   justify-content: space-between;

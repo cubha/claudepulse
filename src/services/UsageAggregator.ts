@@ -12,6 +12,7 @@ export class UsageAggregator {
     const byModel = new Map<string, { tokens: number; costUsd: number }>();
     const byDayTools = new Map<string, DailyToolStats>();
     const byBranch = new Map<string, BranchUsage>();
+    const branchSessionSets = new Map<string, Set<string>>();
     const bySkill = new Map<string, { costUsd: number; totalTokens: number }>();
 
     // 서브에이전트 분리 집계
@@ -87,6 +88,11 @@ export class UsageAggregator {
           + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
         if (r.timestamp > b.lastActive) b.lastActive = r.timestamp;
         byBranch.set(r.gitBranch, b);
+
+        // 브랜치별 고유 세션 수집 (메인 루프 통합 — 별도 재순회 제거)
+        const set = branchSessionSets.get(r.gitBranch) ?? new Set<string>();
+        set.add(r.sessionId);
+        branchSessionSets.set(r.gitBranch, set);
       }
 
       // 스킬별 집계 (#7) — attributionSkill 있는 레코드만
@@ -148,14 +154,7 @@ export class UsageAggregator {
       }
     }
 
-    // 브랜치별 세션 수 집계 (세션 ID × 브랜치 조합 기준)
-    const branchSessionSets = new Map<string, Set<string>>();
-    for (const r of records) {
-      if (!r.gitBranch) continue;
-      const set = branchSessionSets.get(r.gitBranch) ?? new Set<string>();
-      set.add(r.sessionId);
-      branchSessionSets.set(r.gitBranch, set);
-    }
+    // 브랜치별 세션 수 반영 (수집은 메인 루프에서 완료)
     for (const [branch, sessions] of branchSessionSets) {
       const b = byBranch.get(branch);
       if (b) b.sessionCount = sessions.size;

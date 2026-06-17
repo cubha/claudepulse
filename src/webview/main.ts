@@ -279,20 +279,23 @@ function fmtCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+// 모델 문자열 분류 단일 소스 (이름·액센트·색상 3개 함수가 공유)
+type ModelKind = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other';
+const MODEL_KINDS: Exclude<ModelKind, 'other'>[] = ['fable', 'opus', 'sonnet', 'haiku'];
+
+function modelKind(model: string): ModelKind {
+  return MODEL_KINDS.find(k => model.includes(k)) ?? 'other';
+}
+
 function modelShortName(model: string): string {
-  if (model.includes('fable')) return 'Fable';
-  if (model.includes('opus')) return 'Opus';
-  if (model.includes('sonnet')) return 'Sonnet';
-  if (model.includes('haiku')) return 'Haiku';
-  return model.split('-').slice(-2).join('-');
+  const k = modelKind(model);
+  if (k === 'other') return model.split('-').slice(-2).join('-');
+  return k.charAt(0).toUpperCase() + k.slice(1);
 }
 
 function modelAccentClass(model: string): string {
-  if (model.includes('fable')) return 'fable';
-  if (model.includes('opus')) return 'opus';
-  if (model.includes('sonnet')) return 'sonnet';
-  if (model.includes('haiku')) return 'haiku';
-  return 'slate';
+  const k = modelKind(model);
+  return k === 'other' ? 'slate' : k;
 }
 
 function buildUsageRowHtml(usage: UsageSummary | null): string {
@@ -582,6 +585,7 @@ let modelChart: Chart | null = null;
 let toolChart: Chart | null = null;
 let longTermChart: Chart | null = null;
 let monthlyChart: Chart | null = null;
+let cacheSparkChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
 let longTermScopeDays = 30;
 let panelUsage: UsageSummary | null = null;
@@ -594,6 +598,7 @@ function destroyCharts(): void {
   if (toolChart) { toolChart.destroy(); toolChart = null; }
   if (longTermChart) { longTermChart.destroy(); longTermChart = null; }
   if (monthlyChart) { monthlyChart.destroy(); monthlyChart = null; }
+  if (cacheSparkChart) { cacheSparkChart.destroy(); cacheSparkChart = null; }
 }
 
 function wirePanelButtons(messenger: InstanceType<typeof Messenger>): void {
@@ -930,11 +935,8 @@ function updateDailyChart(): void {
 }
 
 function modelColor(model: string): string {
-  if (model.includes('fable')) return getCssVar('--c-fable');
-  if (model.includes('opus')) return getCssVar('--c-opus');
-  if (model.includes('sonnet')) return getCssVar('--c-sonnet');
-  if (model.includes('haiku')) return getCssVar('--c-haiku');
-  return getCssVar('--c-slate');
+  const k = modelKind(model);
+  return getCssVar(k === 'other' ? '--c-slate' : `--c-${k}`);
 }
 
 function updateModelBreakdown(): void {
@@ -1011,6 +1013,9 @@ function updateCacheSection(): void {
   const bodyEl = document.getElementById('panel-cache-body');
   if (!bodyEl) return;
 
+  // innerHTML 재설정으로 기존 canvas가 제거되므로 이전 차트를 먼저 정리(누수 방지).
+  if (cacheSparkChart) { cacheSparkChart.destroy(); cacheSparkChart = null; }
+
   const cache = panelUsage?.cacheStats;
   const last7 = panelUsage?.last7Days ?? [];
 
@@ -1052,7 +1057,7 @@ function updateCacheSection(): void {
     const axisColor = getCssVar('--vscode-descriptionForeground');
     const gridColor = getCssVar('--vscode-panel-border');
     const lineColor = getCssVar('--c-warn');
-    new Chart(canvas, {
+    cacheSparkChart = new Chart(canvas, {
       type: 'line',
       data: {
         labels: sparkLabels,
