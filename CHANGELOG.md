@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-06-17
+
+### Fixed
+- **Incremental jsonl parsing restored (P1 performance)**: `JsonlParser.parseFile` was re-reading every watched file from byte 0 on every change event — a dead ternary always evaluated `startOffset` to `0`, so the `mtime+offset` incremental design never took effect. It now reads only the appended bytes from the cached offset (`cached.offset`), with a guard that falls back to a full re-parse when the file was truncated/rotated (`offset > size`). Output is unchanged (dedup already guaranteed correctness); the win is CPU/IO on hot file-watch refreshes.
+- **Cost-by-Skill card layout**: The "Cost by Skill" dashboard card was missing its `.panel-skill-card` margin/padding rule, so it stretched full-width with no padding unlike sibling cards. Added the rule to match the other panel cards.
+- **Cache-spark chart memory leak**: The 7-day cache-hit sparkline created a `Chart.js` instance on every render without destroying the previous one (its canvas was removed via `innerHTML`). It is now tracked in a module variable, destroyed before recreation, and included in `destroyCharts()`.
+
+### Changed
+- **FileWatcher debounce**: Rapid chokidar events are now coalesced into a single `change` emit (500 ms debounce), preventing redundant full parse+aggregate+persist cycles when many jsonl writes land in quick succession (per the spec in CLAUDE.md §4).
+- **Internal: model-classification dedup**: `modelShortName` / `modelAccentClass` / `modelColor` shared the same `model.includes(...)` chain in three places; consolidated into a single `modelKind()` source of truth. No behavior change, no new colors/tokens (5+1 accent cap preserved).
+- **Internal: single-pass branch aggregation**: `UsageAggregator.aggregate` no longer iterates the records array a second time to count per-branch sessions — the session set is collected within the main loop.
+
 ## [0.1.35] - 2026-06-16
 
 ### Fixed

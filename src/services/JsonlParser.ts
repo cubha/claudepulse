@@ -51,8 +51,10 @@ export class JsonlParser {
       return cached.records;
     }
 
-    const startOffset = cached?.mtime === stat.mtimeMs ? cached.offset : 0;
-    const existingRecords: SessionRecord[] = cached ? [...cached.records] : [];
+    // 파일이 잘리거나 교체된 경우(offset > 현재 size) 증분 불가 → 전체 재파싱 폴백.
+    const canIncrement = cached !== undefined && cached.offset <= stat.size;
+    const startOffset = canIncrement ? cached.offset : 0;
+    const existingRecords: SessionRecord[] = canIncrement ? [...cached.records] : [];
 
     const newRecords = await this.readFrom(filePath, startOffset);
     const merged = this.dedup([...existingRecords, ...newRecords]);

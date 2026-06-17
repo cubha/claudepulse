@@ -8,10 +8,14 @@ export type FileWatcherEvent = 'change';
 export class FileWatcher extends EventEmitter {
   private watcher: chokidar.FSWatcher | null = null;
   private readonly watchPath: string;
+  private readonly debounceMs: number;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPath: string | null = null;
 
-  constructor(claudeDir?: string) {
+  constructor(claudeDir?: string, debounceMs = 500) {
     super();
     this.watchPath = path.join(claudeDir ?? path.join(os.homedir(), '.claude'), 'projects');
+    this.debounceMs = debounceMs;
   }
 
   start(): void {
@@ -29,17 +33,32 @@ export class FileWatcher extends EventEmitter {
       },
     });
 
-    const emit = (filePath: string) => {
-      if (filePath.endsWith('.jsonl')) {
-        this.emit('change', filePath);
-      }
-    };
+    this.watcher.on('add', (p: string) => this.schedule(p));
+    this.watcher.on('change', (p: string) => this.schedule(p));
+  }
 
-    this.watcher.on('add', emit);
-    this.watcher.on('change', emit);
+  /**
+   * jsonl 변경 이벤트를 디바운스해 다발 이벤트를 1회 'change' 로 합친다.
+   * (chokidar polling이 짧은 시간에 다수 이벤트를 쏟아도 refreshUsage 1회만 트리거)
+   */
+  private schedule(filePath: string): void {
+    if (!filePath.endsWith('.jsonl')) return;
+    this.pendingPath = filePath;
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null;
+      const p = this.pendingPath;
+      this.pendingPath = null;
+      if (p !== null) this.emit('change', p);
+    }, this.debounceMs);
   }
 
   stop(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingPath = null;
     void this.watcher?.close();
     this.watcher = null;
   }
