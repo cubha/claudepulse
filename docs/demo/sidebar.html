@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="../../dist/webview/styles.css">
+<style>
+  html, body { margin:0; padding:0; width:300px; height:632px; overflow:hidden; background:var(--vscode-sideBar-background,#252526); }
+  :root {
+    --vscode-editor-background:#1e1e1e;
+    --vscode-sideBar-background:#252526;
+    --vscode-sideBarSectionHeader-background:#2d2d2d;
+    --vscode-panel-background:#1e1e1e;
+    --vscode-panel-border:#3c3c3c;
+    --vscode-foreground:#cccccc;
+    --vscode-descriptionForeground:#8b8b8b;
+    --vscode-textLink-foreground:#4daafc;
+    --vscode-input-background:#3c3c3c;
+    --vscode-input-border:#555;
+    --vscode-inputOption-activeBackground:#094771;
+    --vscode-button-background:#0e639c;
+    --vscode-button-hoverBackground:#1177bb;
+    --vscode-button-foreground:#fff;
+    --vscode-badge-background:#4d4d4d;
+    --vscode-badge-foreground:#ccc;
+    --vscode-list-hoverBackground:#2a2d2e;
+    --vscode-notificationCenterHeader-background:#2d2d2d;
+    --vscode-notifications-background:#252526;
+    --vscode-sideBar-foreground:#cccccc;
+    --vscode-charts-blue:#4daafc;
+    --vscode-charts-green:#4ec9b0;
+  }
+  #root { height: 100%; overflow-y: auto; }
+</style>
+<script src="mock-data.js"></script>
+</head>
+<body class="theme-dark" data-mode="sidebar">
+<div id="root">Loading…</div>
+<script src="../../dist/webview/main.js"></script>
+</body>
+</html>

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-06-19
+
+### Added
+- **Cost by Commit — usage×git retrospective**: A new dashboard card attributes token cost to individual git commits, extending the existing branch-level Git ROI down to commit/feature granularity. Each row shows the commit, an approximate cost (`≈$`), a confidence dot, and its share of total.
+  - **Honest approximation by design**: git commits are *not* recorded in session logs, so attribution is an approximate join on `timestamp + cwd + branch` (not an exact mapping). The card carries a prominent **`≈ Approximate`** badge and a join-method disclaimer.
+  - **First-class "Other / Uncommitted" bucket**: work not yet committed (planning, discussion, research, debugging) — measured to be roughly half of output — is shown as a first-class slice rather than hidden, to avoid false precision.
+  - **Survives the 30-day log window**: commit attributions are persisted SHA-keyed (`ccg-retro.json`, separate from the date-keyed history) so retro data outlives the rolling `.jsonl` window.
+  - Localized in all 4 languages (ko/en/ja/zh). No new accent colors (reuses existing tokens).
+
 ## [0.1.36] - 2026-06-17
 
 ### Fixed

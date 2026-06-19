@@ -68,6 +68,21 @@ window.MOCK_USAGE = {
     { model: 'claude-haiku-4-5-20251001',  tokens: 2364,  costUsd: 0.07, share: 0.033 },
   ],
   cacheStats: { hitRate: 0.68, savedUsd: 0.89 },
+  todayToolCounts: { edit: 31, write: 12, bash: 156, read: 248, grep: 14, webSearch: 3, webFetch: 9, mcp: 41, other: 7 },
+  skillBreakdown: [
+    { skill: 'sh-dev-loop',     costUsd: 4.82, totalTokens: 980000, share: 0.46 },
+    { skill: 'ship',            costUsd: 2.10, totalTokens: 410000, share: 0.20 },
+    { skill: 'deep-research',   costUsd: 1.34, totalTokens: 260000, share: 0.13 },
+    { skill: 'plan',            costUsd: 0.88, totalTokens: 170000, share: 0.08 },
+    { skill: 'security-review', costUsd: 0.62, totalTokens: 120000, share: 0.06 },
+    { skill: 'refactoring',     costUsd: 0.41, totalTokens: 80000,  share: 0.04 },
+    { skill: 'debugger',        costUsd: 0.33, totalTokens: 64000,  share: 0.03 },
+  ],
+  subagentStats: { mainCostUsd: 7.31, subagentCostUsd: 3.19, subagentShare: 0.304, subagentCount: 12 },
+  branchBreakdown: [],
+  activeBranch: 'main',
+  historicalDays: [],
+  generatedAt: now.toISOString(),
   last7DaysTools: (() => {
     const edits  = [12, 23, 18, 31, 27, 15, 89];
     const writes = [2,  4,  1,  5,  3,  2,  12];

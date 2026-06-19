@@ -204,6 +204,60 @@ export interface UsageSummary {
   generatedAt: string;               // ISO8601
 }
 
+// ─────────────────────────────────────────────────────────────
+// usage×git 회고 뷰 도메인 모델 (v0.1.37)
+//
+// ⚠️ 포워드 컨트랙트(codex-later): 본 모델은 단일 프로바이더(Claude) 전제.
+// PLAN-v0.1.4-codex-provider 착수 시 Codex session_meta가 cwd를 보유하므로
+// (회고 join 1차 키 = repo+윈도) Codex 레코드가 Claude 커밋 윈도에 오조인(undercount)된다.
+// → 그때 CommitAttributor에 provider 필터를 추가(codex-owned)할 것.
+//   지금 provider 파라미터를 선구현하지 않는다(dead param 금지).
+// 상세: docs/PLAN-v0.1.37-usage-git-retro-2026-06-18.md §5
+// ─────────────────────────────────────────────────────────────
+
+/** git log 1커밋 메타. GitLogReader가 추출, CommitAttributor 입력. */
+export interface CommitMeta {
+  sha: string;
+  committedAt: string;   // ISO8601 (committer date %cI, tz 포함 가능 — Date.parse로 UTC 정규화)
+  branch: string;        // 읽은 시점의 현재 브랜치 (근사치 — §2 한계)
+  subject: string;
+  files: string[];       // --name-only
+  repoRoot: string;      // git rev-parse --show-toplevel
+}
+
+/** 귀속 신뢰도 — 매칭 레코드 수 기반(결정론). */
+export type AttributionConfidence = 'high' | 'medium' | 'low';
+
+/** 커밋 단위 사용량 귀속 결과. */
+export interface CommitUsage {
+  commit: CommitMeta;
+  costUsd: number;          // r.costUsd 합산 (이미 cache amortize 반영 — 재계산 금지)
+  totalTokens: number;
+  recordCount: number;
+  sessionIds: string[];     // 고유 세션
+  confidence: AttributionConfidence;
+}
+
+/** 미귀속 버킷 — 숨기면 거짓 정밀도(§4). 1급 처리 필수. */
+export interface UnattributedBucket {
+  costUsd: number;
+  totalTokens: number;
+  recordCount: number;
+  /** 마지막 커밋 이후 진행중 작업 비용 (repo/branch는 매치) */
+  postLastCommitCostUsd: number;
+  /** 어떤 repo/branch 윈도에도 안 맞는 비용 */
+  noWindowMatchCostUsd: number;
+}
+
+/** 회고 요약 — webview 전달. */
+export interface RetroSummary {
+  commits: CommitUsage[];          // 비용 내림차순
+  unattributed: UnattributedBucket;
+  totalCostUsd: number;            // 전체 레코드 비용 (커밋+미귀속)
+  approximate: true;               // UI 근사치 라벨 강제
+  generatedAt: string;             // ISO8601
+}
+
 /** extension → webview 전달용 폴링 히스토리 포인트. JSON 직렬화 안전. */
 export interface PollHistoryPoint {
   t: string;   // ISO8601
