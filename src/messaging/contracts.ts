@@ -1,5 +1,5 @@
 import { NotificationType, RequestType } from 'vscode-messenger-common';
-import type { PollHistoryPoint, RateLimitSnapshot, UsageSummary } from '../types';
+import type { PollHistoryPoint, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
 
 /** Request: webview → extension. 현재 Rate Limit 스냅샷 요청. */
 export const GetRateLimit: RequestType<void, RateLimitSnapshot> = {
@@ -64,4 +64,12 @@ export const GetUsageSummary: RequestType<void, UsageSummary | null> = {
 /** Notification: extension → webview. 새 사용량 요약 푸시. */
 export const PushUsageSummary: NotificationType<UsageSummary> = {
   method: 'pushUsageSummary'
+};
+
+/**
+ * Request: webview → extension. usage×git 회고 요약 요청 (v0.1.37).
+ * 회고 뷰 오픈/갱신 시 lazy 호출 — git log는 HEAD SHA로 캐시됨.
+ */
+export const GetRetroSummary: RequestType<void, RetroSummary | null> = {
+  method: 'getRetroSummary'
 };

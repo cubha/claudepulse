@@ -1,7 +1,7 @@
 import { Messenger } from 'vscode-messenger';
 import { BROADCAST } from 'vscode-messenger-common';
-import type { PollHistoryPoint, RateLimitSnapshot, UsageSummary } from '../types';
-import { GetLang, GetPollHistory, GetRateLimit, GetUsageSummary, PushLang, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from './contracts';
+import type { PollHistoryPoint, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
+import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
@@ -13,7 +13,8 @@ export function registerHandlers(
   onOpenDashboard: () => void,
   onOpenBillingSettings: () => void,
   getLang: () => string,
-  setLang: (lang: string) => void
+  setLang: (lang: string) => void,
+  getRetroSummary: () => Promise<RetroSummary | null>
 ): void {
   messenger.onRequest(GetPollHistory, () => getPollHistory());
   messenger.onRequest(GetRateLimit, () => {
@@ -22,6 +23,7 @@ export function registerHandlers(
     return snap;
   });
   messenger.onRequest(GetUsageSummary, () => getUsageSummary());
+  messenger.onRequest(GetRetroSummary, () => getRetroSummary());
   messenger.onRequest(GetLang, () => getLang());
   messenger.onNotification(RequestRefresh, () => { void onRefresh(); });
   messenger.onNotification(RequestLogin, () => { onLogin(); });

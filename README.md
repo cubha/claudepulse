@@ -63,6 +63,7 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 ### Git Branch ROI (local `.jsonl` — v0.1.0+)
 - **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency
 - **Git ROI table** (dashboard): Full branch breakdown — **Branch · Cost · Tokens · Sessions · Last Active** — sorted by cost so your most expensive branches surface first
+- **Cost by Commit — usage×git retrospective** (dashboard — v0.1.37): Extends branch ROI down to individual commits. Because git commits aren't recorded in session logs, cost is *approximately* attributed by `timestamp + cwd + branch` — so the card is explicit about it: an **`≈ Approximate`** badge, per-commit confidence dots, and a first-class **"Other / Uncommitted"** bucket (planning/research/debugging that hasn't been committed yet) instead of hiding it. Attributions persist SHA-keyed so they outlive the 30-day log window.
 
 ## How it works
 
