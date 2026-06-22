@@ -51,7 +51,7 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Recently edited files** (dashboard): Up to 20 files touched in recent sessions, ordered by last activity — filename + full path
 
 ### Cost Attribution — *where the cost went* (local `.jsonl` — v0.1.34+)
-- **Cost by Skill** (dashboard): Ranked bar list of cost per `attributionSkill` (sh-dev-loop, ship, plan, research, …) — see which Claude Code skills drive your spend
+- **Cost by Skill** (dashboard): Ranked bar list of cost per `attributionSkill` (sh-dev-loop, ship, plan, research, …) — see which Claude Code skills drive your spend. Because Claude Code only stamps a skill on main-chain turns *while a skill is actively loaded* (~⅓ of cost-bearing turns), everything else — plain requests and work before/after a skill loads — is shown as a first-class **"Outside skills"** bucket rather than hidden, with a `≈ Partial` badge. Subagent-delegated cost is surfaced separately below (v0.1.38)
 - **Subagent vs. main split** (dashboard): Subagent consumption share, cost, and unique-agent count from `isSidechain`/`agentId` — separate background subagent usage from your main session
 
 ### Long-term Cost Tracking (local persistence — v0.1.1+)

@@ -12,3 +12,4 @@ coverage/
 .turbo/
 .eslintcache
 .playwright-mcp/
+.claude/

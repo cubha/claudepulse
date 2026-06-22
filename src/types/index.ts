@@ -169,6 +169,17 @@ export interface SkillUsage {
   share: number;         // 0.0 ~ 1.0 (귀속된 비용 중 비율)
 }
 
+/**
+ * "스킬 외 작업" 1급 버킷 — 활성 스킬(Skill 툴)이 로드되지 않은 동안의 메인체인 작업.
+ * 정의: !isSidechain && !attributionSkill. 평문 NL 직접작업 + 스킬 로드 전/후 lead-up 포함.
+ * ⚠️ 사이드체인(서브에이전트)은 제외 — subagentStats로 별도 노출(이중계산 금지).
+ * 숨기면 거짓 정밀도(attributionSkill 커버리지 실측 ~33%) → 스킬 행과 동등 렌더.
+ */
+export interface SkillUnattributed {
+  costUsd: number;       // 누적 비용
+  totalTokens: number;   // 누적 토큰
+}
+
 /** 서브에이전트 vs 메인 소비 분리 통계. */
 export interface SubagentStats {
   mainCostUsd: number;       // isSidechain=false 비용
@@ -198,6 +209,7 @@ export interface UsageSummary {
   recentEditedFiles: string[];       // 최근 편집 파일 목록 (top 20)
   branchBreakdown: BranchUsage[];    // 브랜치별 비용 집계 (비용 내림차순)
   skillBreakdown: SkillUsage[];      // 스킬별 비용 집계 (비용 내림차순)
+  skillUnattributed: SkillUnattributed;  // "스킬 외 작업" 1급 버킷 (!isSidechain && !attributionSkill)
   subagentStats: SubagentStats;      // 서브에이전트 vs 메인 소비 분리
   activeBranch: string;              // 가장 최근 활성 브랜치명 (사이드바 칩용)
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-06-22
+
+### Changed
+- **Cost by Skill — honest attribution**: the card previously only summed turns Claude Code stamped with an `attributionSkill`, which is **only main-chain turns while a skill is actively loaded** — measured at ~33% of cost-bearing turns. The other ~67% (plain requests, and lead-up work before/after a skill loads) silently vanished, making the card read as if it covered all cost.
+  - **First-class "Outside skills" bucket**: that unattributed main-chain work (`!isSidechain && !attributionSkill`) is now shown as a first-class slice alongside skills — never hidden — reusing the v0.1.37 retrospective's "unattributed bucket" honesty pattern.
+  - **Grand-total shares + `≈ Partial` badge**: skill shares are now computed over the grand total (skills + bucket), and the card header carries a `≈ Partial` badge with a disclaimer explaining the attribution scope.
+  - **No double-counting**: subagent (sidechain) cost stays out of the bucket and is shown only in the separate "Subagent usage" line.
+  - Localized in all 4 languages (ko/en/ja/zh). No new accent colors (bucket reuses the existing slate token).
+
 ## [0.1.37] - 2026-06-19
 
 ### Added

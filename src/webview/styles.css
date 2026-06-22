@@ -1460,6 +1460,16 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   border-radius: 3px;
 }
 .skill-cost { color: var(--c-sonnet); text-align: right; }
+/* 스킬 카드 헤더 + 부분귀속 배지 정렬 (v0.1.38, retro 패턴 재사용) */
+.panel-skill-card .panel-chart-header {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+/* "스킬 외 작업" 1급 버킷 — muted(거짓 정밀도 회피, 숨김 금지). 신규색 없음 */
+.skill-row-other .skill-name { color: var(--c-slate); }
+.skill-bar-other { background: var(--c-slate); }
+.skill-row-other .skill-cost { color: var(--c-slate); }
 
 /* usage×git 회고 — 커밋별 비용 귀속 (v0.1.37) */
 .panel-retro-card {

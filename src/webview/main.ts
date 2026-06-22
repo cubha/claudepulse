@@ -843,7 +843,10 @@ function buildPanelShell(): string {
 
       <!-- 비용 귀속 — 스킬별 비용 + 서브에이전트 소비 -->
       <div class="card panel-skill-card" id="panel-skill-card">
-        <div class="panel-chart-header">${t('skill_attribution')}</div>
+        <div class="panel-chart-header">
+          <span>${t('skill_attribution')}</span>
+          <span class="retro-approx-badge" title="${t('skill_scope_disclaimer')}">${t('skill_scope_badge')}</span>
+        </div>
         <div id="panel-skill-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
@@ -1320,6 +1323,7 @@ function updateSkillSection(): void {
 
   const skills = panelUsage?.skillBreakdown ?? [];
   const sub = panelUsage?.subagentStats;
+  const unattr = panelUsage?.skillUnattributed;
 
   // 서브에이전트 소비 요약 라인 (#8)
   let subLine = '';
@@ -1331,14 +1335,20 @@ function updateSkillSection(): void {
     </div>`;
   }
 
-  if (skills.length === 0) {
+  // 스킬 외 작업 버킷 (1급) — !isSidechain && !attributionSkill
+  const hasBucket = !!unattr && unattr.costUsd > 0;
+  if (skills.length === 0 && !hasBucket) {
     listEl.innerHTML = subLine || `<div class="panel-empty">${t('no_skill_data')}</div>`;
     return;
   }
 
-  // 비용 비중 바 (단일 액센트 — 6+1 cap 준수)
+  // share 분모(grand-total)는 aggregator에서 반영됨. 버킷 share는 동일 분모로 webview 산출.
+  const grandTotal = skills.reduce((s, x) => s + x.costUsd, 0) + (hasBucket ? unattr!.costUsd : 0);
+  const bucketShare = grandTotal > 0 && hasBucket ? unattr!.costUsd / grandTotal : 0;
+
+  // 비용 비중 바 (단일 액센트 — 6+1 cap 준수). 바 스케일은 버킷 포함 최대치 기준.
   const top = skills.slice(0, 8);
-  const maxShare = top[0]?.share || 1;
+  const maxShare = Math.max(top[0]?.share || 0, bucketShare) || 1;
   const rows = top.map(s => {
     const w = Math.max(2, (s.share / maxShare) * 100);
     return `<div class="skill-row" title="${escapeHtml(s.skill)} · ${(s.share * 100).toFixed(1)}%">
@@ -1348,7 +1358,14 @@ function updateSkillSection(): void {
     </div>`;
   }).join('');
 
-  listEl.innerHTML = subLine + rows;
+  // 버킷 행은 스킬 행과 동등(1급)하되 muted — "Other" 관례상 마지막 배치. 숨김/0표시 금지.
+  const bucketRow = hasBucket ? `<div class="skill-row skill-row-other" title="${t('skill_unattributed_tip')} · ${(bucketShare * 100).toFixed(1)}%">
+      <span class="skill-name">${t('skill_unattributed')}</span>
+      <span class="skill-bar-wrap"><span class="skill-bar skill-bar-other" style="width:${Math.max(2, (bucketShare / maxShare) * 100)}%"></span></span>
+      <span class="skill-cost mono">${fmtCost(unattr!.costUsd)}</span>
+    </div>` : '';
+
+  listEl.innerHTML = subLine + rows + bucketRow;
 }
 
 function updateLongTermSection(): void {
