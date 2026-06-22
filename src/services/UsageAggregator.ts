@@ -14,6 +14,8 @@ export class UsageAggregator {
     const byBranch = new Map<string, BranchUsage>();
     const branchSessionSets = new Map<string, Set<string>>();
     const bySkill = new Map<string, { costUsd: number; totalTokens: number }>();
+    // "스킬 외 작업" 버킷 — !isSidechain && !attributionSkill (사이드체인 제외 = 이중계산 금지)
+    const skillUnattributed = { costUsd: 0, totalTokens: 0 };
 
     // 서브에이전트 분리 집계
     let mainCostUsd = 0;
@@ -95,13 +97,20 @@ export class UsageAggregator {
         branchSessionSets.set(r.gitBranch, set);
       }
 
-      // 스킬별 집계 (#7) — attributionSkill 있는 레코드만
-      if (r.attributionSkill) {
-        const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0 };
-        sk.costUsd += r.costUsd;
-        sk.totalTokens += r.usage.input_tokens + r.usage.output_tokens
+      // 스킬별 집계 (#7) — 메인체인만(!isSidechain). 사이드체인은 subagentStats로 별도(이중계산 금지)
+      if (!r.isSidechain) {
+        const tokens = r.usage.input_tokens + r.usage.output_tokens
           + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
-        bySkill.set(r.attributionSkill, sk);
+        if (r.attributionSkill) {
+          const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0 };
+          sk.costUsd += r.costUsd;
+          sk.totalTokens += tokens;
+          bySkill.set(r.attributionSkill, sk);
+        } else {
+          // 스킬 외 작업 버킷 (1급) — 활성 스킬 없던 메인 작업
+          skillUnattributed.costUsd += r.costUsd;
+          skillUnattributed.totalTokens += tokens;
+        }
       }
 
       // 서브에이전트 vs 메인 분리 (#8)
@@ -209,14 +218,16 @@ export class UsageAggregator {
       : null;
     const activeBranch = lastRecord?.gitBranch ?? '';
 
-    // 스킬별 비용 분해 (#7) — 비용 내림차순, share는 귀속 비용 총합 기준
+    // 스킬별 비용 분해 (#7) — 비용 내림차순.
+    // share 분모 = grand-total(Σskill + 스킬 외 버킷) = 전체 메인체인 비용. 거짓 정밀도 회피.
     const skillTotalCost = [...bySkill.values()].reduce((sum, v) => sum + v.costUsd, 0);
+    const skillGrandTotal = skillTotalCost + skillUnattributed.costUsd;
     const skillBreakdown: SkillUsage[] = [...bySkill.entries()]
       .map(([skill, v]) => ({
         skill,
         costUsd: v.costUsd,
         totalTokens: v.totalTokens,
-        share: skillTotalCost > 0 ? v.costUsd / skillTotalCost : 0,
+        share: skillGrandTotal > 0 ? v.costUsd / skillGrandTotal : 0,
       }))
       .sort((a, b) => b.costUsd - a.costUsd);
 
@@ -240,6 +251,7 @@ export class UsageAggregator {
       recentEditedFiles,
       branchBreakdown,
       skillBreakdown,
+      skillUnattributed,
       subagentStats,
       activeBranch,
       historicalDays: [],  // extension.ts에서 CacheStore 데이터로 채워짐
