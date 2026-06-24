@@ -13,11 +13,11 @@ import type { SessionRecord } from '../../src/types';
  */
 describe('Retro 실 파이프라인 (GitLogReader → CommitAttributor)', () => {
   const reader = new GitLogReader();
-  const repoRoot = reader.getRepoRoot(process.cwd());
 
-  it('실제 커밋을 읽어 repo+윈도로 귀속 — 브랜치 무관하게 매칭', () => {
+  it('실제 커밋을 읽어 repo+윈도로 귀속 — 브랜치 무관하게 매칭', async () => {
+    const repoRoot = await reader.getRepoRoot(process.cwd());
     if (!repoRoot) return; // git 없으면 스킵(graceful)
-    const commits = reader.readCommits(repoRoot);
+    const commits = await reader.readCommits(repoRoot);
     expect(commits.length).toBeGreaterThan(0);
 
     // 커밋 시각 범위 중앙에 레코드를 합성 — feature 브랜치명을 일부러 부여(현실 모사).

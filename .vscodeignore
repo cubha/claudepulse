@@ -1,6 +1,7 @@
 .env
 .env.*
 .claude/**
+.gbc/**
 .playwright-mcp/**
 pricing/**
 CLAUDE.md

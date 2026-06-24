@@ -13,3 +13,7 @@ coverage/
 .eslintcache
 .playwright-mcp/
 .claude/
+.gbc/
+
+# 로컬 실데이터 측정 스크립트(실 ~/.claude 의존 — 커밋 안 함, 섹션별 회귀 측정에 재사용)
+scripts/*-e2e.ts
