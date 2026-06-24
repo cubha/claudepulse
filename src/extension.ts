@@ -57,34 +57,62 @@ export function activate(context: vscode.ExtensionContext): void {
   const commitAttributor = new CommitAttributor();
   const retroStore = new RetroStore(context.globalStorageUri.fsPath);
 
-  // 영구 이력 초기 로드
+  // 회고 빌드 상태 (v0.1.39): dirty 디바운스 + 동시빌드 가드 + first-paint 캐시
+  let lastRetroSummary: RetroSummary | null = null;
+  let retroDirty = true;                                  // 레코드 변경 시 set → 다음 요청에 1회 재빌드
+  let retroBuildInFlight: Promise<RetroSummary | null> | null = null;
+
+  // 영구 이력 초기 로드. 회고는 load 후 영속 스냅샷을 메모리 캐시에 올려 first-paint 즉시 반환.
   void cacheStore.load();
-  void retroStore.load();
+  void retroStore.load().then(() => {
+    if (!lastRetroSummary) lastRetroSummary = retroStore.getSummary();
+  });
 
   /**
    * 회고 요약을 lazy 빌드한다(회고 뷰 오픈/갱신 시 호출).
+   * v0.1.39: 비동기 git을 await(호스트 비차단). 깨끗하면 캐시 반환(매-푸시 재빌드 제거),
+   * 동시 요청은 단일 빌드 공유. 영속 스냅샷으로 빌드 전에도 즉시 반환(first-paint).
+   *
    * ⚠️ 포워드 컨트랙트: record 소싱은 단일 진입점 allRecords에서만 한다.
    * getAllJsonlFiles 재호출 금지 — codex "무행위변경 이관"이 이를 ClaudeSource로
    * 옮겨도 회고 ingestion이 깨지지 않게. (PLAN-v0.1.37 §5)
    */
-  async function buildRetroSummary(): Promise<RetroSummary | null> {
-    if (allRecords.length === 0) return null;
-    // 레코드 cwd → git repo root 집합 (중복 셸아웃 회피).
-    // 첫 호출 비용: allRecords는 ~/.claude/projects 전체 프로젝트를 포함하므로 고유 cwd마다
-    // git rev-parse 1회 spawn(확장 호스트 블로킹). getRepoRoot가 cwd당 캐시 → 이후 호출은 저렴.
+  function buildRetroSummary(): Promise<RetroSummary | null> {
+    // 깨끗 + 캐시 보유 → 재빌드 없이 즉시(매 PushUsageSummary 재빌드 차단).
+    if (!retroDirty && lastRetroSummary) return Promise.resolve(lastRetroSummary);
+    // dirty → 백그라운드 빌드 1회만 트리거(동시 요청 dedup). floating promise 방어(.catch).
+    if (!retroBuildInFlight) {
+      retroBuildInFlight = doBuildRetroSummary()
+        .catch(() => lastRetroSummary)
+        .finally(() => { retroBuildInFlight = null; });
+    }
+    // first-paint: 캐시(영속 스냅샷 포함)가 있으면 빌드를 기다리지 않고 즉시 반환.
+    // 다음 푸시/요청에 갱신본이 반영된다. 캐시가 없을 때만(최초) 빌드 대기.
+    return lastRetroSummary ? Promise.resolve(lastRetroSummary) : retroBuildInFlight;
+  }
+
+  async function doBuildRetroSummary(): Promise<RetroSummary | null> {
+    // allRecords 스냅샷 + 즉시 dirty 해제 — 빌드 중 refreshUsage(records 재할당)가 들어오면
+    // 그 refresh가 dirty=true를 재설정해 다음 요청에 재빌드된다(빌드-끝 reset이 B 변경을
+    // 덮어쓰는 race 회피). 이후 전부 스냅샷 records만 사용(repoRoots·attribute 일관).
+    const records = allRecords;
+    retroDirty = false;
+    if (records.length === 0) return lastRetroSummary; // 영속 스냅샷 유지(있으면)
+    // 레코드 cwd → git repo root 집합 (중복 셸아웃 회피). getRepoRoot가 cwd당 캐시.
     const repoRoots = new Set<string>();
     const seenCwd = new Set<string>();
-    for (const r of allRecords) {
+    for (const r of records) {
       if (!r.cwd || seenCwd.has(r.cwd)) continue;
       seenCwd.add(r.cwd);
-      const root = gitLogReader.getRepoRoot(r.cwd);
+      const root = await gitLogReader.getRepoRoot(r.cwd);
       if (root) repoRoots.add(root);
     }
     const commits: CommitMeta[] = [];
-    for (const root of repoRoots) commits.push(...gitLogReader.readCommits(root));
-    const summary = commitAttributor.attribute(allRecords, commits);
-    // SHA-keyed 영속 — jsonl 30일 롤오프 후에도 커밋귀속 생존
-    await retroStore.merge(summary.commits);
+    for (const root of repoRoots) commits.push(...await gitLogReader.readCommits(root));
+    const summary = commitAttributor.attribute(records, commits);
+    lastRetroSummary = summary;
+    // 전체 요약 영속 — first-paint + jsonl 30일 롤오프 후에도 커밋귀속 생존
+    await retroStore.saveSummary(summary);
     return summary;
   }
 
@@ -92,6 +120,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const files = workspaceMapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
     allRecords = perFile.flat();
+    retroDirty = true; // 레코드 변경 → 다음 회고 요청에 1회 재빌드(매-푸시 재빌드 아님)
     lastUsageSummary = aggregator.aggregate(allRecords);
     // 오늘 포함 최근 7일 데이터를 CacheStore에 영구 저장
     await cacheStore.merge(lastUsageSummary.last7Days);

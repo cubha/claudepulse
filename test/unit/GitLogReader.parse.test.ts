@@ -9,8 +9,9 @@ function line(sha: string, date: string, refs: string, subject: string): string 
 }
 
 describe('parseGitLog — 순수 파서', () => {
-  it('단일 커밋 + 파일목록 파싱', () => {
-    const out = `${line('aaa', '2026-06-10T10:00:00+09:00', '', 'feat: x')}\nsrc/a.ts\nsrc/b.ts\n`;
+  // v0.1.39: --name-only 드롭. 출력은 헤더-only(파일줄 없음)이며 CommitMeta.files 제거.
+  it('헤더-only 단일 커밋 파싱 — files 필드 없음', () => {
+    const out = `${line('aaa', '2026-06-10T10:00:00+09:00', '', 'feat: x')}\n`;
     const commits = parseGitLog(out, '/repo', 'main');
     expect(commits.length).toBe(1);
     expect(commits[0]).toMatchObject({
@@ -19,14 +20,15 @@ describe('parseGitLog — 순수 파서', () => {
       subject: 'feat: x',
       branch: 'main',
       repoRoot: '/repo',
-      files: ['src/a.ts', 'src/b.ts'],
     });
+    // 죽은 비용 제거: files는 더 이상 존재하지 않는다(소비처 0건).
+    expect(commits[0]).not.toHaveProperty('files');
   });
 
   it('%D decorate에서 HEAD -> branch 추출, 없으면 폴백', () => {
     const out =
       `${line('aaa', '2026-06-10T10:00:00Z', 'HEAD -> feature/y, origin/feature/y', 'a')}\n` +
-      `${line('bbb', '2026-06-09T10:00:00Z', '', 'b')}\nx.ts\n`;
+      `${line('bbb', '2026-06-09T10:00:00Z', '', 'b')}\n`;
     const commits = parseGitLog(out, '/repo', 'main');
     expect(commits[0].branch).toBe('feature/y'); // decorate
     expect(commits[1].branch).toBe('main');       // 폴백
@@ -36,9 +38,13 @@ describe('parseGitLog — 순수 파서', () => {
     expect(parseGitLog('', '/repo', 'main')).toEqual([]);
   });
 
-  it('파일 없는 커밋(merge 등)도 안전 파싱', () => {
-    const out = `${line('aaa', '2026-06-10T10:00:00Z', '', 'merge')}\n`;
+  it('헤더-only 다중 커밋 스트림 — 전부 파싱', () => {
+    const out =
+      `${line('aaa', '2026-06-10T10:00:00Z', '', 'a')}\n` +
+      `${line('bbb', '2026-06-09T10:00:00Z', '', 'b')}\n` +
+      `${line('ccc', '2026-06-08T10:00:00Z', '', 'c')}\n`;
     const commits = parseGitLog(out, '/repo', 'main');
-    expect(commits[0].files).toEqual([]);
+    expect(commits.map(c => c.sha)).toEqual(['aaa', 'bbb', 'ccc']);
+    expect(commits.every(c => !('files' in c))).toBe(true);
   });
 });

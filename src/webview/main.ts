@@ -4,8 +4,10 @@ import { Chart, registerables } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from '../messaging/contracts';
-import type { AttributionConfidence, DailyUsage, PollerError, RateLimitSnapshot, RetroSummary, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
+import type { DailyUsage, PollerError, RateLimitSnapshot, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
 import { getLang, setLang, t } from './i18n';
+import { escapeHtml, fmtCost } from './format';
+import { renderRetro } from './retroView';
 
 Chart.register(...registerables);
 
@@ -80,10 +82,6 @@ function barFillWidth(utilization: number): string {
   return `width:${pct}%;`;
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 
 function calcBurnRate(history: PollPoint[]): number | null {
   if (history.length < 2) return null;
@@ -274,10 +272,6 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
-function fmtCost(usd: number): string {
-  if (usd < 0.01) return '<$0.01';
-  return `$${usd.toFixed(2)}`;
-}
 
 // 모델 문자열 분류 단일 소스 (이름·액센트·색상 3개 함수가 공유)
 type ModelKind = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other';
@@ -904,54 +898,6 @@ function updateRetroSection(): void {
   void panelMessenger.sendRequest(GetRetroSummary, HOST_EXTENSION, undefined)
     .then((retro) => renderRetro(listEl, retro))
     .catch(() => { listEl.innerHTML = `<div class="panel-empty">${t('no_retro_data')}</div>`; });
-}
-
-function confidenceLabel(c: AttributionConfidence): string {
-  return c === 'high' ? t('confidence_high') : c === 'medium' ? t('confidence_medium') : t('confidence_low');
-}
-
-function confidenceDot(c: AttributionConfidence): string {
-  return c === 'high' ? '●' : c === 'medium' ? '◐' : '○';
-}
-
-function renderRetro(listEl: HTMLElement, retro: RetroSummary | null): void {
-  if (!retro || (retro.commits.length === 0 && retro.unattributed.recordCount === 0)) {
-    listEl.innerHTML = `<div class="panel-empty">${t('no_retro_data')}</div>`;
-    return;
-  }
-
-  const total = retro.totalCostUsd > 0 ? retro.totalCostUsd : 1;
-  const top = retro.commits.slice(0, 12);
-  const maxCost = Math.max(top[0]?.costUsd ?? 0, retro.unattributed.costUsd, 0.000001);
-
-  // 미귀속 버킷 = 1급 슬라이스. 항상 첫 행으로 노출(숨기면 거짓 정밀도 — §4).
-  const u = retro.unattributed;
-  const uShare = (u.costUsd / total) * 100;
-  const unattRow = u.recordCount > 0
-    ? `<div class="retro-row retro-unattributed" title="${t('retro_unattributed_tip')}">
-        <span class="retro-name">◌ ${t('retro_unattributed')}</span>
-        <span class="retro-bar-wrap"><span class="retro-bar retro-bar--unatt" style="width:${Math.max(2, (u.costUsd / maxCost) * 100)}%"></span></span>
-        <span class="retro-conf" aria-hidden="true"></span>
-        <span class="retro-cost mono">≈${fmtCost(u.costUsd)}</span>
-        <span class="retro-share mono">${uShare.toFixed(0)}%</span>
-      </div>`
-    : '';
-
-  const rows = top.map(c => {
-    const share = (c.costUsd / total) * 100;
-    const w = Math.max(2, (c.costUsd / maxCost) * 100);
-    const sha = c.commit.sha.slice(0, 7);
-    return `<div class="retro-row" title="${escapeHtml(sha)} · ${escapeHtml(c.commit.subject)} · ${c.recordCount} ${t('retro_records')}">
-      <span class="retro-name"><span class="retro-sha mono">${escapeHtml(sha)}</span> ${escapeHtml(c.commit.subject)}</span>
-      <span class="retro-bar-wrap"><span class="retro-bar conf-${c.confidence}" style="width:${w}%"></span></span>
-      <span class="retro-conf conf-${c.confidence}" title="${t('retro_confidence')}: ${confidenceLabel(c.confidence)}">${confidenceDot(c.confidence)}</span>
-      <span class="retro-cost mono">≈${fmtCost(c.costUsd)}</span>
-      <span class="retro-share mono">${share.toFixed(0)}%</span>
-    </div>`;
-  }).join('');
-
-  listEl.innerHTML = unattRow + rows
-    + `<div class="retro-disclaimer">${t('retro_disclaimer')}</div>`;
 }
 
 function updateDailyChart(): void {

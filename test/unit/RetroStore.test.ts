@@ -7,7 +7,7 @@ import type { CommitUsage } from '../../src/types';
 
 function cu(sha: string, costUsd: number): CommitUsage {
   return {
-    commit: { sha, committedAt: '2026-06-10T10:00:00.000Z', branch: 'main', subject: 's', files: [], repoRoot: '/repo' },
+    commit: { sha, committedAt: '2026-06-10T10:00:00.000Z', branch: 'main', subject: 's', repoRoot: '/repo' },
     costUsd,
     totalTokens: 100,
     recordCount: 1,

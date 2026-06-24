@@ -233,8 +233,9 @@ export interface CommitMeta {
   committedAt: string;   // ISO8601 (committer date %cI, tz 포함 가능 — Date.parse로 UTC 정규화)
   branch: string;        // 읽은 시점의 현재 브랜치 (근사치 — §2 한계)
   subject: string;
-  files: string[];       // --name-only
   repoRoot: string;      // git rev-parse --show-toplevel
+  // v0.1.39: files 제거 — 소비처 0건(CommitAttributor는 timestamp+repo 조인).
+  // --name-only가 대형 repo서 회고 빌드 33초 블로킹의 97% 비용이라 드롭.
 }
 
 /** 귀속 신뢰도 — 매칭 레코드 수 기반(결정론). */

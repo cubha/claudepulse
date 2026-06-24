@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.39] - 2026-06-24
+
+### Fixed
+- **Cost by Commit stuck on "Collecting data…"**: the retrospective card never replaced its loading placeholder, and refreshing the dashboard didn't help. Root cause was **not** the webview render path (which unconditionally replaces on any response) but that the **response never arrived**: `buildRetroSummary` shelled out to git **synchronously** (`spawnSync`), blocking the extension-host event loop so the RPC reply couldn't be delivered — and an active session writing `.jsonl` re-triggered the build on every push, keeping the loop wedged.
+  - **Dropped `git log --name-only`**: the per-commit file list had **zero consumers** (attribution joins on timestamp+repo; the render never showed files) yet dominated cost on large repos — removing it cut a single heavy repo's `git log` ~5×.
+  - **GitLogReader is now fully async** (`spawnSync` → `execFile` + `await`) with a **5s timeout**, so git can never block the host or hang indefinitely.
+  - **Debounced + deduped rebuilds**: the summary is rebuilt only when records actually change (not on every push), concurrent requests share one build, and the full summary is persisted for **instant first-paint** across sessions.
+  - **Extracted `renderRetro` into a pure module** (`retroView.ts` + `format.ts`) with unit tests locking the placeholder→render replace contract (incl. empty/null → "no data" and HTML escaping).
+
 ## [0.1.38] - 2026-06-22
 
 ### Changed

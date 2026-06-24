@@ -27,7 +27,6 @@ function commit(p: Partial<CommitMeta> & { sha: string; committedAt: string }): 
   return {
     branch: 'main',
     subject: 'c',
-    files: [],
     repoRoot: '/repo',
     ...p,
   } as CommitMeta;
