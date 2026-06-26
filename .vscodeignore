@@ -9,6 +9,7 @@ scratch.md
 .vscode/**
 .vscode-test/**
 dist-test/**
+scripts/**
 .github/**
 docs/**
 test/**
