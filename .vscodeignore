@@ -8,6 +8,7 @@ CLAUDE.md
 scratch.md
 .vscode/**
 .vscode-test/**
+dist-test/**
 .github/**
 docs/**
 test/**

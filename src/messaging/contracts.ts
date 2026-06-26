@@ -73,3 +73,20 @@ export const PushUsageSummary: NotificationType<UsageSummary> = {
 export const GetRetroSummary: RequestType<void, RetroSummary | null> = {
   method: 'getRetroSummary'
 };
+
+/**
+ * webview(사이드바·패널)가 BROADCAST로 수신해야 하는 알림 method 목록.
+ *
+ * ⚠️ vscode-messenger 계약: registerWebviewView/Panel의 broadcastMethods에 등재된
+ * method만 BROADCAST 알림이 webview에 전달된다(미등재 시 onNotification 핸들러는 死).
+ * → 두 등록 지점이 이 단일 상수를 공유해 드리프트(특정 push 누락 재발)를 차단한다.
+ *
+ * 회귀 근거: PushUsageSummary 누락으로 usage 카드(모델/캐시/스킬/일별/회고)가 push 갱신을
+ * 못 받아 뷰 오픈 1회 pull로만 채워졌고, 그 pull이 refreshUsage보다 빠르면 placeholder 영구 고착됐다.
+ */
+export const WEBVIEW_BROADCAST_METHODS: string[] = [
+  PushRateLimit.method,
+  PushPollerError.method,
+  PushLang.method,
+  PushUsageSummary.method,
+];
