@@ -2,17 +2,17 @@
   "name": "claude-code-gauge",
   "displayName": "Claude Code Gauge",
   "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cubha/claude-code-gauge.git"
+    "url": "https://github.com/cubha/claudepulse.git"
   },
-  "homepage": "https://github.com/cubha/claude-code-gauge#readme",
+  "homepage": "https://github.com/cubha/claudepulse#readme",
   "bugs": {
-    "url": "https://github.com/cubha/claude-code-gauge/issues"
+    "url": "https://github.com/cubha/claudepulse/issues"
   },
   "engines": {
     "vscode": "^1.85.0",
@@ -101,6 +101,7 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:integration": "vscode-test",
+    "test:e2e": "esbuild test/integration/broadcastRoundtrip.ts --bundle --platform=node --format=cjs --external:vscode --outfile=dist-test/integration/index.cjs && xvfb-run -a node test/integration/runner.mjs",
     "package": "vsce package --no-dependencies",
     "publish:vscode": "vsce publish --no-dependencies",
     "publish:ovsx": "ovsx publish --no-dependencies"
@@ -123,6 +124,7 @@
     "esbuild": "^0.20.0",
     "eslint": "^8.57.0",
     "ovsx": "^0.9.0",
+    "playwright-core": "^1.61.1",
     "prettier": "^3.2.0",
     "sharp": "^0.34.5",
     "typescript": "^5.4.0",

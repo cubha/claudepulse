@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.40] - 2026-06-26
+
+### Fixed
+- **Cost by Commit (and every usage card) permanently stuck on "Collecting data…"** — the real root cause behind the v0.1.37/v0.1.39 attempts, which mis-diagnosed it as git/RPC blocking. The dashboard panel and sidebar registered with `vscode-messenger` **omitting `PushUsageSummary` from `broadcastMethods`**, so per the library contract (`broadcastMethods.indexOf(method) >= 0`) the panel **never received the usage broadcast** — its `onNotification(PushUsageSummary)` handler was dead. Usage cards (model / cache / skill / daily / **Cost by Commit**) were only ever populated by the one-shot `GetUsageSummary` pull on view open; when that pull raced ahead of the async `.jsonl` parse it returned null and the placeholder stuck forever, recovering only on reopen. Rate-limit cards kept working because their methods *were* registered — exactly matching the observed "burn rate / safe-time show after a while, retro never does" symptom.
+  - **Fix**: both registration sites now share a single `WEBVIEW_BROADCAST_METHODS` constant (including `PushUsageSummary`), so the two can't drift apart again. Cost by Commit is pull-only (no `PushRetroSummary`) and recovers transitively because the usage push re-triggers its pull.
+  - **Verified**: deterministic unit test locking the constant + the library delivery filter, plus a **test-electron round-trip** (`npm run test:e2e`) proving in a real VS Code host that a panel with the fix receives `pushUsageSummary` while a control panel with the old list does not.
+
 ## [0.1.39] - 2026-06-24
 
 ### Fixed
