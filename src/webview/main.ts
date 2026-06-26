@@ -402,14 +402,17 @@ function buildSidebarHtml(
   usage: UsageSummary | null
 ): string {
   if (!snapshot) {
-    const needsLogin = error === 'credentials_missing' || error === 'token_expired';
-    const icon = needsLogin ? '🔑' : '⚠';
+    const needsLogin = error === 'credentials_missing' || error === 'token_expired' || error === 'token_stale';
+    const icon = error === 'token_stale' ? '🔄' : needsLogin ? '🔑' : '⚠';
     const title = error === 'credentials_missing' ? t('login_required')
+      : error === 'token_stale' ? t('token_refresh_needed')
       : error === 'token_expired' ? t('session_expired')
       : error === 'network_error' ? t('network_error')
       : t('connecting');
     const sub = error === 'credentials_missing'
       ? t('login_sub_missing')
+      : error === 'token_stale'
+      ? t('login_sub_stale')
       : error === 'token_expired'
       ? t('login_sub_expired')
       : error === 'network_error'

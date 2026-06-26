@@ -5,6 +5,7 @@ type Lang = 'ko' | 'en' | 'ja' | 'zh';
 const dict: Record<string, Record<Lang, string>> = {
   // 에러 / 연결 상태
   login_required:   { ko: '로그인 필요',       en: 'Login Required',        ja: 'ログイン必要',             zh: '需要登录' },
+  token_refresh_needed:{ ko: '토큰 갱신 필요',  en: 'Token Refresh Needed',  ja: 'トークン更新が必要',       zh: '需要刷新令牌' },
   session_expired:  { ko: '세션 만료',          en: 'Session Expired',       ja: 'セッション期限切れ',       zh: '会话过期' },
   network_error:    { ko: '네트워크 오류',      en: 'Network Error',         ja: 'ネットワークエラー',       zh: '网络错误' },
   connecting:       { ko: '연결 중…',           en: 'Connecting…',           ja: '接続中…',                 zh: '连接中…' },
@@ -16,6 +17,10 @@ const dict: Record<string, Record<Lang, string>> = {
                       en: 'OAuth token has expired.<br>Please log in again.',
                       ja: 'OAuthトークンが期限切れです。<br>再ログインしてください。',
                       zh: 'OAuth 令牌已过期。<br>请重新登录。' },
+  login_sub_stale:  { ko: '세션이 만료된 게 아닙니다. Claude Code를 한 번<br>실행하면 토큰이 자동 갱신됩니다. 계속 뜨면 다시 로그인하세요.',
+                      en: 'Not a logout — run Claude Code once to<br>auto-refresh the token. If it persists, log in again.',
+                      ja: 'ログアウトではありません。Claude Codeを一度<br>実行するとトークンが自動更新されます。続く場合は再ログインを。',
+                      zh: '并非登出 — 运行一次 Claude Code 即可<br>自动刷新令牌。若仍出现，请重新登录。' },
   login_sub_network:{ ko: 'Anthropic API에 연결할 수 없습니다.<br>네트워크를 확인하세요.',
                       en: 'Cannot connect to Anthropic API.<br>Please check your network.',
                       ja: 'Anthropic APIに接続できません。<br>ネットワークを確認してください。',

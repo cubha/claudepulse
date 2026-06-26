@@ -63,8 +63,12 @@ export interface ClaudeCredentials {
   organizationUuid?: string;
 }
 
-/** 폴러 오류 상태 — 웹뷰 로그인 UI 분기용. */
-export type PollerError = 'credentials_missing' | 'token_expired' | 'network_error';
+/**
+ * 폴러 오류 상태 — 웹뷰 로그인 UI 분기용.
+ * - token_stale: accessToken은 만료됐으나 refreshToken 보유 → CLI 실행 시 자동 갱신되는 회복 가능 상태(로그아웃 아님).
+ * - token_expired: refreshToken도 없음 → 실제 재로그인 필요.
+ */
+export type PollerError = 'credentials_missing' | 'token_stale' | 'token_expired' | 'network_error';
 
 // ─────────────────────────────────────────────────────────────
 // jsonl 파싱 도메인 모델 (v0.0.5+)
