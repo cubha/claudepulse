@@ -15,6 +15,7 @@ import { StatusBarController } from './providers/StatusBarController';
 import { DashboardPanel } from './panel/DashboardPanel';
 import { CredentialsReader } from './services/CredentialsReader';
 import { RateLimitPoller } from './services/RateLimitPoller';
+import { CredentialsWatcher } from './services/CredentialsWatcher';
 import { FileWatcher } from './services/FileWatcher';
 import { JsonlParser } from './services/JsonlParser';
 import { UsageAggregator } from './services/UsageAggregator';
@@ -39,6 +40,7 @@ export function activate(context: vscode.ExtensionContext): void {
   let lastSnapshot: RateLimitSnapshot | null = null;
   let lastUsageSummary: UsageSummary | null = null;
   let poller: RateLimitPoller | null = null;
+  let credWatcher: CredentialsWatcher | null = null;
   let currentLang: string = context.globalState.get<string>('ccg-lang') ?? 'auto';
 
   const MAX_POLL_HISTORY = 60;
@@ -170,7 +172,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(COMMANDS.login, () => {
       const terminal = vscode.window.createTerminal({ name: 'Claude Login' });
       terminal.show();
-      terminal.sendText('claude login');
+      // 'claude login'은 유효한 서브커맨드가 아니다 — CLI가 인자를 프롬프트로 해석해 REPL만 열린다.
+      // 정식 인증 명령은 'claude auth login'. (alias/함수 래퍼 환경은 셸 제어 밖이라 보장 불가 — login_hint로 수동 안내)
+      terminal.sendText('claude auth login');
     })
   );
 
@@ -204,6 +208,16 @@ export function activate(context: vscode.ExtensionContext): void {
     );
     poller.start(pollIntervalMs);
     context.subscriptions.push({ dispose: () => poller?.stop() });
+
+    // .credentials.json 변경(CLI 토큰 갱신) → 즉시 재폴링하여 stale 오탐 윈도우 제거.
+    credWatcher?.stop();
+    credWatcher = new CredentialsWatcher(credentialsPath);
+    credWatcher.on('change', () => {
+      logger.info('credentials changed — re-polling');
+      void poller?.poll();
+    });
+    credWatcher.start();
+    context.subscriptions.push({ dispose: () => credWatcher?.stop() });
   }
 
   let lastAlerted: 'fiveHour' | 'sevenDay' | null = null;

@@ -39,19 +39,36 @@ export class RateLimitPoller {
   }
 
   async poll(): Promise<void> {
+    let creds: ClaudeCredentials;
     try {
-      const creds = await this.credReader.read(this.credentialsPath);
-      const headers = await this.postMinimalMessage(creds.accessToken);
-      const snapshot = this.parseHeaders(headers, creds);
-      this.onSnapshot(snapshot);
+      creds = await this.credReader.read(this.credentialsPath);
     } catch (err) {
       const msg = String(err);
       if (msg.includes('not found') || msg.includes('not valid JSON') || msg.includes('accessToken')) {
         this.logger.warn(`RateLimitPoller: credentials missing — ${msg}`);
         this.onError('credentials_missing');
-      } else if (msg.includes('TOKEN_EXPIRED')) {
-        this.logger.warn(`RateLimitPoller: token expired`);
-        this.onError('token_expired');
+      } else {
+        this.logger.warn(`RateLimitPoller: credentials read error — ${msg}`);
+        this.onError('network_error');
+      }
+      return;
+    }
+
+    // expiresAt 선검사 — 이미 만료된 토큰이면 401 왕복(doomed call) 없이 곧장 분류한다.
+    if (this.isExpired(creds)) {
+      this.onError(this.classifyAuthError(creds));
+      return;
+    }
+
+    try {
+      const headers = await this.postMinimalMessage(creds.accessToken);
+      const snapshot = this.parseHeaders(headers, creds);
+      this.onSnapshot(snapshot);
+    } catch (err) {
+      const msg = String(err);
+      if (msg.includes('TOKEN_EXPIRED')) {
+        this.logger.warn('RateLimitPoller: token rejected (401)');
+        this.onError(this.classifyAuthError(creds));
       } else {
         this.logger.warn(`RateLimitPoller: network error — ${msg}`);
         this.onError('network_error');
@@ -59,7 +76,26 @@ export class RateLimitPoller {
     }
   }
 
-  private postMinimalMessage(accessToken: string): Promise<Record<string, string>> {
+  /** expiresAt(Unix ms)가 설정돼 있고 현재보다 과거면 만료. 0/미설정이면 알 수 없음 → 만료로 보지 않음. */
+  private isExpired(creds: ClaudeCredentials): boolean {
+    return creds.expiresAt > 0 && creds.expiresAt <= Date.now();
+  }
+
+  /**
+   * accessToken 거부(401/만료) 시 분류.
+   * refreshToken이 있으면 로그아웃이 아니라 CLI 실행 시 자동 갱신되는 stale 상태일 가능성이 높다(token_stale).
+   * refreshToken조차 없으면 실제 재로그인 필요(token_expired).
+   * — 익스텐션이 직접 토큰을 갱신하는 것은 ToS/CRITICAL #3 위배라 분류만 하고 회복은 CLI/사용자에 위임한다.
+   */
+  private classifyAuthError(creds: ClaudeCredentials): PollerError {
+    return creds.refreshToken ? 'token_stale' : 'token_expired';
+  }
+
+  /**
+   * @visibleForTesting — 단위 테스트에서 HTTP 왕복을 스텁하기 위해 protected로 노출.
+   * 프로덕션 서브클래스는 없으며 오버라이드는 테스트 전용이다(TestablePoller).
+   */
+  protected postMinimalMessage(accessToken: string): Promise<Record<string, string>> {
     return new Promise((resolve, reject) => {
       const body = JSON.stringify({
         model: POLL_MODEL,
@@ -90,7 +126,7 @@ export class RateLimitPoller {
           res.on('end', () => {
             const status = res.statusCode ?? 0;
             if (status === 401) {
-              reject(new Error('TOKEN_EXPIRED: OAuth token is invalid or expired. Re-login via Claude Code CLI (`claude login`).'));
+              reject(new Error('TOKEN_EXPIRED: OAuth token is invalid or expired. Re-login via Claude Code CLI (`claude auth login`).'));
             } else if (status >= 400 && status !== 429) {
               reject(new Error(`API error ${status}`));
             } else {

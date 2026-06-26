@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { RateLimitPoller } from '../../src/services/RateLimitPoller';
 import type { CredentialsReader } from '../../src/services/CredentialsReader';
 import type { Logger } from '../../src/logger';
-import type { RateLimitSnapshot } from '../../src/types';
+import type { ClaudeCredentials, PollerError, RateLimitSnapshot } from '../../src/types';
 
 class TestablePoller extends RateLimitPoller {
   public exposedParseHeaders(h: Record<string, string>): RateLimitSnapshot {
@@ -15,6 +15,30 @@ function makePoller(onSnapshot: (s: RateLimitSnapshot) => void): TestablePoller 
   const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), dispose: vi.fn() } as unknown as Logger;
   return new TestablePoller(mockReader, '/fake/.credentials.json', mockLogger, onSnapshot);
 }
+
+/** poll() 분류 로직 검증용 — read()와 postMinimalMessage()를 스텁한다. */
+class ClassifyPoller extends RateLimitPoller {
+  public postCalls = 0;
+  constructor(
+    private readonly creds: ClaudeCredentials,
+    private readonly post: (token: string) => Promise<Record<string, string>>,
+    onSnapshot: (s: RateLimitSnapshot) => void,
+    onError: (e: PollerError) => void
+  ) {
+    const mockReader = { read: vi.fn().mockResolvedValue(creds) } as unknown as CredentialsReader;
+    const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), dispose: vi.fn() } as unknown as Logger;
+    super(mockReader, '/fake/.credentials.json', mockLogger, onSnapshot, onError);
+  }
+  protected override postMinimalMessage(accessToken: string): Promise<Record<string, string>> {
+    this.postCalls++;
+    return this.post(accessToken);
+  }
+}
+
+function makeCreds(over: Partial<ClaudeCredentials>): ClaudeCredentials {
+  return { accessToken: 'a', refreshToken: 'r', expiresAt: Date.now() + 3_600_000, ...over };
+}
+const reject401 = () => Promise.reject(new Error('TOKEN_EXPIRED: invalid'));
 
 describe('RateLimitPoller — 헤더 파싱', () => {
   it('5h/7d utilization, reset, status를 파싱한다 (% 임계값 기준)', () => {
@@ -80,5 +104,59 @@ describe('RateLimitPoller — 헤더 파싱', () => {
     });
     expect(snap.fiveHour.msUntilReset).toBe(0);
     expect(snap.sevenDay.msUntilReset).toBe(0);
+  });
+});
+
+describe('RateLimitPoller — 인증 상태 분류 (token_stale vs token_expired)', () => {
+  it('expiresAt 만료 + refreshToken 있으면 API 호출 없이 token_stale로 단락한다', async () => {
+    const errors: PollerError[] = [];
+    const poller = new ClassifyPoller(
+      makeCreds({ expiresAt: Date.now() - 1000, refreshToken: 'r' }),
+      reject401, () => {}, (e) => errors.push(e)
+    );
+    await poller.poll();
+    expect(errors).toEqual(['token_stale']);
+    expect(poller.postCalls).toBe(0); // 만료 선검사로 doomed call 회피
+  });
+
+  it('expiresAt 만료 + refreshToken 없으면 token_expired로 단락한다', async () => {
+    const errors: PollerError[] = [];
+    const poller = new ClassifyPoller(
+      makeCreds({ expiresAt: Date.now() - 1000, refreshToken: '' }),
+      reject401, () => {}, (e) => errors.push(e)
+    );
+    await poller.poll();
+    expect(errors).toEqual(['token_expired']);
+    expect(poller.postCalls).toBe(0);
+  });
+
+  it('유효 토큰인데 401 응답 + refreshToken 있으면 token_stale로 분류한다', async () => {
+    const errors: PollerError[] = [];
+    const poller = new ClassifyPoller(
+      makeCreds({ refreshToken: 'r' }), reject401, () => {}, (e) => errors.push(e)
+    );
+    await poller.poll();
+    expect(errors).toEqual(['token_stale']);
+    expect(poller.postCalls).toBe(1);
+  });
+
+  it('유효 토큰인데 401 응답 + refreshToken 없으면 token_expired로 분류한다', async () => {
+    const errors: PollerError[] = [];
+    const poller = new ClassifyPoller(
+      makeCreds({ refreshToken: '' }), reject401, () => {}, (e) => errors.push(e)
+    );
+    await poller.poll();
+    expect(errors).toEqual(['token_expired']);
+  });
+
+  it('정상 응답이면 onSnapshot을 호출하고 에러를 내지 않는다', async () => {
+    const errors: PollerError[] = [];
+    const snaps: RateLimitSnapshot[] = [];
+    const poller = new ClassifyPoller(
+      makeCreds({}), () => Promise.resolve({}), (s) => snaps.push(s), (e) => errors.push(e)
+    );
+    await poller.poll();
+    expect(errors).toEqual([]);
+    expect(snaps).toHaveLength(1);
   });
 });

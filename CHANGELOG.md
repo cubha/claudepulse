@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.41] - 2026-06-26
+
+### Fixed
+- **"Login with Claude" button opened the Claude Code REPL instead of logging in, and the sidebar intermittently showed "Session Expired" while still logged in.** Two compounding bugs:
+  - The button ran `claude login`, which is **not a valid subcommand** — the CLI treats `login` as a prompt and just starts an interactive session, so nothing logs in. Now runs **`claude auth login`** (the real auth command, confirmed against `claude --help`). Aliased shells can't be controlled from the extension; the hint text guides manual `claude auth login`.
+  - Login state was inferred purely from a live **401** on the rate-limit poll. But the OAuth `accessToken` in `~/.claude/.credentials.json` is short-lived (~6–8h) and is only auto-refreshed **while the Claude Code CLI is running**. With the CLI idle, the cached token goes stale → 401 → "Session Expired" — a **false positive**, since the user is still logged in (valid refresh token). This is the intermittent "logged out" symptom.
+- **New `token_stale` state (vs `token_expired`)**: when the access token is rejected but a refresh token is present, the sidebar now shows **"Token Refresh Needed — run Claude Code once to auto-refresh"** with a re-login escape hatch, instead of "Session Expired" (4 languages). An `expiresAt` pre-check short-circuits a doomed 401 round-trip.
+- **`.credentials.json` is now watched** (chokidar, single-file): when the CLI refreshes the token, the extension **re-polls immediately**, eliminating the stale-token false-positive window while the CLI is active.
+  - The extension never refreshes tokens itself (would violate Anthropic ToS and the project's "no private API" rule) — it only classifies and defers recovery to the CLI/user.
+
 ## [0.1.40] - 2026-06-26
 
 ### Fixed
