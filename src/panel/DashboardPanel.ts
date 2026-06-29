@@ -7,6 +7,14 @@ export class DashboardPanel {
   private static current: DashboardPanel | null = null;
   private panel: vscode.WebviewPanel;
 
+  /**
+   * 패널 오픈 여부. extension이 회고 build+push를 이 게이트로 제한한다
+   * (패널 닫힌 동안 파일 변경마다 백그라운드 git 셸아웃이 도는 회귀 방지).
+   */
+  static get isOpen(): boolean {
+    return DashboardPanel.current !== null;
+  }
+
   static createOrShow(extensionUri: vscode.Uri, messenger: Messenger): void {
     if (DashboardPanel.current) {
       DashboardPanel.current.panel.reveal();

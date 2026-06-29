@@ -24,7 +24,7 @@ import { CacheStore } from './services/CacheStore';
 import { GitLogReader } from './services/GitLogReader';
 import { CommitAttributor } from './services/CommitAttributor';
 import { RetroStore } from './services/RetroStore';
-import { PushPollerError, PushRateLimit, PushUsageSummary } from './messaging/contracts';
+import { PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
 import type { CommitMeta, PollHistoryPoint, PollerError, RateLimitSnapshot, RetroSummary, SessionRecord, UsageSummary } from './types';
 
@@ -93,6 +93,19 @@ export function activate(context: vscode.ExtensionContext): void {
     return lastRetroSummary ? Promise.resolve(lastRetroSummary) : retroBuildInFlight;
   }
 
+  /**
+   * 회고를 push로 전달(형제 섹션 정렬). pull-전용은 락다운 환경에서 webview→extension
+   * 요청 라운드트립 불발 시 영구 "수집 중" 고착 → push 백업.
+   * ⚠️ DashboardPanel이 열렸을 때만 실행 — 패널 닫힌 동안 파일 변경마다 git 셸아웃이 도는 회귀 방지.
+   * (retroDirty 가드로 깨끗하면 git 재빌드 없이 캐시본 push.)
+   */
+  function pushRetro(): void {
+    if (!DashboardPanel.isOpen) return;
+    void buildRetroSummary()
+      .then((summary) => messenger.sendNotification(PushRetroSummary, BROADCAST, summary))
+      .catch(() => undefined);
+  }
+
   async function doBuildRetroSummary(): Promise<RetroSummary | null> {
     // allRecords 스냅샷 + 즉시 dirty 해제 — 빌드 중 refreshUsage(records 재할당)가 들어오면
     // 그 refresh가 dirty=true를 재설정해 다음 요청에 재빌드된다(빌드-끝 reset이 B 변경을
@@ -129,6 +142,8 @@ export function activate(context: vscode.ExtensionContext): void {
     // 전체 이력을 UsageSummary에 주입
     lastUsageSummary.historicalDays = cacheStore.getAll();
     messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
+    // 회고도 push(패널 열렸을 때만 — pushRetro 내부 게이트). retroDirty=true로 갱신본 1회 재빌드.
+    pushRetro();
   }
 
   fileWatcher.on('change', () => { void refreshUsage(); });
@@ -142,7 +157,12 @@ export function activate(context: vscode.ExtensionContext): void {
     messenger,
     () => lastSnapshot,
     () => snapshotHistory,
-    () => lastUsageSummary,
+    () => {
+      // webview의 GetUsageSummary pull = 로드 완료(ready) 신호 → 회고도 push로 first-paint.
+      // (패널 열렸을 때만 — pushRetro 내부 게이트. retroDirty 가드로 중복 git 빌드 없음.)
+      pushRetro();
+      return lastUsageSummary;
+    },
     () => { poller?.poll(); },
     () => vscode.commands.executeCommand(COMMANDS.login),
     () => { void vscode.commands.executeCommand(COMMANDS.openDashboard); },

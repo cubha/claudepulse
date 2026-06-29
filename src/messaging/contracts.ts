@@ -75,6 +75,18 @@ export const GetRetroSummary: RequestType<void, RetroSummary | null> = {
 };
 
 /**
+ * Notification: extension → webview. 회고 요약 push (2026-06-29).
+ *
+ * 회고도 형제 섹션(usage)과 동일하게 push로 전달한다. pull-전용(GetRetroSummary)은
+ * 락다운 환경에서 webview→extension 요청 라운드트립이 불발하면 "수집 중" 영구 고착했다.
+ * push는 PushUsageSummary와 동일 BROADCAST 경로(검증됨)를 재사용. GetRetroSummary는 fallback 유지.
+ * ⚠️ extension은 DashboardPanel이 열렸을 때만 build+push한다(닫힌 동안 백그라운드 git 셸아웃 금지).
+ */
+export const PushRetroSummary: NotificationType<RetroSummary | null> = {
+  method: 'pushRetroSummary'
+};
+
+/**
  * webview(사이드바·패널)가 BROADCAST로 수신해야 하는 알림 method 목록.
  *
  * ⚠️ vscode-messenger 계약: registerWebviewView/Panel의 broadcastMethods에 등재된
@@ -89,4 +101,5 @@ export const WEBVIEW_BROADCAST_METHODS: string[] = [
   PushPollerError.method,
   PushLang.method,
   PushUsageSummary.method,
+  PushRetroSummary.method,
 ];

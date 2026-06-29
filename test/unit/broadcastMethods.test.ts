@@ -6,6 +6,7 @@ import {
   PushPollerError,
   PushLang,
   PushUsageSummary,
+  PushRetroSummary,
   GetRetroSummary,
 } from '../../src/messaging/contracts';
 
@@ -30,17 +31,28 @@ describe('WEBVIEW_BROADCAST_METHODS', () => {
     expect(WEBVIEW_BROADCAST_METHODS).toContain(PushUsageSummary.method);
   });
 
-  it('vscode-messenger 전달 필터(indexOf>=0)에서 PushUsageSummary가 통과한다', () => {
+  it('vscode-messenger 전달 필터(indexOf>=0)에서 PushUsageSummary·PushRetroSummary가 통과한다', () => {
     // 라이브러리 delivery 조건을 그대로 재현: 등재 method만 webview로 postMessage.
     const delivered = (method: string) => WEBVIEW_BROADCAST_METHODS.indexOf(method) >= 0;
     expect(delivered(PushUsageSummary.method)).toBe(true);
+    expect(delivered(PushRetroSummary.method)).toBe(true);
   });
 
-  it('retro는 pull 전용 — PushRetroSummary broadcast는 존재하지 않아야 한다(설계 잠금)', () => {
-    // 회고는 GetRetroSummary 요청(pull)으로만 전달된다. usage push가 updateUsageSection→
-    // updateRetroSection을 거쳐 이 pull을 전이적으로 트리거하므로 별도 retro broadcast는 불필요.
-    // 누군가 PushRetroSummary를 추가해 broadcast로 바꾸려 하면 이 테스트가 막는다.
-    expect('PushRetroSummary' in contracts).toBe(false);
-    expect(GetRetroSummary.method).toBe('getRetroSummary'); // request(pull) 계약 유지 확인
+  /**
+   * 설계 변경(2026-06-29): retro pull-전용 잠금 해제 → push 백업 추가.
+   *
+   * 구 잠금("PushRetroSummary 존재 금지")은 "usage push가 updateRetroSection을 거쳐
+   * GetRetroSummary pull을 전이 트리거하므로 별도 broadcast 불필요"라는 가정에 의존했다.
+   * 락다운 환경(보안SW가 webview→extension 요청 라운드트립 간섭)에서 그 pull이 불발 →
+   * 회고만 "수집 중" 영구 고착(타 섹션은 push 백업 있어 정상). 가정이 깨졌으므로
+   * 회고도 형제 섹션과 동일하게 push로 전달하고, GetRetroSummary는 first-paint fallback으로 유지한다.
+   */
+  it('retro는 push(주) + pull(fallback) 양방향 — PushRetroSummary가 broadcast에 등재된다', () => {
+    expect('PushRetroSummary' in contracts).toBe(true);
+    expect(PushRetroSummary.method).toBe('pushRetroSummary');
+    // ⚠️ 핵심: 누락 시 회고가 push 갱신을 못 받아 pull 실패 환경에서 영구 고착(이 변경의 회귀 잠금).
+    expect(WEBVIEW_BROADCAST_METHODS).toContain(PushRetroSummary.method);
+    // pull 계약은 fallback으로 유지(이중 보장 — 제거 금지).
+    expect(GetRetroSummary.method).toBe('getRetroSummary');
   });
 });

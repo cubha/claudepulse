@@ -3,7 +3,7 @@
 import { Chart, registerables } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushUsageSummary, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from '../messaging/contracts';
+import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from '../messaging/contracts';
 import type { DailyUsage, PollerError, RateLimitSnapshot, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
 import { getLang, setLang, t } from './i18n';
 import { escapeHtml, fmtCost } from './format';
@@ -652,6 +652,13 @@ function initPanel(): void {
   messenger.onNotification(PushUsageSummary, (usage) => {
     panelUsage = usage;
     updateUsageSection();
+  });
+
+  // 회고 push 수신(주 경로). pull(updateRetroSection)은 first-paint fallback로 유지 —
+  // 락다운 환경에서 요청 라운드트립 불발해도 push로 "수집 중" 고착을 푼다.
+  messenger.onNotification(PushRetroSummary, (retro) => {
+    const listEl = document.getElementById('panel-retro-list');
+    if (listEl) renderRetro(listEl, retro);
   });
 
   messenger.onNotification(PushLang, (lang) => {
