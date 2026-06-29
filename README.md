@@ -13,9 +13,9 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.40
+## What's New in v0.1.42
 
-- **Fixed: dashboard cards stuck on "Collecting data…".** "Cost by Commit" and other usage cards (model breakdown, cache, skills, daily cost) could get wedged on the loading placeholder and only appear after reopening the dashboard — while the rate-limit gauges kept updating. The dashboard now receives live usage updates again, so every card fills in on its own and stays current as you work. (This is the real fix behind the earlier v0.1.37/v0.1.39 attempts, verified end-to-end in a real VS Code host.)
+- **Fixed: "Cost by Commit" could still get stuck on "Collecting data…" in locked-down setups.** The retrospective card was the last one delivered pull-only, so when security software blocked the dashboard's request round-trip it stayed wedged while every other card recovered. It's now pushed live like its sibling sections (with the old request kept as a first-paint fallback), so it fills in on its own and stays current — without ever running Git in the background while the dashboard is closed.
 
 ## Features
 

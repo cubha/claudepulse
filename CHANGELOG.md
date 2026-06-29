@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-06-30
+
+### Fixed
+- **The retrospective ("Cost by Commit") card could still get stuck on "Collecting data…" in locked-down environments** — the surviving tail of the v0.1.37–v0.1.40 fixes. Unlike its sibling cards, the retrospective was **pull-only** (`GetRetroSummary` request): it relied on the usage push transitively re-triggering that pull. When security software interferes with the webview→extension request round-trip, that pull never completes, so the retro card alone stays wedged while every push-backed card recovers.
+  - **Fix**: the retrospective is now delivered by **push** (`PushRetroSummary`, broadcast) like its sibling sections, with `GetRetroSummary` kept as a first-paint fallback (dual delivery). The extension pushes the retro on every usage refresh and on the panel's load-complete pull.
+  - **No background-git regression**: the build+push is gated behind `DashboardPanel.isOpen`, so a closed panel never triggers a git shell-out on file changes. The existing `retroDirty` guard still skips redundant rebuilds.
+  - **Verified**: the broadcast-methods unit test is flipped from "retro is pull-only (locked)" to "retro is push (primary) + pull (fallback)", locking `PushRetroSummary` into `WEBVIEW_BROADCAST_METHODS` as a regression guard. Full suite 76/76 green.
+
 ## [0.1.41] - 2026-06-26
 
 ### Fixed
