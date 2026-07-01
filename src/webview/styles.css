@@ -285,6 +285,39 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   border-radius: 2px;
   background: var(--heat-0);
 }
+.heat-cell.h1 { background: var(--heat-1); }
+.heat-cell.h2 { background: var(--heat-2); }
+.heat-cell.h3 { background: var(--heat-3); }
+.heat-cell.h4 { background: var(--heat-4); }
+.heat-cell.is-today { box-shadow: 0 0 0 1px var(--vscode-focusBorder); }
+
+/* Usage Calendar (v0.1.43) */
+.calendar-heat-wrap { display: flex; gap: 8px; overflow-x: auto; }
+.calendar-weekday-col {
+  display: grid;
+  grid-template-rows: 14px repeat(7, 12px);
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.calendar-weekday-col span { font-size: 9px; color: var(--vscode-descriptionForeground); line-height: 12px; }
+.calendar-grid-area { flex: 1; overflow: hidden; }
+.calendar-months { display: flex; height: 14px; margin-bottom: 2px; }
+.calendar-months span { font-size: 9px; color: var(--vscode-descriptionForeground); flex: 0 0 14px; }
+.calendar-cells {
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 12px);
+  gap: 2px;
+}
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
 
 /* Codicon visual fallback if font hasn't loaded yet (rendered via .ico-*) */
 .ico {
@@ -1139,7 +1172,7 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   color: var(--vscode-descriptionForeground);
   margin-right: var(--sp-1);
 }
-.scope-btn {
+.scope-btn, .lt-scope-btn {
   background: transparent;
   border: 1px solid var(--vscode-panel-border);
   border-radius: var(--r-sm);
@@ -1150,8 +1183,8 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
-.scope-btn:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
-.scope-btn.active {
+.scope-btn:hover, .lt-scope-btn:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
+.scope-btn.active, .lt-scope-btn.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-foreground);
   border-color: var(--vscode-focusBorder);

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.43] - 2026-07-01
+
+### Security
+- **`credentialsPath` setting could be hijacked by a workspace's `.vscode/settings.json`.** The setting declared no `scope`, so it defaulted to `window` scope — a malicious repo could point it at an arbitrary file, and the extension would read that file and send its contents to Anthropic as a Bearer token.
+  - **Fix**: the setting now declares `"scope": "machine"`, so VS Code ignores workspace-defined values for it at the platform level (the same mechanism used by `git.path`) and shows its own native warning if a workspace tries anyway.
+  - **Defense-in-depth**: `resolveCredentialsPath()` (new pure function) resolves the path from `config.inspect()`'s `globalValue` only, ignoring `workspaceValue`/`workspaceFolderValue` outright — so the fix holds even if the `scope` declaration is ever accidentally removed.
+
+### Added
+- **Usage Calendar** — a GitHub-style contribution heatmap of your daily Claude Code cost, shown right after the Daily Cost card. Fixed 1-year (53-week) grid colored by day-of-usage quartile on the existing blue heat scale, with a hover tooltip (date · cost · tokens) and a highlighted "today" cell.
+  - **History now backfills in full**: previously only the last 7 days were kept in permanent storage; every refresh now persists the entire jsonl-visible history (~30 days), so the calendar (and other history-based charts) fill in from day one instead of growing one day at a time.
+
 ## [0.1.42] - 2026-06-30
 
 ### Fixed

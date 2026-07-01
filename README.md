@@ -13,9 +13,10 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.42
+## What's New in v0.1.43
 
-- **Fixed: "Cost by Commit" could still get stuck on "Collecting data…" in locked-down setups.** The retrospective card was the last one delivered pull-only, so when security software blocked the dashboard's request round-trip it stayed wedged while every other card recovered. It's now pushed live like its sibling sections (with the old request kept as a first-paint fallback), so it fills in on its own and stays current — without ever running Git in the background while the dashboard is closed.
+- **New: Usage Calendar.** A GitHub-style contribution heatmap of your daily Claude Code cost, right below the Daily Cost card — hover any day for its cost/tokens, with a highlighted "today" cell. History now backfills in full on every refresh, so the calendar (and other history charts) fill in from day one instead of growing one day at a time.
+- **Security: hardened `credentialsPath` against workspace-level hijacking.** A malicious repo's `.vscode/settings.json` could previously point this setting at an arbitrary file; it's now locked to your user/global settings only (VS Code enforces this at the platform level, plus a code-level fallback).
 
 ## Features
 
