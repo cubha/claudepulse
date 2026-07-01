@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Usage Heatmap — A/B 예상 UI</title>
+<style>
+  :root {
+    --vscode-editor-background: #1E1E1E;
+    --vscode-card-background: #1F1F1F;
+    --vscode-panel-border: #2D2D30;
+    --vscode-foreground: #CCCCCC;
+    --vscode-descriptionForeground: #9D9D9D;
+    --c-sonnet: #3B82F6;
+    /* DESIGN-TOKENS.md 히트맵 강도 스케일 (블루, 브랜드) */
+    --heat-0: #1B1B1D;
+    --heat-1: #1F2937;
+    --heat-2: #1E3A5F;
+    --heat-3: #1D5B95;
+    --heat-4: #2B85D6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 32px;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+  }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--vscode-descriptionForeground); font-size: 12px; margin: 0 0 24px; }
+  .card {
+    background: var(--vscode-card-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-bottom: 26px;
+  }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .card-title { font-size: 13px; font-weight: 600; }
+  .card-title .count { color: var(--c-sonnet); font-weight: 600; }
+  .scope-toggle { display: flex; gap: 4px; }
+  .scope-toggle button {
+    background: transparent; color: var(--vscode-descriptionForeground);
+    border: 1px solid var(--vscode-panel-border); border-radius: 4px;
+    font-size: 11px; padding: 2px 9px; cursor: pointer;
+  }
+  .scope-toggle button.active { background: #2C3E55; color: #93C5FD; border-color: #1D5B95; }
+
+  /* 히트맵 그리드 */
+  .heat-wrap { display: flex; gap: 8px; }
+  .weekday-col { display: grid; grid-template-rows: 14px repeat(7, 13px); gap: 3px; padding-top: 16px; }
+  .weekday-col span { font-size: 9px; color: var(--vscode-descriptionForeground); line-height: 13px; }
+  .grid-area { flex: 1; overflow: hidden; }
+  .month-row { display: flex; height: 14px; margin-bottom: 2px; }
+  .month-row span { font-size: 9px; color: var(--vscode-descriptionForeground); flex: 0 0 auto; }
+  .cells { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 13px); gap: 3px; }
+  .cell { width: 13px; height: 13px; border-radius: 2px; background: var(--heat-0); }
+  .cell.h1 { background: var(--heat-1); }
+  .cell.h2 { background: var(--heat-2); }
+  .cell.h3 { background: var(--heat-3); }
+  .cell.h4 { background: var(--heat-4); }
+  .legend { display: flex; align-items: center; gap: 5px; justify-content: flex-end; margin-top: 12px; font-size: 10px; color: var(--vscode-descriptionForeground); }
+  .legend .cell { width: 11px; height: 11px; }
+
+  .ab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .tag { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 3px; margin-left: 8px; vertical-align: middle; }
+  .tag.a { background: #1E3A5F; color: #93C5FD; }
+  .tag.b { background: #143; color: #5EEAD4; background: #0f3d36; }
+  .note { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 10px; line-height: 1.5; }
+  .scenario-mini .cells { grid-template-rows: repeat(7, 11px); }
+  .scenario-mini .cell { width: 11px; height: 11px; }
+  .scenario-mini .weekday-col { grid-template-rows: 14px repeat(7, 11px); }
+  .filllabel { font-size: 11px; color: var(--vscode-foreground); margin-bottom: 8px; }
+  .filllabel b { color: var(--c-sonnet); }
+  .divider-label { font-size: 11px; font-weight: 600; color: var(--vscode-descriptionForeground); text-transform: none; margin: 4px 0 14px; letter-spacing: .02em; }
+</style>
+</head>
+<body>
+  <h1>Usage Calendar — 대시보드 히트맵 예상 UI</h1>
+  <p class="sub">DESIGN-TOKENS.md의 <code>--heat-0~4</code> 블루 강도 스케일 사용 · 셀 = 하루 · 색 강도 = 일별 비용(또는 토큰)</p>
+
+  <!-- ===== 공통 위젯 디자인 (현재 데이터 33일 기준, A·B 공통) ===== -->
+  <div class="divider-label">① 위젯 디자인 (A·B 공통 — 대시보드 "Long-term" 섹션에 추가)</div>
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="count" id="total">—</span> 일 사용 기록 · 최근 13주</div>
+      <div class="scope-toggle">
+        <button>13주</button><button class="active">26주</button><button>1년</button>
+      </div>
+    </div>
+    <div class="heat-wrap">
+      <div class="weekday-col">
+        <span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span>
+      </div>
+      <div class="grid-area">
+        <div class="month-row" id="months-full"></div>
+        <div class="cells" id="cells-full"></div>
+      </div>
+    </div>
+    <div class="legend">
+      Less <span class="cell"></span><span class="cell h1"></span><span class="cell h2"></span><span class="cell h3"></span><span class="cell h4"></span> More
+    </div>
+  </div>
+
+  <!-- ===== A vs B: 신규 설치 직후 차이 ===== -->
+  <div class="divider-label">② A vs B 차이 = "신규 설치 직후" 채워지는 양 (위젯 구조는 동일)</div>
+  <div class="ab-grid">
+    <div class="card scenario-mini">
+      <div class="filllabel">방식 A <span class="tag a">히트맵만</span></div>
+      <div class="filllabel">신규 설치 직후: <b>7일</b>만 채워짐 (기존 last7Days)</div>
+      <div class="heat-wrap">
+        <div class="weekday-col">
+          <span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span>
+        </div>
+        <div class="grid-area"><div class="cells" id="cells-a"></div></div>
+      </div>
+      <div class="note">대부분 빈칸(<code>--heat-0</code>) → 매일 +1일씩 채워져 13주~1년으로 성장. 신규 데이터 작업 0.</div>
+    </div>
+
+    <div class="card scenario-mini">
+      <div class="filllabel">방식 B <span class="tag b">히트맵 + jsonl backfill</span></div>
+      <div class="filllabel">신규 설치 직후: <b>~30일</b> 즉시 채워짐 (jsonl 전체 1회 파싱)</div>
+      <div class="heat-wrap">
+        <div class="weekday-col">
+          <span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span><span></span>
+        </div>
+        <div class="grid-area"><div class="cells" id="cells-b"></div></div>
+      </div>
+      <div class="note">설치 첫날부터 ~30일 그리드가 차 있음(Claude Code jsonl 회전 천장). JsonlParser/Aggregator 수정 필요.</div>
+    </div>
+  </div>
+
+  <p class="note" style="max-width:760px">
+    ⚠️ 공통 한계: 두 방식 모두 <b>"지난 1년" 전체는 소급 불가</b>(합법 소스 없음).
+    그리드는 시간이 지나며 1년까지 자연 확장. 현재 사용자(33일 누적)는 A·B 차이가 거의 없고,
+    차이는 <b>신규 설치 사용자</b>의 첫 경험에서만 드러남.
+  </p>
+
+<script>
+  // ---- 결정론에 가까운 가짜 데이터 (시각 목적) ----
+  const HEAT = ['', 'h1', 'h2', 'h3', 'h4'];
+  function lvl(seed) { // 0~4
+    const x = Math.abs(Math.sin(seed * 12.9898) * 43758.5453);
+    const f = x - Math.floor(x);
+    if (f < 0.18) return 0;
+    if (f < 0.40) return 1;
+    if (f < 0.66) return 2;
+    if (f < 0.86) return 3;
+    return 4;
+  }
+  const MONTHS = ['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
+
+  // 풀 위젯: 26주(182일) 표시, 최근 33일만 데이터, 나머지 heat-0
+  function buildFull() {
+    const weeks = 26, days = weeks * 7;
+    const cells = document.getElementById('cells-full');
+    let total = 0;
+    for (let i = 0; i < days; i++) {
+      const fromEnd = days - 1 - i; // 0 = 오늘
+      const c = document.createElement('div');
+      c.className = 'cell';
+      if (fromEnd < 33) { // 최근 33일만 채움
+        const l = lvl(i + 7);
+        if (l > 0) { c.classList.add(HEAT[l]); total += l; }
+        else c.classList.add('h1');
+      }
+      cells.appendChild(c);
+    }
+    document.getElementById('total').textContent = '13.2M tokens';
+    // month row
+    const mr = document.getElementById('months-full');
+    const cellW = 16; // 13 + 3 gap
+    for (let w = 0; w < weeks; w++) {
+      const s = document.createElement('span');
+      s.style.width = cellW + 'px';
+      // 4주마다 라벨
+      if (w % 4 === 0) s.textContent = MONTHS[(6 + Math.floor(w/4)) % 12];
+      mr.appendChild(s);
+    }
+  }
+
+  // A/B 미니: 13주(91일) 그리드, 끝에서 N일만 채움
+  function buildMini(id, filledDays, dense) {
+    const days = 13 * 7;
+    const cells = document.getElementById(id);
+    for (let i = 0; i < days; i++) {
+      const fromEnd = days - 1 - i;
+      const c = document.createElement('div');
+      c.className = 'cell';
+      if (fromEnd < filledDays) {
+        const l = lvl(i + (dense ? 3 : 30));
+        c.classList.add(l > 0 ? HEAT[l] : 'h1');
+      }
+      cells.appendChild(c);
+    }
+  }
+
+  buildFull();
+  buildMini('cells-a', 7, true);
+  buildMini('cells-b', 30, true);
+</script>
+</body>
+</html>

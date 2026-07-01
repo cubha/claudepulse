@@ -793,6 +793,12 @@ function buildPanelShell(): string {
         </div>
       </div>
 
+      <!-- Usage Calendar 히트맵 (v0.1.43) — 고정 1년(53주) 뷰, 토글 없음(GitHub 관례) -->
+      <div class="card panel-trend-card" id="panel-calendar-card">
+        <div class="panel-chart-header">${t('usage_calendar')}</div>
+        <div id="panel-calendar-body"><div class="panel-loading">${t('collecting_data')}</div></div>
+      </div>
+
       <!-- 모델별 사용량 -->
       <div class="card panel-trend-card" id="panel-model-card">
         <div class="panel-chart-header">${t('model_breakdown')}</div>
@@ -886,6 +892,7 @@ function getCssVar(name: string): string {
 
 function updateUsageSection(): void {
   updateDailyChart();
+  updateUsageCalendar();
   updateModelBreakdown();
   updateCacheSection();
   updateToolChart();
@@ -964,6 +971,109 @@ function updateDailyChart(): void {
       },
     });
   }
+}
+
+interface CalendarCell {
+  date: string;
+  cost: number;
+  tokens: number;
+  isToday: boolean;
+}
+
+const CALENDAR_LOCALE: Record<string, string> = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
+
+/** 비용>0 값의 표시 윈도우 내 quartile로 강도 산출(절대값 임계 아님 — DESIGN-TOKENS.md 스펙). */
+function heatLevel(cost: number, sortedPositiveCosts: number[]): number {
+  if (cost <= 0 || sortedPositiveCosts.length === 0) return 0;
+  const pctile = (p: number) => sortedPositiveCosts[Math.min(sortedPositiveCosts.length - 1, Math.floor(p * sortedPositiveCosts.length))];
+  if (cost <= pctile(0.25)) return 1;
+  if (cost <= pctile(0.5)) return 2;
+  if (cost <= pctile(0.75)) return 3;
+  return 4;
+}
+
+/** 고정 1년(53주) 뷰 — GitHub 관례와 동일하게 스코프 토글 없음(셀 크기 고정이라 토글 실익 낮음, 사용자 UI 피드백). */
+const CALENDAR_WINDOW_DAYS = 371;
+
+/**
+ * Usage Calendar 히트맵 — GitHub 기여도식, --heat-0~4 블루 스케일(브랜드, DESIGN-TOKENS.md).
+ * 고정 1년 그리드를 오늘 기준으로 항상 렌더한다 — 실제 데이터 범위로 트림하면 카드 폭 대비
+ * 그리드가 작아 보여 "안 하느니만 못한" 인상을 준다(GitHub 등 실제 캘린더 관행과 동일하게
+ * 데이터 없는 날은 heat-0로 채워 고정 폭을 유지). 주 정렬용 최대 6칸만 시작일 이전으로 패딩한다.
+ */
+function updateUsageCalendar(): void {
+  const bodyEl = document.getElementById('panel-calendar-body');
+  if (!bodyEl) return;
+
+  const allDays = panelUsage?.historicalDays ?? [];
+  const hasData = allDays.some(d => d.costUsd > 0 || d.totalTokens > 0);
+  if (!hasData) {
+    bodyEl.innerHTML = `<div class="panel-loading">${t('collecting_data')}</div>`;
+    return;
+  }
+
+  const byDate = new Map(allDays.map(d => [d.date, d]));
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const today = new Date(`${todayKey}T00:00:00.000Z`);
+  const windowStart = new Date(today);
+  windowStart.setUTCDate(windowStart.getUTCDate() - (CALENDAR_WINDOW_DAYS - 1));
+
+  // 월요일 시작 요일 정렬 — 스코프 시작 주(週)의 요일만큼만 패딩
+  const isoDow = (d: Date) => (d.getUTCDay() + 6) % 7; // 0=Mon..6=Sun
+  const gridStart = new Date(windowStart);
+  gridStart.setUTCDate(gridStart.getUTCDate() - isoDow(windowStart));
+
+  const cells: CalendarCell[] = [];
+  const cur = new Date(gridStart);
+  while (cur.getTime() <= today.getTime()) {
+    const key = cur.toISOString().slice(0, 10);
+    const d = byDate.get(key);
+    cells.push({
+      date: key,
+      cost: d?.costUsd ?? 0,
+      tokens: d?.totalTokens ?? 0,
+      isToday: key === todayKey,
+    });
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  const sortedPositiveCosts = cells.filter(c => c.cost > 0).map(c => c.cost).sort((a, b) => a - b);
+
+  const cellsHtml = cells.map(c => {
+    const level = heatLevel(c.cost, sortedPositiveCosts);
+    const cls = ['heat-cell'];
+    if (level > 0) cls.push(`h${level}`);
+    if (c.isToday) cls.push('is-today');
+    const todayTag = c.isToday ? ` (${t('calendar_today_tag')})` : '';
+    const title = `${c.date}${todayTag} — ${fmtCost(c.cost)} · ${fmtTokens(c.tokens)}`;
+    return `<div class="${cls.join(' ')}" title="${escapeHtml(title)}"></div>`;
+  }).join('');
+
+  // 월 라벨 — 각 주 열의 첫 날짜가 그 달 1~7일이면 로캘 약어 표시(Intl, 신규 i18n 키 불필요)
+  const monthFmt = new Intl.DateTimeFormat(CALENDAR_LOCALE[getLang()] ?? undefined, { month: 'short' });
+  const weeks = Math.ceil(cells.length / 7);
+  const monthLabelsHtml: string[] = [];
+  for (let w = 0; w < weeks; w++) {
+    const weekFirst = cells[w * 7];
+    const d = new Date(`${weekFirst.date}T00:00:00.000Z`);
+    monthLabelsHtml.push(`<span>${d.getUTCDate() <= 7 ? escapeHtml(monthFmt.format(d)) : ''}</span>`);
+  }
+
+  bodyEl.innerHTML = `
+    <div class="calendar-heat-wrap">
+      <div class="calendar-weekday-col">
+        <span></span><span>${t('calendar_mon')}</span><span></span><span>${t('calendar_wed')}</span><span></span><span>${t('calendar_fri')}</span><span></span>
+      </div>
+      <div class="calendar-grid-area">
+        <div class="calendar-months">${monthLabelsHtml.join('')}</div>
+        <div class="calendar-cells">${cellsHtml}</div>
+      </div>
+    </div>
+    <div class="calendar-legend">
+      <span>${t('calendar_less')}</span>
+      <div class="heat-cell"></div><div class="heat-cell h1"></div><div class="heat-cell h2"></div><div class="heat-cell h3"></div><div class="heat-cell h4"></div>
+      <span>${t('calendar_more')}</span>
+    </div>`;
 }
 
 function modelColor(model: string): string {

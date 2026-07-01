@@ -114,6 +114,14 @@ const dict: Record<string, Record<Lang, string>> = {
   scope_90d:        { ko: '90일',               en: '90d',                   ja: '90日',                    zh: '90天' },
   scope_180d:       { ko: '180일',              en: '180d',                  ja: '180日',                   zh: '180天' },
   no_history_data:  { ko: '이력 데이터 없음…',    en: 'No history data…',      ja: '履歴データなし…',          zh: '暂无历史数据…' },
+  // Usage Calendar 히트맵 (v0.1.43)
+  usage_calendar:   { ko: '사용량 캘린더',        en: 'Usage Calendar',        ja: '使用量カレンダー',         zh: '使用量日历' },
+  calendar_less:    { ko: '적음',                en: 'Less',                  ja: '少ない',                  zh: '较少' },
+  calendar_more:    { ko: '많음',                en: 'More',                  ja: '多い',                    zh: '较多' },
+  calendar_today_tag:{ ko: '오늘',               en: 'Today',                 ja: '今日',                    zh: '今天' },
+  calendar_mon:     { ko: '월',                  en: 'Mon',                   ja: '月',                      zh: '一' },
+  calendar_wed:     { ko: '수',                  en: 'Wed',                   ja: '水',                      zh: '三' },
+  calendar_fri:     { ko: '금',                  en: 'Fri',                   ja: '金',                      zh: '五' },
   // 빈 상태 메시지
   collecting_data:  { ko: '데이터 수집 중…',      en: 'Collecting data…',      ja: 'データ収集中…',            zh: '收集数据中…' },
   collecting_poll:  { ko: '데이터 수집 중… (다음 폴링 ~5분 후)', en: 'Collecting data… (next poll in ~5 min)', ja: 'データ収集中… (次回ポーリング約5分後)', zh: '收集数据中…（下次轮询约5分钟后）' },

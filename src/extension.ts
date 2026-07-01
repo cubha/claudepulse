@@ -26,6 +26,7 @@ import { CommitAttributor } from './services/CommitAttributor';
 import { RetroStore } from './services/RetroStore';
 import { PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
+import { resolveCredentialsPath } from './utils/credentialsPath';
 import type { CommitMeta, PollHistoryPoint, PollerError, RateLimitSnapshot, RetroSummary, SessionRecord, UsageSummary } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -137,9 +138,10 @@ export function activate(context: vscode.ExtensionContext): void {
     allRecords = perFile.flat();
     retroDirty = true; // 레코드 변경 → 다음 회고 요청에 1회 재빌드(매-푸시 재빌드 아님)
     lastUsageSummary = aggregator.aggregate(allRecords);
-    // 오늘 포함 최근 7일 데이터를 CacheStore에 영구 저장
-    await cacheStore.merge(lastUsageSummary.last7Days);
-    // 전체 이력을 UsageSummary에 주입
+    // jsonl이 보유한 전체 범위(회전 천장 ~30일)를 CacheStore에 영구 저장 — last7Days만
+    // merge하면 7일보다 오래된 날짜가 영구 보존되지 않아 히트맵이 얕아진다(v0.1.43).
+    await cacheStore.merge(lastUsageSummary.historicalDays);
+    // 전체 이력을 UsageSummary에 주입 (CacheStore가 jsonl 회전 이후에도 보존한 값으로 교체)
     lastUsageSummary.historicalDays = cacheStore.getAll();
     messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
     // 회고도 push(패널 열렸을 때만 — pushRetro 내부 게이트). retroDirty=true로 갱신본 1회 재빌드.
@@ -202,8 +204,12 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function getConfig() {
     const cfg = vscode.workspace.getConfiguration('claudeCodeGauge');
+    // scope:machine이 workspaceValue를 platform 단에서 이미 차단하지만, inspect()로
+    // globalValue만 명시적으로 채택해 2차 방어(defense-in-depth)한다 — VS Code 네이티브
+    // 경고가 투명성을 담당하므로 커스텀 경고는 추가하지 않는다.
+    const credentialsInspect = cfg.inspect<string>(CONFIG_KEYS.credentialsPath);
     return {
-      credentialsPath: cfg.get<string>(CONFIG_KEYS.credentialsPath) || DEFAULT_CREDENTIALS_PATH,
+      credentialsPath: resolveCredentialsPath(credentialsInspect, DEFAULT_CREDENTIALS_PATH),
       pollIntervalMs: cfg.get<number>(CONFIG_KEYS.pollIntervalMs) ?? DEFAULT_POLL_INTERVAL_MS,
       warnThreshold: cfg.get<number>(CONFIG_KEYS.utilizationWarnThreshold) ?? DEFAULT_WARN_THRESHOLD,
     };

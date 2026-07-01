@@ -2,7 +2,7 @@
   "name": "claude-code-gauge",
   "displayName": "Claude Code Gauge",
   "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.1.42",
+  "version": "0.1.43",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -76,6 +76,7 @@
         "claudeCodeGauge.credentialsPath": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "description": "Path to Claude Code credentials file. Leave empty to use default (~/.claude/.credentials.json)."
         },
         "claudeCodeGauge.pollIntervalMs": {

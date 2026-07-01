@@ -254,7 +254,10 @@ export class UsageAggregator {
       skillUnattributed,
       subagentStats,
       activeBranch,
-      historicalDays: [],  // extension.ts에서 CacheStore 데이터로 채워짐
+      // jsonl이 보유한 전체 범위(회전 천장 ~30일)를 반환 — extension.ts가 이를 CacheStore에
+      // merge해 last7Days 이후로도 영구 보존한다(v0.1.43 히트맵 backfill). 신규 파싱/dedup 경로
+      // 없음 — allRecords가 이미 JsonlParser의 message.id/requestId dedup을 거친 값이다.
+      historicalDays: [...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)),
       generatedAt: now.toISOString(),
     };
   }
