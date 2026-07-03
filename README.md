@@ -13,10 +13,18 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.43
+## What's New in v0.1.44
+
+- **Fixed: Usage Calendar hid your newest weeks on narrow dashboards.** The fixed 1-year grid was silently clipped on the right — exactly where your recent usage lives — making the calendar look empty despite active use. It now scrolls horizontally, opens anchored to today (GitHub-style), and remembers your scroll position across data refreshes.
+- **Fixed: rate-limit polling can no longer hang silently.** Requests now time out after 15s and surface through the normal error path instead of leaking sockets while the gauge quietly goes stale.
+- **Polish**: zero hardcoded colors (all UI now follows your VS Code theme, light or dark), cryptographically random CSP nonces, and fully async file I/O during usage refresh.
+
+<details><summary>v0.1.43</summary>
 
 - **New: Usage Calendar.** A GitHub-style contribution heatmap of your daily Claude Code cost, right below the Daily Cost card — hover any day for its cost/tokens, with a highlighted "today" cell. History now backfills in full on every refresh, so the calendar (and other history charts) fill in from day one instead of growing one day at a time.
 - **Security: hardened `credentialsPath` against workspace-level hijacking.** A malicious repo's `.vscode/settings.json` could previously point this setting at an arbitrary file; it's now locked to your user/global settings only (VS Code enforces this at the platform level, plus a code-level fallback).
+
+</details>
 
 ## Features
 

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { EXTENSION_NAME } from '../constants';
 import { WEBVIEW_BROADCAST_METHODS } from '../messaging/contracts';
+import { getNonce } from '../utils/nonce';
 
 export class DashboardPanel {
   private static current: DashboardPanel | null = null;
@@ -68,11 +69,4 @@ export class DashboardPanel {
 <script nonce="${nonce}" src="${jsUri}"></script>
 </body></html>`;
   }
-}
-
-function getNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let n = '';
-  for (let i = 0; i < 32; i++) n += chars.charAt(Math.floor(Math.random() * chars.length));
-  return n;
 }

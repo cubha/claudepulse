@@ -292,7 +292,7 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
 .heat-cell.is-today { box-shadow: 0 0 0 1px var(--vscode-focusBorder); }
 
 /* Usage Calendar (v0.1.43) */
-.calendar-heat-wrap { display: flex; gap: 8px; overflow-x: auto; }
+.calendar-heat-wrap { display: flex; gap: 8px; }
 .calendar-weekday-col {
   display: grid;
   grid-template-rows: 14px repeat(7, 12px);
@@ -300,7 +300,10 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   flex: 0 0 auto;
 }
 .calendar-weekday-col span { font-size: 9px; color: var(--vscode-descriptionForeground); line-height: 12px; }
-.calendar-grid-area { flex: 1; overflow: hidden; }
+/* grid-area가 스크롤러 — overflow:hidden이면 카드 폭 < 그리드 고정폭(54주×14px)일 때
+   우측(최신) 주가 조용히 잘린다(v0.1.44 수정). 요일 열은 형제라 스크롤과 무관하게 고정.
+   overflow-y는 지정하지 않는다 — hidden이면 하단 행 .is-today의 spread 1px shadow가 잘림. */
+.calendar-grid-area { flex: 1; overflow-x: auto; }
 .calendar-months { display: flex; height: 14px; margin-bottom: 2px; }
 .calendar-months span { font-size: 9px; color: var(--vscode-descriptionForeground); flex: 0 0 14px; }
 .calendar-cells {
