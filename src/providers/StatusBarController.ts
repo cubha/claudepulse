@@ -48,9 +48,10 @@ export class StatusBarController {
     return undefined;
   }
 
-  private windowColor(w: UnifiedWindow): string | undefined {
+  private windowColor(w: UnifiedWindow): vscode.ThemeColor | undefined {
     if (w.status === 'blocked' || w.status === 'danger' || w.status === 'allowed_warning') return undefined;
-    return '#3B82F6';
+    // 하드코딩 hex 금지(§3#5) — 테마가 정의한 차트 블루로 브랜드 톤 유지(라이트/다크 추종)
+    return new vscode.ThemeColor('charts.blue');
   }
 
   private pctToSquares(pct: number, status: UnifiedWindow['status']): string {

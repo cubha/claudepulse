@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.44] - 2026-07-03
+
+### Fixed
+- **Usage Calendar silently hid the newest weeks when the dashboard was narrower than the fixed 1-year grid (54 weeks × 14px).** The grid area clipped its own overflow (`overflow: hidden`), so the intended horizontal scrollbar on the parent never engaged — and since the newest weeks live at the right edge, exactly the days you actually used got cut off, making the calendar look empty despite active usage.
+  - **Fix**: the grid area is now the horizontal scroller, and the default scroll position is anchored to the right edge (today), GitHub-style. Scrolling left to browse the past is preserved across data refreshes instead of snapping back to today.
+  - **Regression lock**: new Playwright check (`scripts/verify-calendar-clip.js`) renders the real webview bundle at 700px and asserts overflow engagement, right-anchored default, today-cell visibility, and scroll-position preservation.
+- **Rate-limit poller requests now time out after 15s.** Previously a server that accepted the TCP connection but never responded would leave the request (and its socket) hanging forever — each poll cycle leaked another socket and the gauge went stale without any error surfaced. Timed-out requests are destroyed and reported through the existing `network_error` path.
+- **Poller/credentials-watcher disposables no longer accumulate** in `context.subscriptions` on every settings change (hygiene — old instances were already stopped correctly).
+
+### Changed
+- **Zero hardcoded colors**: webview error/waiting fallbacks now use `var(--vscode-errorForeground)` / `var(--vscode-descriptionForeground)` (5 spots), and the StatusBar gauge text uses the theme's `charts.blue` instead of a fixed hex — dark/light themes now render consistently.
+- **CSP nonces are now generated with `crypto.randomBytes`** via a single shared utility (`src/utils/nonce.ts`), replacing two duplicated `Math.random()` implementations.
+- `JsonlParser` file stat is now async (`fs.promises.stat`) — no sync I/O on the extension host during refresh.
+- Removed obsolete `@types/chokidar` stub (chokidar 3+ ships its own types); bumped `chart.js` to ^4.5.1.
+
 ## [0.1.43] - 2026-07-01
 
 ### Security

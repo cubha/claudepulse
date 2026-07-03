@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { Messenger } from 'vscode-messenger';
 import { VIEW_IDS } from '../constants';
 import { WEBVIEW_BROADCAST_METHODS } from '../messaging/contracts';
+import { getNonce } from '../utils/nonce';
 
 export class SidebarViewProvider implements vscode.WebviewViewProvider {
   static readonly viewType = VIEW_IDS.sidebar;
@@ -49,11 +50,4 @@ export class SidebarViewProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}" src="${jsUri}"></script>
 </body></html>`;
   }
-}
-
-function getNonce(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let n = '';
-  for (let i = 0; i < 32; i++) n += chars.charAt(Math.floor(Math.random() * chars.length));
-  return n;
 }

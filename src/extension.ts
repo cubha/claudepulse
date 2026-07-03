@@ -233,7 +233,6 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     );
     poller.start(pollIntervalMs);
-    context.subscriptions.push({ dispose: () => poller?.stop() });
 
     // .credentials.json 변경(CLI 토큰 갱신) → 즉시 재폴링하여 stale 오탐 윈도우 제거.
     credWatcher?.stop();
@@ -243,8 +242,14 @@ export function activate(context: vscode.ExtensionContext): void {
       void poller?.poll();
     });
     credWatcher.start();
-    context.subscriptions.push({ dispose: () => credWatcher?.stop() });
   }
+
+  // dispose 등록은 1회만 — startPoller 내부에서 push하면 설정 변경(재시작)마다 항목이 누적된다.
+  // 클로저가 외부 변수(poller/credWatcher)를 참조하므로 항상 현재 인스턴스를 정지시킨다.
+  context.subscriptions.push(
+    { dispose: () => poller?.stop() },
+    { dispose: () => credWatcher?.stop() }
+  );
 
   let lastAlerted: 'fiveHour' | 'sevenDay' | null = null;
 

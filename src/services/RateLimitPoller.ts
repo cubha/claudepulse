@@ -14,6 +14,8 @@ import type { CredentialsReader } from './CredentialsReader';
 const POLL_MODEL = 'claude-haiku-4-5-20251001';
 const API_HOST = 'api.anthropic.com';
 const API_PATH = '/v1/messages';
+/** 서버가 TCP만 수락하고 응답하지 않는 행(hang) 시 소켓·Promise가 폴링 주기마다 누적되는 것을 차단 */
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export class RateLimitPoller {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -136,6 +138,9 @@ export class RateLimitPoller {
         }
       );
 
+      req.setTimeout(REQUEST_TIMEOUT_MS, () => {
+        req.destroy(new Error(`TIMEOUT: no response within ${REQUEST_TIMEOUT_MS}ms`));
+      });
       req.on('error', reject);
       req.write(body);
       req.end();

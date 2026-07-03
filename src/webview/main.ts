@@ -32,7 +32,7 @@ try {
   const msg = err instanceof Error ? err.message : String(err);
   console.error('[Claude Code Gauge] webview init failed:', err);
   if (root) {
-    root.innerHTML = `<div style="padding:12px;color:#f48771;font-size:12px;font-family:monospace;">
+    root.innerHTML = `<div style="padding:12px;color:var(--vscode-errorForeground);font-size:12px;font-family:monospace;">
       Claude Code Gauge webview error:<br>${msg}<br><br>
       Open DevTools (Help → Toggle Developer Tools) for details.
     </div>`;
@@ -153,7 +153,7 @@ function initSidebar(): void {
   // acquireVsCodeApi가 없으면 non-webview 환경 — 명확한 에러 표시
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (typeof (globalThis as any).acquireVsCodeApi === 'undefined' && _vsApi === undefined) {
-    root.innerHTML = `<div style="padding:12px;color:#f48771;font-size:12px;">
+    root.innerHTML = `<div style="padding:12px;color:var(--vscode-errorForeground);font-size:12px;">
       acquireVsCodeApi not available.<br>This view must run inside VS Code.
     </div>`;
     return;
@@ -638,7 +638,7 @@ function initPanel(): void {
     messenger = new Messenger(_vsApi as any);
   } catch (err) {
     const el = document.getElementById('panel-status');
-    if (el) el.innerHTML = `<span style="color:#f48771">Messenger init failed: ${err instanceof Error ? err.message : String(err)}</span>`;
+    if (el) el.innerHTML = `<span style="color:var(--vscode-errorForeground)">Messenger init failed: ${err instanceof Error ? err.message : String(err)}</span>`;
     return;
   }
   panelMessenger = messenger;
@@ -672,7 +672,7 @@ function initPanel(): void {
     messenger.start();
   } catch (err) {
     const el = document.getElementById('panel-status');
-    if (el) el.innerHTML = `<span style="color:#f48771">Messenger start failed: ${err instanceof Error ? err.message : String(err)}</span>`;
+    if (el) el.innerHTML = `<span style="color:var(--vscode-errorForeground)">Messenger start failed: ${err instanceof Error ? err.message : String(err)}</span>`;
     return;
   }
 
@@ -709,7 +709,7 @@ function initPanel(): void {
     })
     .catch(() => {
       const el = document.getElementById('panel-status');
-      if (el) el.innerHTML = `<span style="color:#8a8a8a;font-size:12px;">${t('waiting_poll')}</span>`;
+      if (el) el.innerHTML = `<span style="color:var(--vscode-descriptionForeground);font-size:12px;">${t('waiting_poll')}</span>`;
     });
 
   wirePanelButtons(messenger);
@@ -1005,6 +1005,13 @@ function updateUsageCalendar(): void {
   const bodyEl = document.getElementById('panel-calendar-body');
   if (!bodyEl) return;
 
+  // 재렌더(innerHTML 교체)는 스크롤 상태를 지운다 — 사용자가 과거로 스크롤해둔 위치는 보존하고,
+  // 우측 끝(기본)에 있었거나 첫 렌더면 갱신 후에도 우측 끝(오늘)을 유지한다.
+  const prevArea = bodyEl.querySelector('.calendar-grid-area');
+  const prevScrollLeft = prevArea && prevArea.scrollLeft < prevArea.scrollWidth - prevArea.clientWidth - 2
+    ? prevArea.scrollLeft
+    : null;
+
   const allDays = panelUsage?.historicalDays ?? [];
   const hasData = allDays.some(d => d.costUsd > 0 || d.totalTokens > 0);
   if (!hasData) {
@@ -1074,6 +1081,11 @@ function updateUsageCalendar(): void {
       <div class="heat-cell"></div><div class="heat-cell h1"></div><div class="heat-cell h2"></div><div class="heat-cell h3"></div><div class="heat-cell h4"></div>
       <span>${t('calendar_more')}</span>
     </div>`;
+
+  // 카드 폭 < 그리드 고정폭이면 좌측(과거)부터 보이는 게 기본인데, 최신 주가 화면 밖으로
+  // 밀려 "사용내역 없음"처럼 보인다 — 기본 스크롤을 오른쪽 끝(오늘)으로 정렬(GitHub 관례).
+  const gridArea = bodyEl.querySelector('.calendar-grid-area');
+  if (gridArea) gridArea.scrollLeft = prevScrollLeft ?? gridArea.scrollWidth;
 }
 
 function modelColor(model: string): string {

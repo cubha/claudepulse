@@ -2,7 +2,7 @@
   "name": "claude-code-gauge",
   "displayName": "Claude Code Gauge",
   "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.1.43",
+  "version": "0.1.44",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -108,13 +108,12 @@
     "publish:ovsx": "ovsx publish --no-dependencies"
   },
   "dependencies": {
-    "chart.js": "^4.4.0",
+    "chart.js": "^4.5.1",
     "vscode-messenger": "^0.5.0",
     "vscode-messenger-common": "^0.5.0",
     "vscode-messenger-webview": "^0.5.0"
   },
   "devDependencies": {
-    "@types/chokidar": "^1.7.5",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",

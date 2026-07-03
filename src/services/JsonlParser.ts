@@ -40,7 +40,7 @@ export class JsonlParser {
   async parseFile(filePath: string): Promise<SessionRecord[]> {
     let stat: fs.Stats;
     try {
-      stat = fs.statSync(filePath);
+      stat = await fs.promises.stat(filePath);
     } catch {
       this.cache.delete(filePath);
       return [];
