@@ -891,6 +891,9 @@ body[data-mode="sidebar"] #root { height: 100%; }
   padding: 0 var(--sp-4) var(--sp-2);
   flex-shrink: 0;
 }
+.sb-calendar-wrap .sb-section-hdr {
+  border-top: none;
+}
 
 /* 사이드바 하단 대시보드 열기 버튼 */
 .sb-dashboard-wrap {
@@ -1224,6 +1227,7 @@ body[data-mode="sidebar"] #root { height: 100%; }
 .sb-chip-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--sp-1);
   padding: var(--sp-1) var(--sp-3) var(--sp-2);
 }

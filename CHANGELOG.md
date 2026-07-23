@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.46] - 2026-07-23
+
+### Fixed
+- **Sidebar tool/model/branch/monthly-cost chip rows no longer clip when the sidebar is narrowed.** These rows never wrapped, so chips that didn't fit on one line were simply cut off by the sidebar's scroll container instead of flowing to a new line — unlike every other section, which reflowed normally as the panel resized.
+  - **Fix**: `.sb-chip-row` now sets `flex-wrap: wrap`, so chips wrap to additional lines instead of overflowing off-screen.
+- **Faint stray border above the sidebar Usage Calendar header.** Its section header reused the shared `.sb-section-hdr` divider style (meant to separate collapsible sections), producing a redundant hairline directly under the Overage section. The calendar's header no longer draws that top border.
+
 ## [0.1.45] - 2026-07-23
 
 ### Added
