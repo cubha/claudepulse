@@ -13,11 +13,18 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.44
+## What's New in v0.1.45
+
+- **New: Sidebar mini Usage Calendar.** A compact, last-3-months version of the dashboard's GitHub-style heatmap, right below Overage usage — same coloring and hover tooltips, no legend, hidden entirely until you have usage history. Reuses the dashboard's exact cell size rather than shrinking it, sized so it fills the sidebar's default width without horizontal scrolling.
+- **Fixed: "Open Dashboard" button no longer sticks to the section above it.** The sidebar's mount element was missing an explicit height, so the button collapsed up against Overage usage instead of anchoring to the bottom. It's now correctly pinned at the bottom, and the sidebar scrolls instead of clipping when its content (now including the calendar) is taller than the panel.
+
+<details><summary>v0.1.44</summary>
 
 - **Fixed: Usage Calendar hid your newest weeks on narrow dashboards.** The fixed 1-year grid was silently clipped on the right — exactly where your recent usage lives — making the calendar look empty despite active use. It now scrolls horizontally, opens anchored to today (GitHub-style), and remembers your scroll position across data refreshes.
 - **Fixed: rate-limit polling can no longer hang silently.** Requests now time out after 15s and surface through the normal error path instead of leaking sockets while the gauge quietly goes stale.
 - **Polish**: zero hardcoded colors (all UI now follows your VS Code theme, light or dark), cryptographically random CSP nonces, and fully async file I/O during usage refresh.
+
+</details>
 
 <details><summary>v0.1.43</summary>
 
