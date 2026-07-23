@@ -886,7 +886,7 @@ body[data-mode="sidebar"] #root { height: 100%; }
   text-align: center;
 }
 
-/* 사이드바 미니 Usage Calendar(v0.1.45) — 최근 30일 축소뷰. calendar-* 클래스는 대시보드와 공유. */
+/* 사이드바 미니 Usage Calendar(v0.1.45) — 최근 3개월(90일) 축소뷰. calendar-* 클래스는 대시보드와 공유. */
 .sb-calendar-wrap {
   padding: 0 var(--sp-4) var(--sp-2);
   flex-shrink: 0;

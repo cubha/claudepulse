@@ -1,4 +1,5 @@
-// 사이드바 미니 Usage Calendar 검증 (v0.1.45 ST3).
+// 사이드바 미니 Usage Calendar 검증 (v0.1.45 ST3, 90일/3개월 윈도우로 확정 — 60일 이하는
+// 12px 셀 기준 사이드바 기본폭을 못 채우고 120일은 넘쳐 스크롤 유발, 실측 비교로 90일 확정).
 // ① 초과사용량 섹션과 대시보드 버튼 사이에 정확히 위치하는지 (DOM 순서)
 // ② 사이드바 폭(300px) 안에 가로 스크롤 없이 들어가는지
 // ③ 레전드가 생략됐는지(공간절약 설계)
@@ -11,11 +12,12 @@ const fs = require('fs');
 const HTML_PATH = path.resolve(__dirname, '../docs/demo/sidebar.html');
 const OUT_DIR = path.resolve(__dirname, '../.playwright-mcp');
 const VIEWPORT = { width: 300, height: 900 };
+const WINDOW_DAYS = 90; // SIDEBAR_CALENDAR_WINDOW_DAYS(main.ts)와 동일하게 유지
 
 function daysPayload() {
   const days = [];
   const now = new Date();
-  for (let i = 29; i >= 0; i--) {
+  for (let i = WINDOW_DAYS - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setUTCDate(d.getUTCDate() - i);
     const date = d.toISOString().slice(0, 10);
@@ -95,7 +97,7 @@ async function main() {
     [withData.orderOk, 'DOM 순서: 초과사용량 → 캘린더 → 대시보드 버튼'],
     [withData.noHorizontalOverflow, `가로 오버플로 없음 (grid.right ${withData.noHorizontalOverflow})`],
     [withData.noLegend, '레전드(Less/More) 생략됨'],
-    [withData.cellCount >= 30 && withData.cellCount <= 36, `셀 개수 30~36 범위 (실제 ${withData.cellCount})`],
+    [withData.cellCount >= WINDOW_DAYS && withData.cellCount <= WINDOW_DAYS + 6, `셀 개수 ${WINDOW_DAYS}~${WINDOW_DAYS + 6} 범위 (실제 ${withData.cellCount})`],
     [withData.coloredCount > 0, `색상 셀 렌더됨 (${withData.coloredCount}개)`],
     [withData.todayMarker, '오늘 마커 존재'],
     [noData.wrapAbsent, '데이터 없을 때 섹션 자체 생략(수집중 placeholder 아님)'],

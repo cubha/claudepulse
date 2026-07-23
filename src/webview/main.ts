@@ -570,7 +570,7 @@ function buildSidebarHtml(
 }
 
 /**
- * 사이드바 미니 Usage Calendar(v0.1.45) — 최근 30일 축소뷰. 대시보드 371일 원본과
+ * 사이드바 미니 Usage Calendar(v0.1.45) — 최근 3개월(90일) 축소뷰. 대시보드 371일 원본과
  * buildCalendarHtml을 공유하되 windowDays만 다르다(사이드바=차트금지 원칙 예외,
  * feedback_sidebar_vs_dashboard.md 참조). 데이터 없으면 섹션 자체를 생략한다
  * (대시보드처럼 "수집 중…" placeholder를 두면 좁은 폭에서 공간만 차지하고 정보가 없다).
@@ -999,8 +999,14 @@ const CALENDAR_LOCALE: Record<string, string> = { ko: 'ko-KR', en: 'en-US', ja: 
 
 /** 고정 1년(53주) 뷰 — GitHub 관례와 동일하게 스코프 토글 없음(셀 크기 고정이라 토글 실익 낮음, 사용자 UI 피드백). */
 const CALENDAR_WINDOW_DAYS = 371;
-/** 사이드바 축소뷰 — 최근 1개월(v0.1.45). 가로 스크롤 없이 사이드바 폭에 들어가는 크기. */
-const SIDEBAR_CALENDAR_WINDOW_DAYS = 30;
+/**
+ * 사이드바 축소뷰 — 최근 3개월(90일, v0.1.45). 30일(≈5주)은 12px 셀 그대로 쓰면 사이드바
+ * 기본 폭(~300px) 대비 컬럼이 너무 적어 여백이 크게 남았다(실측). 셀을 키우면 세로가 과도하게
+ * 커지고 DESIGN-TOKENS.md 셀 스펙(12×12px)까지 개정해야 해서, 대신 윈도우를 넓혀 컬럼 수로
+ * 폭을 채우는 쪽을 선택 — 대시보드와 동일한 12px 셀을 그대로 재사용(시각 일관성 유지),
+ * 90일이 기본 폭을 거의 채우면서도 가로 스크롤을 유발하지 않는 실측 최적점(60일=부족, 120일=초과).
+ */
+const SIDEBAR_CALENDAR_WINDOW_DAYS = 90;
 
 /**
  * Usage Calendar 히트맵 HTML — GitHub 기여도식, --heat-0~4 블루 스케일(브랜드, DESIGN-TOKENS.md).
