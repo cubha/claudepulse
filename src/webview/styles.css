@@ -129,6 +129,10 @@ html, body { margin: 0; padding: 0; height: 100%; }
 }
 /* 사이드바 webview는 sideBar 배경으로 통일 */
 body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
+/* #root(mount div)에 명시적 height가 없으면 .sb-layout의 height:100%가 auto-height 부모 기준으로
+   무의미해져 flex:1 스페이서가 밀어낼 여유공간이 없다(v0.1.45 버그수정) — sidebar에만 스코핑
+   (DashboardPanel도 동일 #root를 mount하므로 전역 규칙은 패널 레이아웃 회귀 위험). */
+body[data-mode="sidebar"] #root { height: 100%; }
 .theme-dark *, .theme-light * { box-sizing: border-box; }
 
 .mono { font-family: var(--ff-mono); font-feature-settings: 'tnum', 'zero'; }
@@ -435,7 +439,8 @@ body[data-mode="sidebar"] { background: var(--vscode-sideBar-background); }
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--vscode-sideBar-background);
 }
 
