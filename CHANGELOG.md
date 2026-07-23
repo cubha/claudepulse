@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-07-23
+
+### Added
+- **Sidebar mini Usage Calendar** — a compact, last-30-days version of the dashboard's GitHub-style heatmap, shown right after the Overage section. Shares the same day-of-usage quartile coloring and hover tooltips as the dashboard's fixed 1-year view (which is unchanged); the legend is omitted to save vertical space, and the section itself is hidden entirely when there's no usage history yet (no "Collecting data…" placeholder). Fits the ~300px sidebar width without any horizontal scrolling.
+
+### Fixed
+- **"Open Dashboard" button rendered stuck to the section above it instead of pinned to the bottom of the sidebar**, and long sidebar content had no way to scroll. Root cause: the webview's mount `<div id="root">` had no explicit height, so `.sb-layout`'s `height: 100%` resolved against an auto-sized parent and collapsed to content size — leaving the `flex: 1` spacer with no room to push the button down.
+  - **Fix**: `#root` now gets an explicit `height: 100%`, scoped to the sidebar (`body[data-mode="sidebar"] #root`) so the dashboard panel — which mounts the same `#root` id — is unaffected. The sidebar layout switched from `overflow: hidden` to `overflow-y: auto`, so content taller than the viewport now scrolls instead of clipping.
+  - **Regression lock**: new Playwright checks (`scripts/verify-sidebar-layout.js`, `scripts/verify-sidebar-calendar.js`) render the real webview bundle and assert the button stays pinned with short content, the sidebar actually scrolls when content overflows, and the new calendar section renders in the right place without horizontal overflow.
+
 ## [0.1.44] - 2026-07-03
 
 ### Fixed
