@@ -33,27 +33,38 @@ describe('buildCalendarCells — 윈도우·정렬·패딩', () => {
     expect(last.tokens).toBe(500);
   });
 
-  it('월요일 시작 정렬 — 그리드 길이가 7의 배수', () => {
+  it('월요일 시작 정렬 — 앞쪽 패딩은 0~6일, 뒤쪽(오늘 이후)은 패딩하지 않는다', () => {
+    // gridStart는 windowStart가 속한 주의 월요일 — 패딩폭은 windowStart 요일에 좌우되어 0~6일.
+    // 마지막 셀은 항상 today(요일 무관, 부분 마지막 주 허용) — CSS grid-auto-flow:column이 처리.
     const todayKey = '2026-07-23'; // 목요일
     const cells = buildCalendarCells([], 30, todayKey);
-    expect(cells.length % 7).toBe(0);
+    expect(cells.length).toBeGreaterThanOrEqual(30);
+    expect(cells.length).toBeLessThanOrEqual(30 + 6);
+    expect(cells[cells.length - 1].date).toBe(todayKey);
   });
 
-  it('패딩 경계 0칸 — 윈도우 시작이 월요일이면 그리드 첫 셀 = 윈도우 시작일 그대로', () => {
-    // 2026-06-29는 월요일(UTC) — windowDays=1이면 windowStart=today=2026-06-29
-    const todayKey = '2026-06-29';
-    const cells = buildCalendarCells([], 1, todayKey);
-    expect(cells[0].date).toBe('2026-06-29');
-    expect(cells.length).toBe(7); // 월~일 한 주 전체
+  it('패딩 경계 — 그리드 첫 셀은 항상 월요일(UTC)이고 패딩폭은 0~6일', () => {
+    // windowDays=1 → windowStart=today. 임의 요일(today)에 대해 gridStart(그리드 첫 셀)는
+    // 그 주의 월요일로 정렬되므로 패딩폭(windowStart 대비)은 0(today가 월요일)~6(today가 일요일)일.
+    for (const todayKey of ['2026-06-29', '2026-06-30', '2026-07-01', '2026-07-02', '2026-07-03', '2026-07-04', '2026-07-05']) {
+      const cells = buildCalendarCells([], 1, todayKey);
+      const firstDow = new Date(`${cells[0].date}T00:00:00.000Z`).getUTCDay();
+      expect(firstDow).toBe(1); // 월요일(UTC) = getUTCDay() 1
+      expect(cells.length).toBeGreaterThanOrEqual(1);
+      expect(cells.length).toBeLessThanOrEqual(7);
+      expect(cells[cells.length - 1].date).toBe(todayKey);
+    }
   });
 
-  it('패딩 경계 6칸 — 윈도우 시작이 일요일이면 6일 패딩(월~일 전체 주)', () => {
-    // 2026-07-05는 일요일(UTC) — windowDays=1이면 windowStart=today=2026-07-05
-    const todayKey = '2026-07-05';
-    const cells = buildCalendarCells([], 1, todayKey);
-    expect(cells[0].date).toBe('2026-06-29'); // 그 주 월요일까지 6일 패딩
-    expect(cells[cells.length - 1].date).toBe('2026-07-05');
+  it('패딩 경계 6칸 — windowStart가 일요일이면 패딩 6일(그리드 길이 7)', () => {
+    // getUTCDay()===0인 날짜를 today로 두면 windowDays=1일 때 windowStart=today=일요일 → 최대 패딩.
+    const sunday = ['2026-06-28', '2026-07-05', '2026-07-12'].find(
+      d => new Date(`${d}T00:00:00.000Z`).getUTCDay() === 0
+    );
+    expect(sunday).toBeDefined();
+    const cells = buildCalendarCells([], 1, sunday!);
     expect(cells.length).toBe(7);
+    expect(cells[0].date).not.toBe(sunday);
   });
 
   it('데이터 없는 날은 cost 0 · tokens 0으로 채워진다', () => {
@@ -88,7 +99,7 @@ describe('monthLabelFlags — 주별 라벨 표시', () => {
     const todayKey = '2026-07-23';
     const cells = buildCalendarCells([], 30, todayKey);
     const flags = monthLabelFlags(cells);
-    expect(flags.length).toBe(cells.length / 7);
+    expect(flags.length).toBe(Math.ceil(cells.length / 7));
   });
 
   it('윈도우 시작 주 첫날이 1~7일 범위면 해당 주 플래그가 true', () => {
