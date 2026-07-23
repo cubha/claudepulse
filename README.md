@@ -13,10 +13,17 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.45
+## What's New in v0.1.46
+
+- **Fixed: sidebar chip rows (model, tools, branch, monthly cost) no longer get cut off when you narrow the sidebar.** They now wrap to a new line like every other section instead of overflowing off-screen.
+- **Fixed: faint stray divider line above the sidebar Usage Calendar.**
+
+<details><summary>v0.1.45</summary>
 
 - **New: Sidebar mini Usage Calendar.** A compact, last-3-months version of the dashboard's GitHub-style heatmap, right below Overage usage — same coloring and hover tooltips, no legend, hidden entirely until you have usage history. Reuses the dashboard's exact cell size rather than shrinking it, sized so it fills the sidebar's default width without horizontal scrolling.
 - **Fixed: "Open Dashboard" button no longer sticks to the section above it.** The sidebar's mount element was missing an explicit height, so the button collapsed up against Overage usage instead of anchoring to the bottom. It's now correctly pinned at the bottom, and the sidebar scrolls instead of clipping when its content (now including the calendar) is taller than the panel.
+
+</details>
 
 <details><summary>v0.1.44</summary>
 
