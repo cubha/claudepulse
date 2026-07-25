@@ -71,6 +71,63 @@ describe('UsageAggregator — 스킬별 비용 분해 (#7)', () => {
   });
 });
 
+describe('UsageAggregator — 24h/7d 기간 스코프 attribution (v0.1.48 ②)', () => {
+  function tsAgo(ms: number): string {
+    return new Date(Date.now() - ms).toISOString();
+  }
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+
+  it('24h 스코프는 24시간 이내 레코드만, 7d는 7일 이내만 포함', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, attributionSkill: 'ship', timestamp: tsAgo(1 * HOUR) }),   // 24h+7d 포함
+      rec({ costUsd: 2.0, attributionSkill: 'ship', timestamp: tsAgo(3 * DAY) }),    // 7d만 포함
+      rec({ costUsd: 4.0, attributionSkill: 'ship', timestamp: tsAgo(20 * DAY) }),   // 둘 다 제외(전체만)
+    ]);
+
+    expect(r.attributionScopes.last24h.skillBreakdown[0]?.costUsd).toBeCloseTo(1.0, 6);
+    expect(r.attributionScopes.last7d.skillBreakdown[0]?.costUsd).toBeCloseTo(3.0, 6);
+    // 전체(top-level) 스코프는 기존처럼 전달받은 레코드 전체
+    expect(r.skillBreakdown[0]?.costUsd).toBeCloseTo(7.0, 6);
+  });
+
+  it('24h 스코프에서도 share 분모는 그 스코프의 grand-total(이중계산 없음)', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 3.0, attributionSkill: 'ship', timestamp: tsAgo(1 * HOUR) }),
+      rec({ costUsd: 1.0, timestamp: tsAgo(1 * HOUR) }), // 스킬 외 버킷, 24h 이내
+      rec({ costUsd: 100.0, attributionSkill: 'ship', timestamp: tsAgo(20 * DAY) }), // 24h 밖 — 영향 없어야 함
+    ]);
+    const scope = r.attributionScopes.last24h;
+    expect(scope.skillUnattributed.costUsd).toBeCloseTo(1.0, 6);
+    // grand-total = 3.0(ship) + 1.0(버킷) = 4.0 → share = 0.75
+    expect(scope.skillBreakdown[0].share).toBeCloseTo(0.75, 6);
+  });
+});
+
+describe('UsageAggregator — MCP 서버별 호출수 집계 (v0.1.48 ②, 호출 수 기반 share)', () => {
+  it('mcpServerCounts를 서버명별로 합산하고 호출수 기반 share를 계산', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, mcpServerCounts: { playwright: 3 } }),
+      rec({ costUsd: 1.0, mcpServerCounts: { playwright: 1, 'chrome-devtools': 4 } }),
+    ]);
+    const byServer = Object.fromEntries(r.mcpServerBreakdown.map(m => [m.server, m]));
+    expect(byServer.playwright.callCount).toBe(4);
+    expect(byServer['chrome-devtools'].callCount).toBe(4);
+    // grand-total 호출수 = 8 → 각 4/8 = 0.5
+    expect(byServer.playwright.share).toBeCloseTo(0.5, 6);
+    expect(byServer['chrome-devtools'].share).toBeCloseTo(0.5, 6);
+  });
+
+  it('MCP 호출 없으면 빈 배열', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([rec({ costUsd: 1.0 })]);
+    expect(r.mcpServerBreakdown).toEqual([]);
+  });
+});
+
 describe('UsageAggregator — 서브에이전트 vs 메인 분리 (#8)', () => {
   it('isSidechain 비용 분리 + 서브에이전트 비중 + 고유 agentId 수', () => {
     const agg = new UsageAggregator();

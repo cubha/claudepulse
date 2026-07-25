@@ -9,6 +9,13 @@ import { getLang, setLang, t } from './i18n';
 import { escapeHtml, fmtCost } from './format';
 import { renderRetro } from './retroView';
 import { buildCalendarCells, heatLevel, monthLabelFlags, type CalendarDay } from './calendarView';
+import {
+  calcSafeUntil,
+  calcProjAtReset,
+  deriveBurnState,
+  burnStateLabelKey,
+  type PollPoint,
+} from './burnRate';
 
 Chart.register(...registerables);
 
@@ -44,7 +51,8 @@ try {
 // 공통 유틸
 // ──────────────────────────────────────────────
 
-type PollPoint = { t: Date; v: number };
+const FH_WINDOW_MS = 5 * 60 * 60 * 1000; // 5h
+const SD_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7d
 
 function fmtPct(utilization: number): string {
   return `${(utilization * 100).toFixed(0)}%`;
@@ -84,60 +92,19 @@ function barFillWidth(utilization: number): string {
 }
 
 
-function calcBurnRate(history: PollPoint[]): number | null {
-  if (history.length < 2) return null;
-  const last = history[history.length - 1];
-  const prev = history[history.length - 2];
-  const deltaV = last.v - prev.v;
-  const deltaT = (last.t.getTime() - prev.t.getTime()) / 60000;
-  if (deltaT <= 0) return null;
-  return deltaV / deltaT; // %/min (양수 = 소비 중)
-}
-
-/** 히스토리 1개일 때 세션 경과 시간 기반 추정 번 레이트 */
-function calcBurnRateEstimate(utilization: number, msUntilReset: number, windowMs: number): number | null {
-  const elapsed = windowMs - msUntilReset;
-  const elapsedMin = elapsed / 60000;
-  if (elapsedMin < 1) return null;
-  return utilization / elapsedMin; // %/min 추정
-}
-
-function calcSafeUntil(
-  utilization: number,
-  burnRatePerMin: number,
-  resetAt: Date
-): Date | null {
-  if (burnRatePerMin <= 0) return null;
-  const remaining = 1 - utilization;
-  const minsLeft = remaining / burnRatePerMin;
-  const safeUntil = new Date(Date.now() + minsLeft * 60000);
-  if (safeUntil > resetAt) return null;
-  return safeUntil;
-}
-
-function calcProjAtReset(
-  utilization: number,
-  burnRatePerMin: number,
-  msUntilReset: number
-): number {
-  const minsUntilReset = msUntilReset / 60000;
-  const projected = utilization + burnRatePerMin * minsUntilReset;
-  return Math.min(1, Math.max(0, 1 - projected));
-}
-
 function fmtPlanTier(subscriptionType: string, rateLimitTier: string): string {
   const m = /(\d+)x/.exec(rateLimitTier);
   const base = subscriptionType.charAt(0).toUpperCase() + subscriptionType.slice(1);
   return m ? `${base} ${m[1]}x` : base || rateLimitTier;
 }
 
-function buildBurnRow(history: PollPoint[], utilization: number, msUntilReset: number): string {
-  const rate = calcBurnRate(history);
-  if (rate === null || rate <= 0) return '';
+function buildBurnRow(history: PollPoint[], utilization: number, msUntilReset: number, windowMs: number): string {
+  const state = deriveBurnState(history, utilization, msUntilReset, windowMs);
+  if (state.rate === null || state.rate <= 0) return '';
   const resetAt = new Date(Date.now() + msUntilReset);
-  const safeUntil = calcSafeUntil(utilization, rate, resetAt);
-  const projRemaining = calcProjAtReset(utilization, rate, msUntilReset);
-  const rateStr = `${(rate * 100).toFixed(2)}%/min`;
+  const safeUntil = calcSafeUntil(utilization, state.rate, resetAt);
+  const projRemaining = calcProjAtReset(utilization, state.rate, msUntilReset);
+  const rateStr = `${(state.rate * 100).toFixed(2)}%/min${state.isEstimate ? ` (${t('est_label')})` : ''}`;
   const safeStr = safeUntil ? ` · ${t('safe_until')} ${fmtTime(safeUntil)} (${t('proj')} ${fmtPct(projRemaining)} ${t('left')})` : '';
   return `<div class="rate-burn-row">
     <span class="rate-burn-label">${t('burn')} ${rateStr}${safeStr}</span>
@@ -239,10 +206,14 @@ function initSidebar(): void {
       const fhBar = root!.querySelector<HTMLElement>('#sb-fh-bar');
       const sdBar = root!.querySelector<HTMLElement>('#sb-sd-bar');
       const ovBar = root!.querySelector<HTMLElement>('#sb-ov-bar');
+      const ctxBar = root!.querySelector<HTMLElement>('#sb-ctx-bar');
       if (fhBar) fhBar.style.width = `${Math.min(100, snapshot.fiveHour.utilization * 100)}%`;
       if (sdBar) sdBar.style.width = `${Math.min(100, snapshot.sevenDay.utilization * 100)}%`;
       if (ovBar && snapshot.overage) {
         ovBar.style.width = `${Math.min(100, snapshot.overage.utilization * 100)}%`;
+      }
+      if (ctxBar && lastUsage?.sessionContext) {
+        ctxBar.style.width = `${Math.min(100, lastUsage.sessionContext.ratio * 100)}%`;
       }
     }
     root!.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
@@ -447,8 +418,8 @@ function buildSidebarHtml(
   const overall = snapshot.overallStatus;
   const timestamp = fmtTime(new Date(snapshot.generatedAt));
 
-  const fhBurnRow = buildBurnRow(fhHist, fh.utilization, fh.msUntilReset);
-  const sdBurnRow = buildBurnRow(sdHist, sd.utilization, sd.msUntilReset);
+  const fhBurnRow = buildBurnRow(fhHist, fh.utilization, fh.msUntilReset, FH_WINDOW_MS);
+  const sdBurnRow = buildBurnRow(sdHist, sd.utilization, sd.msUntilReset, SD_WINDOW_MS);
 
   // 병목 윈도우 카드 하이라이트
   const isFhBottleneck = snapshot.representativeClaim === 'five_hour';
@@ -560,6 +531,7 @@ function buildSidebarHtml(
       </div>
 
       ${overageSection}
+      ${buildContextGaugeHtml(usage)}
       ${buildSidebarCalendarHtml(usage)}
       <div class="sb-spacer"></div>
       <div class="sb-dashboard-wrap">
@@ -567,6 +539,32 @@ function buildSidebarHtml(
       </div>
 
     </div>`;
+}
+
+/**
+ * 사이드바 세션 컨텍스트 점유율 미니 게이지(v0.1.49 ④) — 단일 숫자→사이드바 배치 원칙,
+ * 기존 overage rate-bar 시각 문법 그대로 재사용. 데이터 없으면(세션 기록 자체가 없음) 섹션 생략.
+ */
+function buildContextGaugeHtml(usage: UsageSummary | null): string {
+  const ctx = usage?.sessionContext;
+  if (!ctx) return '';
+  const color = ctx.ratio >= 0.90 ? 'var(--c-danger)' : ctx.ratio >= 0.80 ? 'var(--c-warn)' : 'var(--c-sonnet)';
+  const dataStatus = ctx.ratio >= 0.90 ? 'danger' : ctx.ratio >= 0.80 ? 'allowed_warning' : 'allowed';
+  return `<div class="sb-context-wrap">
+    <div class="sb-section-hdr">
+      <span class="sb-section-dot" style="background:${color};"></span>
+      <span class="sb-section-label" title="${t('context_gauge_tooltip')}" style="cursor:help;">${t('context_usage')}</span>
+      <span class="sb-section-right">
+        <span class="mono" style="color:${color};">${fmtPct(ctx.ratio)}</span>
+        <span class="retro-approx-badge" title="${t('context_gauge_tooltip')}">${t('retro_approx_badge')}</span>
+      </span>
+    </div>
+    <div class="sb-rate-card">
+      <div class="rate-bar">
+        <div class="rate-bar-fill" id="sb-ctx-bar" data-status="${dataStatus}"></div>
+      </div>
+    </div>
+  </div>`;
 }
 
 /**
@@ -607,6 +605,7 @@ let monthlyChart: Chart | null = null;
 let cacheSparkChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
 let longTermScopeDays = 30;
+let attrScope: 'all' | '24h' | '7d' = 'all';
 let panelUsage: UsageSummary | null = null;
 let lastPanelSnapshot: RateLimitSnapshot | null = null;
 // 회고 섹션은 extension에 lazy 요청(GetRetroSummary)하므로 messenger 참조 보관
@@ -642,11 +641,24 @@ function wirePanelButtons(messenger: InstanceType<typeof Messenger>): void {
       updateLongTermSection();
     });
   });
+  document.querySelectorAll<HTMLButtonElement>('.attr-scope-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      attrScope = (btn.dataset.scope as 'all' | '24h' | '7d') || 'all';
+      document.querySelectorAll('.attr-scope-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateSkillSection();
+    });
+  });
 }
 
 function rebuildPanelDom(messenger: InstanceType<typeof Messenger>): void {
   destroyCharts();
   if (root) root.innerHTML = buildPanelShell();
+  // buildPanelShell()은 항상 scope 토글을 기본값(active)으로 그린다 — 재빌드 후에도
+  // 이전 선택이 남아있으면 active 표시(전체)와 실제 렌더 데이터(예: 7d)가 어긋난다.
+  chartScopeMin = 120;
+  longTermScopeDays = 30;
+  attrScope = 'all';
   wirePanelButtons(messenger);
 }
 
@@ -873,13 +885,21 @@ function buildPanelShell(): string {
         <div id="panel-retro-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
-      <!-- 비용 귀속 — 스킬별 비용 + 서브에이전트 소비 -->
+      <!-- 비용 귀속 — 스킬별 비용 + 서브에이전트 소비 + MCP 서버별 호출 -->
       <div class="card panel-skill-card" id="panel-skill-card">
         <div class="panel-chart-header">
           <span>${t('skill_attribution')}</span>
           <span class="retro-approx-badge" title="${t('skill_scope_disclaimer')}">${t('skill_scope_badge')}</span>
         </div>
+        <div class="chart-scope-row">
+          <span class="chart-scope-label">${t('scope_label')}:</span>
+          <button class="attr-scope-btn active" data-scope="all">${t('attr_scope_all')}</button>
+          <button class="attr-scope-btn" data-scope="24h">${t('attr_scope_24h')}</button>
+          <button class="attr-scope-btn" data-scope="7d">${t('attr_scope_7d')}</button>
+        </div>
         <div id="panel-skill-list"><div class="panel-loading">${t('collecting_data')}</div></div>
+        <div class="panel-mcp-header">${t('mcp_attribution')}</div>
+        <div id="panel-mcp-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
       <!-- 장기 비용 트렌드 -->
@@ -1401,9 +1421,30 @@ function updateSkillSection(): void {
   const listEl = document.getElementById('panel-skill-list');
   if (!listEl) return;
 
-  const skills = panelUsage?.skillBreakdown ?? [];
-  const sub = panelUsage?.subagentStats;
-  const unattr = panelUsage?.skillUnattributed;
+  const scoped = attrScope === '24h' ? panelUsage?.attributionScopes.last24h
+    : attrScope === '7d' ? panelUsage?.attributionScopes.last7d
+    : undefined;
+  const skills = scoped?.skillBreakdown ?? panelUsage?.skillBreakdown ?? [];
+  const sub = scoped?.subagentStats ?? panelUsage?.subagentStats;
+  const unattr = scoped?.skillUnattributed ?? panelUsage?.skillUnattributed;
+  const mcpServers = scoped?.mcpServerBreakdown ?? panelUsage?.mcpServerBreakdown ?? [];
+
+  const mcpListEl = document.getElementById('panel-mcp-list');
+  if (mcpListEl) {
+    if (mcpServers.length === 0) {
+      mcpListEl.innerHTML = `<div class="panel-empty">${t('no_mcp_data')}</div>`;
+    } else {
+      const maxMcpShare = mcpServers[0]?.share || 1;
+      mcpListEl.innerHTML = mcpServers.map(m => {
+        const w = Math.max(2, (m.share / maxMcpShare) * 100);
+        return `<div class="skill-row" title="${escapeHtml(m.server)} · ${(m.share * 100).toFixed(1)}%">
+          <span class="skill-name">${escapeHtml(m.server)}</span>
+          <span class="skill-bar-wrap"><span class="skill-bar" style="width:${w}%"></span></span>
+          <span class="skill-cost mono">${m.callCount}</span>
+        </div>`;
+      }).join('');
+    }
+  }
 
   // 서브에이전트 소비 요약 라인 (#8)
   let subLine = '';
@@ -1654,35 +1695,33 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
     sdResetEl.innerHTML = `${t('resets_in')} ${fmtReset(sd.msUntilReset)} · ${t('used_label')} ${fmtPct(sd.utilization)}${thBadge}`;
   }
 
-  // BURN RATE 카드
-  const FH_WINDOW_MS = 5 * 60 * 60 * 1000; // 5h
-  const burnRate = calcBurnRate(fhHistory)
-    ?? calcBurnRateEstimate(fh.utilization, fh.msUntilReset, FH_WINDOW_MS);
-  const isEstimate = calcBurnRate(fhHistory) === null && burnRate !== null;
+  // BURN RATE 카드 — deriveBurnState()로 idle/window_reset을 "수집 중" 고착과 구분
+  const burnState = deriveBurnState(fhHistory, fh.utilization, fh.msUntilReset, FH_WINDOW_MS);
   const burnRateEl = document.getElementById('burn-rate-val');
   const burnHrEl = document.getElementById('burn-rate-hr');
-  if (burnRate !== null && burnRate > 0) {
-    if (burnRateEl) burnRateEl.textContent = `${(burnRate * 100).toFixed(2)}%/min`;
-    if (burnHrEl) burnHrEl.textContent = isEstimate
-      ? `${(burnRate * 100 * 60).toFixed(1)}%/hr (${t('est_label')})`
-      : `${(burnRate * 100 * 60).toFixed(1)}%/hr`;
+  if (burnState.rate !== null) {
+    const estSuffix = burnState.isEstimate ? ` (${t('est_label')})` : '';
+    const idleSuffix = burnState.kind === 'idle' ? ` · ${t('idle_label')}` : '';
+    if (burnRateEl) burnRateEl.textContent = `${(burnState.rate * 100).toFixed(2)}%/min`;
+    if (burnHrEl) burnHrEl.textContent = `${(burnState.rate * 100 * 60).toFixed(1)}%/hr${estSuffix}${idleSuffix}`;
   } else {
     if (burnRateEl) burnRateEl.textContent = '—';
-    if (burnHrEl) burnHrEl.textContent = fh.utilization === 0 ? t('no_usage_yet') : t('collecting_data');
+    if (burnHrEl) burnHrEl.textContent = t(burnStateLabelKey(burnState.kind));
   }
 
   // SAFE UNTIL 카드
   const safeEl = document.getElementById('safe-until-val');
   const safeProjEl = document.getElementById('safe-until-proj');
-  if (burnRate !== null && burnRate > 0) {
+  if (burnState.rate !== null && burnState.rate > 0) {
     const resetAt = new Date(Date.now() + fh.msUntilReset);
-    const safeUntil = calcSafeUntil(fh.utilization, burnRate, resetAt);
-    const projRemaining = calcProjAtReset(fh.utilization, burnRate, fh.msUntilReset);
+    const safeUntil = calcSafeUntil(fh.utilization, burnState.rate, resetAt);
+    const projRemaining = calcProjAtReset(fh.utilization, burnState.rate, fh.msUntilReset);
     if (safeEl) safeEl.textContent = safeUntil ? fmtTime(safeUntil) : t('after_reset');
-    if (safeProjEl) safeProjEl.textContent = `${t('proj')} ${fmtPct(projRemaining)} ${t('left_at_reset')}${isEstimate ? ` (${t('est_label')})` : ''}`;
+    if (safeProjEl) safeProjEl.textContent = `${t('proj')} ${fmtPct(projRemaining)} ${t('left_at_reset')}${burnState.isEstimate ? ` (${t('est_label')})` : ''}`;
   } else {
     if (safeEl) safeEl.textContent = '—';
-    if (safeProjEl) safeProjEl.textContent = fh.utilization === 0 ? t('no_usage_yet') : t('collecting_data');
+    // idle(rate=0)도 이 분기로 온다 — 소모가 없으니 소진 시각이 없을 뿐 "수집 중"이 아니다.
+    if (safeProjEl) safeProjEl.textContent = t(burnStateLabelKey(burnState.kind));
   }
 
   updateTrendChart();

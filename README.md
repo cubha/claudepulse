@@ -6,6 +6,7 @@
 [![Open VSX](https://img.shields.io/open-vsx/v/cubha/claude-code-gauge?label=Open%20VSX&color=a855f7)](https://open-vsx.org/extension/cubha/claude-code-gauge)
 [![Downloads](https://img.shields.io/visual-studio-marketplace/d/cubha.claude-code-gauge?color=22c55e)](https://marketplace.visualstudio.com/items?itemName=cubha.claude-code-gauge)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/cubha/claudepulse?style=social)](https://github.com/cubha/claudepulse)
 
 Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, **what Claude actually did**, **which skill & branch cost how much**, and **how much your subagents spend** — with burn rate predictions, tool usage breakdowns, per-skill cost attribution, and Git branch ROI — without leaving your editor.
 
@@ -13,10 +14,19 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.46
+## What's New in v0.1.47
+
+- **New: Session context gauge.** A compact bar in the sidebar showing how full your latest session's context window is — computed from the most recent turn's input + cache tokens against that model's window. Approximate by nature (auto-compact isn't recorded in the logs), so it's labeled `≈` rather than presented as exact.
+- **New: MCP server attribution.** Cost attribution now breaks down MCP usage per server (`mcp__<server>__*`), ranked by call count. Share is deliberately call-count based, not cost based: a single assistant turn can mix MCP and non-MCP tools, so splitting *cost* per server would be false precision.
+- **New: 24h / 7d / All toggle on cost attribution.** The skill, subagent, and MCP breakdowns now scope to the last 24 hours or 7 days instead of only all-time — see what's driving spend *right now*, not just cumulatively.
+- **Fixed: Burn Rate and Safe Until got stuck on "Collecting data…" whenever you paused.** If your usage didn't move between two polls, the measured rate was `0` — which the cards misread as "no data yet" and could stay that way indefinitely. Idle is now a distinct state (`0.00%/min · idle`), separate from genuinely still collecting and from a 5h window reset. The rate is also averaged over the last 30 minutes rather than just the two most recent polls, so it no longer jumps on a single noisy sample.
+
+<details><summary>v0.1.46</summary>
 
 - **Fixed: sidebar chip rows (model, tools, branch, monthly cost) no longer get cut off when you narrow the sidebar.** They now wrap to a new line like every other section instead of overflowing off-screen.
 - **Fixed: faint stray divider line above the sidebar Usage Calendar.**
+
+</details>
 
 <details><summary>v0.1.45</summary>
 
@@ -46,7 +56,7 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **StatusBar**: Two independent items — `5H 🟦🟦⬜⬜⬜ 28%` and `7D 🟦⬜⬜⬜⬜ 14%` — emoji fill count based on utilization %; color (🟦🟨🟥), background, and font based on utilization thresholds (0–80 % blue · 80–90 % amber · 90–<100 % red Danger · 100 % red Blocked)
 - **Sidebar**: Three labeled sections — **Session (5h)** · **Weekly (7d)** · **Overage** — each with `used% · left%` display + status-colored progress bars (blue OK / amber Warning / red Danger·Blocked) + overall status badge inline with title
 - **Plan badge**: Your subscription tier (e.g. `Max 5x`) shown in the header — read from local credentials, no extra API call
-- **Burn Rate**: `%/min` consumption speed — estimated from session elapsed time on first open, then refined from poll history
+- **Burn Rate**: `%/min` consumption speed — estimated from session elapsed time on first open, then refined from poll history (averaged over the last 30 minutes, so a single noisy poll doesn't swing it). Distinguishes idle (`0.00%/min · idle`) from still-collecting and from a window reset, instead of showing "Collecting data…" for all three
 - **Safe Until**: Predicted time when your 5h quota runs out at current burn rate
 - **Dashboard Panel**: SESSION · WEEKLY · BURN RATE · SAFE UNTIL 4-card layout + utilization trend chart
 - **Trend Chart Scope**: Toggle 30m / 2h / 24h view window directly on the chart
@@ -84,12 +94,15 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 ### Cost Attribution — *where the cost went* (local `.jsonl`)
 - **Cost by Skill** (dashboard): Ranked bar list of cost per `attributionSkill` (sh-dev-loop, ship, plan, research, …) — see which Claude Code skills drive your spend. Because Claude Code only stamps a skill on main-chain turns *while a skill is actively loaded* (~⅓ of cost-bearing turns), everything else — plain requests and work before/after a skill loads — is shown as a first-class **"Outside skills"** bucket rather than hidden, with a `≈ Partial` badge. Subagent-delegated cost is surfaced separately below
 - **Subagent vs. main split** (dashboard): Subagent consumption share, cost, and unique-agent count from `isSidechain`/`agentId` — separate background subagent usage from your main session
+- **MCP server breakdown** (dashboard): Ranked list of MCP servers by call count, parsed from `mcp__<server>__<tool>` tool names. Share is call-count based on purpose — one assistant turn can mix MCP and non-MCP tools, so a per-server *cost* split would be false precision
+- **24h / 7d / All scope toggle** (dashboard): Re-scope the whole attribution section — skills, subagents, and MCP servers — to the last day or week instead of all time, to see what's driving spend right now
 
 ### Long-term Cost Tracking (local persistence)
 - **CacheStore**: Daily usage snapshots persist to `globalStorageUri/ccg-history.json` — survives jsonl rotation so history accumulates across months
 - **Long-term trend chart** (dashboard): Daily cost line chart with 30d / 90d / 180d scope toggle — see spending patterns across months
 - **Monthly cost bar chart** (dashboard): Month-by-month cost aggregation — spot your most expensive periods
 - **This-month chip** (sidebar): `◑ This month $X.XX / ≈$Y.YY` — current month spend + projected end-of-month cost (linear extrapolation)
+- **Session context gauge** (sidebar): How full your latest session's context window is — the most recent turn's input + cache-read + cache-creation tokens against that model's window. Approximate (`≈`) because auto-compact isn't recorded in the logs; hidden entirely until there's a session to measure
 
 ### Git Branch ROI (local `.jsonl`)
 - **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency

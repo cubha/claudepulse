@@ -105,6 +105,7 @@ export interface SessionRecord {
   attributionSkill?: string;  // jsonl entry.attributionSkill (스킬 귀속, 없으면 미정의)
   isSidechain: boolean;       // jsonl entry.isSidechain (서브에이전트 소비 여부)
   agentId?: string;           // jsonl entry.agentId (서브에이전트 식별자)
+  mcpServerCounts?: Record<string, number>;  // mcp__<server>__<tool> 서버별 호출수 (MCP 호출 없으면 미정의)
 }
 
 /** 하루 집계 (UTC 날짜 기준). */
@@ -192,6 +193,39 @@ export interface SubagentStats {
   subagentCount: number;     // 고유 agentId 수
 }
 
+/**
+ * MCP 서버별 호출수 집계. 비용이 아닌 **호출 수** 기반 share다(v0.1.48 확정) —
+ * 한 assistant 메시지에 MCP·비MCP 도구가 혼재하면 서버별 비용 분해가 원천적으로 불가능하기 때문.
+ */
+export interface McpServerUsage {
+  server: string;       // mcp__<server>__<tool>에서 추출한 서버명
+  callCount: number;     // 누적 호출 수
+  share: number;         // 0.0 ~ 1.0 (이 스코프의 전체 MCP 호출 수 중 비율)
+}
+
+/** 스킬·서브에이전트·MCP attribution 묶음 — 기간 스코프(24h/7d)별로 동일 구조 재사용. */
+export interface AttributionScope {
+  skillBreakdown: SkillUsage[];
+  skillUnattributed: SkillUnattributed;
+  subagentStats: SubagentStats;
+  mcpServerBreakdown: McpServerUsage[];
+}
+
+/**
+ * 세션 컨텍스트 점유율(근사치) — records(현재 이 머신의 ~/.claude/projects 전체, 워크스페이스 미필터링 —
+ * WorkspaceMapper.cwdMatchesWorkspace()는 존재하나 어디서도 호출되지 않아 activeBranch 등 다른 필드와
+ * 동일하게 cross-project 스코프다) 중 timestamp 최댓값 레코드 1건 기준.
+ * jsonl 각 assistant 레코드의 input+cache_read+cache_creation 합이 "그 턴 시점의 전체 컨텍스트 크기"이므로
+ * 세션 전체를 누적합하면 안 되고, 마지막 레코드 1건만 봐야 "현재 점유율"이 된다.
+ * 1M 베타 윈도 활성 여부는 jsonl에 기록되지 않아 보수적 기본값을 쓴다 — 웹뷰에서 "≈"로 고지.
+ */
+export interface SessionContextUsage {
+  tokens: number;   // 마지막 레코드의 input+cache_read+cache_creation 합
+  model: string;
+  maxWindow: number; // 모델 최대 컨텍스트 윈도(토큰)
+  ratio: number;     // 0.0 ~ 1.0
+}
+
 /** 브랜치별 사용량 집계. */
 export interface BranchUsage {
   branch: string;        // 브랜치명
@@ -212,10 +246,16 @@ export interface UsageSummary {
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
   recentEditedFiles: string[];       // 최근 편집 파일 목록 (top 20)
   branchBreakdown: BranchUsage[];    // 브랜치별 비용 집계 (비용 내림차순)
-  skillBreakdown: SkillUsage[];      // 스킬별 비용 집계 (비용 내림차순)
-  skillUnattributed: SkillUnattributed;  // "스킬 외 작업" 1급 버킷 (!isSidechain && !attributionSkill)
-  subagentStats: SubagentStats;      // 서브에이전트 vs 메인 소비 분리
+  skillBreakdown: SkillUsage[];      // 스킬별 비용 집계 (비용 내림차순, 전체 스코프)
+  skillUnattributed: SkillUnattributed;  // "스킬 외 작업" 1급 버킷 (!isSidechain && !attributionSkill, 전체 스코프)
+  subagentStats: SubagentStats;      // 서브에이전트 vs 메인 소비 분리 (전체 스코프)
+  mcpServerBreakdown: McpServerUsage[];  // MCP 서버별 호출수 집계 (전체 스코프)
+  attributionScopes: {
+    last24h: AttributionScope;
+    last7d: AttributionScope;
+  };
   activeBranch: string;              // 가장 최근 활성 브랜치명 (사이드바 칩용)
+  sessionContext: SessionContextUsage | null;  // 가장 최근 활동 세션의 컨텍스트 점유율(근사치, cross-project 스코프)
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601
 }
@@ -224,7 +264,7 @@ export interface UsageSummary {
 // usage×git 회고 뷰 도메인 모델 (v0.1.37)
 //
 // ⚠️ 포워드 컨트랙트(codex-later): 본 모델은 단일 프로바이더(Claude) 전제.
-// PLAN-v0.1.4-codex-provider 착수 시 Codex session_meta가 cwd를 보유하므로
+// PLAN-v0.2.0-codex-provider 착수 시 Codex session_meta가 cwd를 보유하므로
 // (회고 join 1차 키 = repo+윈도) Codex 레코드가 Claude 커밋 윈도에 오조인(undercount)된다.
 // → 그때 CommitAttributor에 provider 필터를 추가(codex-owned)할 것.
 //   지금 provider 파라미터를 선구현하지 않는다(dead param 금지).

@@ -21,7 +21,7 @@ import * as fs from 'node:fs';
 import { JsonlParser } from '../../src/services/JsonlParser';
 
 /** assistant 엔트리 한 줄 생성. */
-function line(messageId: string, ts: string): string {
+function line(messageId: string, ts: string, content: unknown[] = []): string {
   return JSON.stringify({
     type: 'assistant',
     requestId: messageId,
@@ -33,7 +33,7 @@ function line(messageId: string, ts: string): string {
       id: messageId,
       model: 'claude-opus-4-8',
       usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 },
-      content: [],
+      content,
     },
   }) + '\n';
 }
@@ -105,5 +105,30 @@ describe('JsonlParser — 증분 파싱 (#1)', () => {
     const second = await parser.parseFile(file);
     expect(h.calls[0].start).toBe(0); // 폴백: 처음부터
     expect(second.map(r => r.messageId)).toContain('m3');
+  });
+});
+
+describe('JsonlParser — mcpServerCounts (레코드별 MCP 서버 호출수 집계)', () => {
+  it('한 레코드 내 여러 MCP 서버 호출을 서버명별로 집계', async () => {
+    const file = tmpFile();
+    fs.writeFileSync(file, line('m1', '2026-06-12T10:00:00.000Z', [
+      { type: 'tool_use', name: 'mcp__playwright__browser_navigate', input: {} },
+      { type: 'tool_use', name: 'mcp__playwright__browser_click', input: {} },
+      { type: 'tool_use', name: 'mcp__chrome-devtools__click', input: {} },
+      { type: 'tool_use', name: 'Read', input: {} },
+    ]));
+    const parser = new JsonlParser();
+    const [record] = await parser.parseFile(file);
+    expect(record.mcpServerCounts).toEqual({ playwright: 2, 'chrome-devtools': 1 });
+  });
+
+  it('MCP 호출이 없으면 mcpServerCounts는 undefined(빈 객체 아님)', async () => {
+    const file = tmpFile();
+    fs.writeFileSync(file, line('m1', '2026-06-12T10:00:00.000Z', [
+      { type: 'tool_use', name: 'Read', input: {} },
+    ]));
+    const parser = new JsonlParser();
+    const [record] = await parser.parseFile(file);
+    expect(record.mcpServerCounts).toBeUndefined();
   });
 });
