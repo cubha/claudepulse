@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.47] - 2026-07-25
+
+### Added
+- **Session context gauge (sidebar).** Shows how full the latest session's context window is, as a compact bar below the monthly-cost row. Computed from the *most recent* assistant turn's `input_tokens + cache_read + cache_creation` against that model's window — not a cumulative sum, which would double-count the context on every turn and converge above 100%. Model windows resolve through the same exact → longest-prefix → family fallback used for pricing. Labeled `≈` and hidden entirely when there's no session to measure, because auto-compact isn't recorded in the logs and so can't be accounted for.
+- **MCP server attribution (dashboard).** Cost attribution now breaks MCP usage down per server, parsed from `mcp__<server>__<tool>` tool names and ranked by call count. Share is **call-count based, not cost based** — a single assistant message can mix MCP and non-MCP tool calls, so decomposing *cost* per server is structurally impossible and would be false precision.
+- **24h / 7d / All scope toggle (dashboard).** The attribution section — skills, the "Outside skills" bucket, subagents, and MCP servers — can now be scoped to the last 24 hours or 7 days instead of only all-time. Share denominators stay grand-total within each scope, so the existing no-double-counting guarantee holds per scope. Reuses the existing scope-toggle styling; no new visual language.
+
+### Fixed
+- **Burn Rate and Safe Until could stay stuck on "Collecting data…" indefinitely while you were idle.** If utilization didn't change between two polls, the measured rate was exactly `0`, and the display branches only accepted `> 0` — so being briefly idle at the default 5-minute poll interval was enough to reproduce it. A 5h window reset (negative delta) fell into the same trap.
+  - **Fix**: burn-rate state is now derived by an explicit state machine (`no_usage` / `collecting` / `idle` / `active` / `window_reset`) in a dedicated pure module, so idle reads as `0.00%/min · idle` and a window reset falls back to the elapsed-time estimate, both clearly distinct from genuinely still collecting.
+  - The slope is also averaged over the last 30 minutes of poll history instead of just the two most recent points, so a single noisy sample no longer swings the reading.
+  - **Regression lock**: the label decision for all five states lives in one pure function with unit tests, rather than being branched by hand at each card — the original defect was that the two dashboard cards each wrote their own branch and only one of them handled idle.
+
+### Security
+- **Hardened two lookup maps keyed by strings that originate outside the extension** (MCP server names from `.jsonl` tool calls, and model names). Both were plain objects, so a key colliding with an inherited `Object.prototype` member — `constructor`, `toString`, `valueOf` — would read back an inherited function instead of `undefined`, silently corrupting an MCP call count into a string or producing `NaN%` in the context gauge. The MCP counter now uses a prototype-less map and the model lookup an own-property guard. No `Object.prototype` mutation was possible in either case; this closes a silent data-corruption path, not a privilege escalation.
+
 ## [0.1.46] - 2026-07-23
 
 ### Fixed

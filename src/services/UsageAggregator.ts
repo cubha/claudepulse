@@ -1,6 +1,85 @@
 import { findPricing } from '../utils/pricing';
+import { calcContextUsageRatio, findContextWindow } from '../utils/contextWindow';
 import { emptyToolCounts } from './JsonlParser';
-import type { BranchUsage, CacheStats, DailyToolStats, DailyUsage, ModelBreakdown, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
+import type { AttributionScope, BranchUsage, CacheStats, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 스킬·서브에이전트·MCP attribution 계산 — 24h/7d/전체 스코프에 동일 로직 재사용.
+ * share 분모는 항상 grand-total(스킬 Σ + 미귀속 버킷 / MCP는 스코프 내 총 호출수), 이중계산 없음.
+ */
+function computeAttribution(records: SessionRecord[]): AttributionScope {
+  const bySkill = new Map<string, { costUsd: number; totalTokens: number }>();
+  const skillUnattributed = { costUsd: 0, totalTokens: 0 };
+  let mainCostUsd = 0;
+  let subagentCostUsd = 0;
+  const subagentIds = new Set<string>();
+  const byMcpServer = new Map<string, number>();
+
+  for (const r of records) {
+    const tokens = r.usage.input_tokens + r.usage.output_tokens
+      + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
+
+    // 스킬별 집계 (#7) — 메인체인만(!isSidechain). 사이드체인은 subagentStats로 별도(이중계산 금지)
+    if (!r.isSidechain) {
+      if (r.attributionSkill) {
+        const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0 };
+        sk.costUsd += r.costUsd;
+        sk.totalTokens += tokens;
+        bySkill.set(r.attributionSkill, sk);
+      } else {
+        skillUnattributed.costUsd += r.costUsd;
+        skillUnattributed.totalTokens += tokens;
+      }
+    }
+
+    // 서브에이전트 vs 메인 분리 (#8)
+    if (r.isSidechain) {
+      subagentCostUsd += r.costUsd;
+      if (r.agentId) subagentIds.add(r.agentId);
+    } else {
+      mainCostUsd += r.costUsd;
+    }
+
+    // MCP 서버별 호출수 (v0.1.48) — 메인/서브 구분 없이 전부 집계(도구 사용은 체인 유형과 무관)
+    if (r.mcpServerCounts) {
+      for (const [server, count] of Object.entries(r.mcpServerCounts)) {
+        byMcpServer.set(server, (byMcpServer.get(server) ?? 0) + count);
+      }
+    }
+  }
+
+  const skillTotalCost = [...bySkill.values()].reduce((sum, v) => sum + v.costUsd, 0);
+  const skillGrandTotal = skillTotalCost + skillUnattributed.costUsd;
+  const skillBreakdown: SkillUsage[] = [...bySkill.entries()]
+    .map(([skill, v]) => ({
+      skill,
+      costUsd: v.costUsd,
+      totalTokens: v.totalTokens,
+      share: skillGrandTotal > 0 ? v.costUsd / skillGrandTotal : 0,
+    }))
+    .sort((a, b) => b.costUsd - a.costUsd);
+
+  const totalAttributedCost = mainCostUsd + subagentCostUsd;
+  const subagentStats: SubagentStats = {
+    mainCostUsd,
+    subagentCostUsd,
+    subagentShare: totalAttributedCost > 0 ? subagentCostUsd / totalAttributedCost : 0,
+    subagentCount: subagentIds.size,
+  };
+
+  const mcpTotalCalls = [...byMcpServer.values()].reduce((sum, v) => sum + v, 0);
+  const mcpServerBreakdown: McpServerUsage[] = [...byMcpServer.entries()]
+    .map(([server, callCount]) => ({
+      server,
+      callCount,
+      share: mcpTotalCalls > 0 ? callCount / mcpTotalCalls : 0,
+    }))
+    .sort((a, b) => b.callCount - a.callCount);
+
+  return { skillBreakdown, skillUnattributed, subagentStats, mcpServerBreakdown };
+}
 
 export class UsageAggregator {
   aggregate(records: SessionRecord[]): UsageSummary {
@@ -13,14 +92,6 @@ export class UsageAggregator {
     const byDayTools = new Map<string, DailyToolStats>();
     const byBranch = new Map<string, BranchUsage>();
     const branchSessionSets = new Map<string, Set<string>>();
-    const bySkill = new Map<string, { costUsd: number; totalTokens: number }>();
-    // "스킬 외 작업" 버킷 — !isSidechain && !attributionSkill (사이드체인 제외 = 이중계산 금지)
-    const skillUnattributed = { costUsd: 0, totalTokens: 0 };
-
-    // 서브에이전트 분리 집계
-    let mainCostUsd = 0;
-    let subagentCostUsd = 0;
-    const subagentIds = new Set<string>();
 
     // 오늘 집계용
     let todayCacheRead = 0;
@@ -95,30 +166,6 @@ export class UsageAggregator {
         const set = branchSessionSets.get(r.gitBranch) ?? new Set<string>();
         set.add(r.sessionId);
         branchSessionSets.set(r.gitBranch, set);
-      }
-
-      // 스킬별 집계 (#7) — 메인체인만(!isSidechain). 사이드체인은 subagentStats로 별도(이중계산 금지)
-      if (!r.isSidechain) {
-        const tokens = r.usage.input_tokens + r.usage.output_tokens
-          + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
-        if (r.attributionSkill) {
-          const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0 };
-          sk.costUsd += r.costUsd;
-          sk.totalTokens += tokens;
-          bySkill.set(r.attributionSkill, sk);
-        } else {
-          // 스킬 외 작업 버킷 (1급) — 활성 스킬 없던 메인 작업
-          skillUnattributed.costUsd += r.costUsd;
-          skillUnattributed.totalTokens += tokens;
-        }
-      }
-
-      // 서브에이전트 vs 메인 분리 (#8)
-      if (r.isSidechain) {
-        subagentCostUsd += r.costUsd;
-        if (r.agentId) subagentIds.add(r.agentId);
-      } else {
-        mainCostUsd += r.costUsd;
       }
 
       // 편집 파일 추적
@@ -218,26 +265,29 @@ export class UsageAggregator {
       : null;
     const activeBranch = lastRecord?.gitBranch ?? '';
 
-    // 스킬별 비용 분해 (#7) — 비용 내림차순.
-    // share 분모 = grand-total(Σskill + 스킬 외 버킷) = 전체 메인체인 비용. 거짓 정밀도 회피.
-    const skillTotalCost = [...bySkill.values()].reduce((sum, v) => sum + v.costUsd, 0);
-    const skillGrandTotal = skillTotalCost + skillUnattributed.costUsd;
-    const skillBreakdown: SkillUsage[] = [...bySkill.entries()]
-      .map(([skill, v]) => ({
-        skill,
-        costUsd: v.costUsd,
-        totalTokens: v.totalTokens,
-        share: skillGrandTotal > 0 ? v.costUsd / skillGrandTotal : 0,
-      }))
-      .sort((a, b) => b.costUsd - a.costUsd);
+    // 세션 컨텍스트 점유율(근사치, #④) — 마지막 레코드 1건만(누적합 금지, 타당한 이유는 SessionContextUsage 문서 참조)
+    const sessionContext: SessionContextUsage | null = lastRecord
+      ? (() => {
+          const tokens = lastRecord.usage.input_tokens
+            + lastRecord.usage.cache_read_input_tokens
+            + lastRecord.usage.cache_creation_input_tokens;
+          return {
+            tokens,
+            model: lastRecord.model,
+            maxWindow: findContextWindow(lastRecord.model),
+            ratio: calcContextUsageRatio(tokens, lastRecord.model),
+          };
+        })()
+      : null;
 
-    // 서브에이전트 vs 메인 소비 분리 (#8)
-    const totalAttributedCost = mainCostUsd + subagentCostUsd;
-    const subagentStats: SubagentStats = {
-      mainCostUsd,
-      subagentCostUsd,
-      subagentShare: totalAttributedCost > 0 ? subagentCostUsd / totalAttributedCost : 0,
-      subagentCount: subagentIds.size,
+    // 스킬·서브에이전트·MCP attribution — 전체 스코프 + 24h/7d 스코프(v0.1.48 ②)
+    const nowMs = now.getTime();
+    const last24hRecords = records.filter(r => nowMs - new Date(r.timestamp).getTime() <= DAY_MS);
+    const last7dRecords = records.filter(r => nowMs - new Date(r.timestamp).getTime() <= 7 * DAY_MS);
+    const allAttribution = computeAttribution(records);
+    const attributionScopes = {
+      last24h: computeAttribution(last24hRecords),
+      last7d: computeAttribution(last7dRecords),
     };
 
     return {
@@ -250,10 +300,13 @@ export class UsageAggregator {
       last7DaysTools,
       recentEditedFiles,
       branchBreakdown,
-      skillBreakdown,
-      skillUnattributed,
-      subagentStats,
+      skillBreakdown: allAttribution.skillBreakdown,
+      skillUnattributed: allAttribution.skillUnattributed,
+      subagentStats: allAttribution.subagentStats,
+      mcpServerBreakdown: allAttribution.mcpServerBreakdown,
+      attributionScopes,
       activeBranch,
+      sessionContext,
       // jsonl이 보유한 전체 범위(회전 천장 ~30일)를 반환 — extension.ts가 이를 CacheStore에
       // merge해 last7Days 이후로도 영구 보존한다(v0.1.43 히트맵 backfill). 신규 파싱/dedup 경로
       // 없음 — allRecords가 이미 JsonlParser의 message.id/requestId dedup을 거친 값이다.

@@ -1131,6 +1131,12 @@ body[data-mode="sidebar"] #root { height: 100%; }
   border-top: 1px solid var(--vscode-panel-border);
   border-bottom: 1px solid var(--vscode-panel-border);
 }
+/* 세션 컨텍스트 점유율 미니 게이지 (v0.1.49 ④) — overage와 동일 플랫 스타일 재사용 */
+.sb-context-wrap {
+  padding: 0;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
 .sb-overage-card {
   padding: var(--sp-2) var(--sp-4) var(--sp-3);
   background: transparent;
@@ -1189,7 +1195,7 @@ body[data-mode="sidebar"] #root { height: 100%; }
   color: var(--vscode-descriptionForeground);
   margin-right: var(--sp-1);
 }
-.scope-btn, .lt-scope-btn {
+.scope-btn, .lt-scope-btn, .attr-scope-btn {
   background: transparent;
   border: 1px solid var(--vscode-panel-border);
   border-radius: var(--r-sm);
@@ -1200,8 +1206,8 @@ body[data-mode="sidebar"] #root { height: 100%; }
   cursor: pointer;
   transition: background 120ms ease, color 120ms ease;
 }
-.scope-btn:hover, .lt-scope-btn:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
-.scope-btn.active, .lt-scope-btn.active {
+.scope-btn:hover, .lt-scope-btn:hover, .attr-scope-btn:hover { background: var(--vscode-list-hoverBackground); color: var(--vscode-foreground); }
+.scope-btn.active, .lt-scope-btn.active, .attr-scope-btn.active {
   background: var(--vscode-list-activeSelectionBackground);
   color: var(--vscode-foreground);
   border-color: var(--vscode-focusBorder);
@@ -1521,6 +1527,16 @@ body[data-mode="sidebar"] #root { height: 100%; }
 .skill-row-other .skill-name { color: var(--c-slate); }
 .skill-bar-other { background: var(--c-slate); }
 .skill-row-other .skill-cost { color: var(--c-slate); }
+
+/* MCP 서버별 호출수 — 스킬 리스트 하위 서브섹션 (v0.1.48 ②, skill-row 문법 재사용) */
+.panel-mcp-header {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+  margin: var(--sp-3) 0 var(--sp-1);
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--vscode-panel-border);
+}
 
 /* usage×git 회고 — 커밋별 비용 귀속 (v0.1.37) */
 .panel-retro-card {

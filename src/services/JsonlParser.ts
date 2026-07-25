@@ -30,6 +30,13 @@ export function classifyToolName(name: string): keyof ToolUseCounts {
   return 'other';
 }
 
+/** mcp__<server>__<tool> → 서버명. mcp__ 접두사가 아니면 undefined. */
+export function mcpServerName(name: string): string | undefined {
+  if (!name.startsWith('mcp__')) return undefined;
+  const parts = name.split('__');
+  return parts.length >= 2 ? parts[1] : undefined;
+}
+
 export class JsonlParser {
   private readonly cache = new Map<string, ParseCache>();
 
@@ -139,6 +146,9 @@ export class JsonlParser {
         toolCounts.webSearch = webSearchCount;
         toolCounts.webFetch = webFetchCount;
         const editedFiles: string[] = [];
+        // 서버명은 jsonl에서 온 외부 문자열이라 prototype 없는 맵을 쓴다 — 'constructor'·'toString' 같은
+        // 상속 프로퍼티명이 서버명으로 오면 `?? 0`이 상속 함수를 집어 카운트가 문자열로 오염된다.
+        const mcpServerCounts: Record<string, number> = Object.create(null);
 
         if (Array.isArray(content)) {
           for (const block of content as Array<Record<string, unknown>>) {
@@ -150,6 +160,10 @@ export class JsonlParser {
             if (cat === 'edit' || cat === 'write') {
               const fp = String(input?.['file_path'] ?? '');
               if (fp) editedFiles.push(fp);
+            }
+            if (cat === 'mcp') {
+              const server = mcpServerName(name);
+              if (server) mcpServerCounts[server] = (mcpServerCounts[server] ?? 0) + 1;
             }
           }
         }
@@ -170,6 +184,7 @@ export class JsonlParser {
           attributionSkill: entry['attributionSkill'] !== undefined ? String(entry['attributionSkill']) : undefined,
           isSidechain: entry['isSidechain'] === true,
           agentId: entry['agentId'] !== undefined ? String(entry['agentId']) : undefined,
+          mcpServerCounts: Object.keys(mcpServerCounts).length > 0 ? mcpServerCounts : undefined,
         };
 
         // 같은 requestId → 마지막 엔트리로 교체 (스트리밍 중복 처리)
