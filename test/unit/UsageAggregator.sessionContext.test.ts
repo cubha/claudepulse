@@ -53,4 +53,51 @@ describe('UsageAggregator — 세션 컨텍스트 점유율 (#④, 누적합 아
     const r = agg.aggregate([]);
     expect(r.sessionContext).toBeNull();
   });
+
+  it('cwd/repoName 필드 — repoName은 cwd의 마지막 경로 세그먼트', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, cwd: '/home/user/projects/claudepulse' }),
+    ]);
+    expect(r.sessionContext!.cwd).toBe('/home/user/projects/claudepulse');
+    expect(r.sessionContext!.repoName).toBe('claudepulse');
+  });
+});
+
+describe('UsageAggregator — sessionContext 워크스페이스 스코핑 (B, v0.1.50)', () => {
+  it('workspaceRoot 미지정 시 기존 동작(cross-project, 전체 레코드 중 최신 1건) 유지', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, cwd: '/repo/a', timestamp: '2026-06-12T10:00:00.000Z' }),
+      rec({ costUsd: 1.0, cwd: '/repo/b', timestamp: '2026-06-12T10:05:00.000Z' }),
+    ]);
+    expect(r.sessionContext!.cwd).toBe('/repo/b');
+  });
+
+  it('workspaceRoot 지정 시 그 하위 cwd 레코드만 후보 — 워크스페이스 밖의 더 최신 레코드는 무시', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, cwd: '/repo/a', timestamp: '2026-06-12T10:00:00.000Z' }),
+      rec({ costUsd: 1.0, cwd: '/repo/b', timestamp: '2026-06-12T10:05:00.000Z' }), // 더 최신이지만 워크스페이스 밖
+    ], '/repo/a');
+    expect(r.sessionContext).not.toBeNull();
+    expect(r.sessionContext!.cwd).toBe('/repo/a');
+  });
+
+  it('workspaceRoot의 하위 디렉토리 cwd도 매칭 (repo 루트가 아닌 서브디렉토리에서 기동된 세션)', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, cwd: '/repo/a/src/webview', timestamp: '2026-06-12T10:00:00.000Z' }),
+    ], '/repo/a');
+    expect(r.sessionContext).not.toBeNull();
+    expect(r.sessionContext!.cwd).toBe('/repo/a/src/webview');
+  });
+
+  it('workspaceRoot 하위에 매칭 레코드가 없으면 null — 전역 폴백 금지', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, cwd: '/repo/other', timestamp: '2026-06-12T10:00:00.000Z' }),
+    ], '/repo/a');
+    expect(r.sessionContext).toBeNull();
+  });
 });
