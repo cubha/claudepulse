@@ -3,6 +3,7 @@
 .claude/**
 .gbc/**
 .playwright-mcp/**
+.harness-tmp/**
 pricing/**
 CLAUDE.md
 scratch.md
