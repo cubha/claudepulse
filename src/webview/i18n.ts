@@ -116,6 +116,7 @@ const dict: Record<string, Record<Lang, string>> = {
                       en: 'Approximate, based on the latest turn. Does not account for auto-compact.',
                       ja: '直近ターン基準の近似値です。auto-compact(自動圧縮)は反映されません。',
                       zh: '基于最近一轮的近似值，未考虑 auto-compact（自动压缩）。' },
+  context_repo_label: { ko: '워크스페이스', en: 'Workspace', ja: 'ワークスペース', zh: '工作区' },
   // 장기 트렌드
   this_month:       { ko: '이번달',              en: 'This Month',            ja: '今月',                    zh: '本月' },
   projected:        { ko: '예상',               en: 'Projected',             ja: '予測',                    zh: '预测' },

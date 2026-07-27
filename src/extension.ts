@@ -137,7 +137,13 @@ export function activate(context: vscode.ExtensionContext): void {
     const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
     allRecords = perFile.flat();
     retroDirty = true; // 레코드 변경 → 다음 회고 요청에 1회 재빌드(매-푸시 재빌드 아님)
-    lastUsageSummary = aggregator.aggregate(allRecords);
+    // 첫 워크스페이스 폴더로 스코핑한다. refreshUsage()는 chokidar jsonl 이벤트로만 재실행되고
+    // 포커스 변경 리스너가 없으므로, 활성 에디터 기반 선택은 폴더를 전환해도 재계산되지 않아
+    // "고정된 값에 잘못된 출처 라벨"을 붙이는 결과가 된다(advisor 지적, v0.1.48). 원 문제(multirepo)의
+    // 실사용 패턴은 repo별 별도 VS Code 창(각각 single-root)이라 이걸로 충분히 해결된다.
+    // 멀티루트 워크스페이스에서 두 번째 이상 폴더 작업 중인 경우는 알려진 한계로 남긴다.
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    lastUsageSummary = aggregator.aggregate(allRecords, workspaceRoot);
     // jsonl이 보유한 전체 범위(회전 천장 ~30일)를 CacheStore에 영구 저장 — last7Days만
     // merge하면 7일보다 오래된 날짜가 영구 보존되지 않아 히트맵이 얕아진다(v0.1.43).
     await cacheStore.merge(lastUsageSummary.historicalDays);

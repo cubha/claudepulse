@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
+import { cwdMatchesWorkspace } from '../utils/workspaceMatch';
 
 export class WorkspaceMapper {
   private readonly projectsDir: string;
@@ -34,11 +35,7 @@ export class WorkspaceMapper {
    * cwd가 workspacePath 또는 하위 디렉토리이면 true.
    */
   cwdMatchesWorkspace(cwd: string, workspacePath: string): boolean {
-    if (!cwd || !workspacePath) return false;
-    const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '');
-    const nc = norm(cwd);
-    const nw = norm(workspacePath);
-    return nc === nw || nc.startsWith(nw + '/');
+    return cwdMatchesWorkspace(cwd, workspacePath);
   }
 
   /** ~/.claude/projects 하위 모든 jsonl 파일 경로를 반환. */

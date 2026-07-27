@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.48] - 2026-07-27
+
+### Fixed
+- **Session context gauge showed the wrong repo's usage in multi-repo setups.** `UsageAggregator.aggregate()` always picked the most recently active session across the entire `~/.claude/projects` directory, regardless of which workspace VS Code had open — so a different repo's context usage could appear in a workspace where you hadn't even started a session yet.
+  - **Fix**: `aggregate()` now accepts an optional `workspaceRoot` and scopes the session-context candidate to records whose `cwd` falls under it. No match under the workspace means the gauge hides itself — no silent fallback to a different repo's numbers. Passing no `workspaceRoot` preserves the previous cross-project behavior.
+  - **Known limitation**: `workspaceRoot` always resolves to the first folder of the workspace, not whichever one is currently focused, because the gauge only recomputes on `.jsonl` file changes (not on editor-focus changes) — tying the scope to "currently focused" without also recomputing on focus change would show a stale value under a now-incorrect label, which is worse than the fixed-first-folder behavior. This only matters for multi-root workspaces; most multi-repo setups use one VS Code window per repo (single-root), which this fully solves.
+  - The matching logic (path normalization + prefix match) is shared with `WorkspaceMapper.cwdMatchesWorkspace()`, previously unused dead code, via a new `src/utils/workspaceMatch.ts`.
+
+### Added
+- **Repo chip on the session context gauge.** A small `📁 <folder name>` chip below the gauge bar states which workspace the percentage is scoped to, with the full path as a tooltip — useful when the session was started from a subdirectory, where the folder name shown isn't necessarily the repo root.
+
 ## [0.1.47] - 2026-07-25
 
 ### Added

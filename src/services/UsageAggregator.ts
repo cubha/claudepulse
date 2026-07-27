@@ -1,5 +1,7 @@
+import * as path from 'node:path';
 import { findPricing } from '../utils/pricing';
 import { calcContextUsageRatio, findContextWindow } from '../utils/contextWindow';
+import { cwdMatchesWorkspace } from '../utils/workspaceMatch';
 import { emptyToolCounts } from './JsonlParser';
 import type { AttributionScope, BranchUsage, CacheStats, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
 
@@ -82,7 +84,7 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
 }
 
 export class UsageAggregator {
-  aggregate(records: SessionRecord[]): UsageSummary {
+  aggregate(records: SessionRecord[], workspaceRoot?: string): UsageSummary {
     const now = new Date();
     const todayKey = toUtcDateKey(now);
 
@@ -266,16 +268,25 @@ export class UsageAggregator {
     const activeBranch = lastRecord?.gitBranch ?? '';
 
     // 세션 컨텍스트 점유율(근사치, #④) — 마지막 레코드 1건만(누적합 금지, 타당한 이유는 SessionContextUsage 문서 참조)
-    const sessionContext: SessionContextUsage | null = lastRecord
+    // workspaceRoot 지정 시 그 하위 cwd 레코드만 후보로 스코핑(v0.1.50 B) — 미지정이면 기존처럼 전체(records)에서 선택.
+    const contextCandidates = workspaceRoot
+      ? records.filter(r => cwdMatchesWorkspace(r.cwd, workspaceRoot))
+      : records;
+    const contextLastRecord = contextCandidates.length > 0
+      ? contextCandidates.reduce((a, b) => a.timestamp > b.timestamp ? a : b)
+      : null;
+    const sessionContext: SessionContextUsage | null = contextLastRecord
       ? (() => {
-          const tokens = lastRecord.usage.input_tokens
-            + lastRecord.usage.cache_read_input_tokens
-            + lastRecord.usage.cache_creation_input_tokens;
+          const tokens = contextLastRecord.usage.input_tokens
+            + contextLastRecord.usage.cache_read_input_tokens
+            + contextLastRecord.usage.cache_creation_input_tokens;
           return {
             tokens,
-            model: lastRecord.model,
-            maxWindow: findContextWindow(lastRecord.model),
-            ratio: calcContextUsageRatio(tokens, lastRecord.model),
+            model: contextLastRecord.model,
+            maxWindow: findContextWindow(contextLastRecord.model),
+            ratio: calcContextUsageRatio(tokens, contextLastRecord.model),
+            cwd: contextLastRecord.cwd,
+            repoName: path.basename(contextLastRecord.cwd),
           };
         })()
       : null;
