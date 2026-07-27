@@ -544,12 +544,16 @@ function buildSidebarHtml(
 /**
  * 사이드바 세션 컨텍스트 점유율 미니 게이지(v0.1.49 ④) — 단일 숫자→사이드바 배치 원칙,
  * 기존 overage rate-bar 시각 문법 그대로 재사용. 데이터 없으면(세션 기록 자체가 없음) 섹션 생략.
+ * repo 칩(v0.1.50 A) — sessionContext가 워크스페이스 스코핑(B)된 값이므로, 게이트 바만으론
+ * "어느 워크스페이스 기준인지" 알 수 없어 헤더 행과 별도 줄로 basename(cwd)을 표기한다
+ * (헤더 행은 라벨+%+≈배지로 이미 폭이 빡빡함 — v0.1.46 칩 줄바꿈 버그 이력).
  */
 function buildContextGaugeHtml(usage: UsageSummary | null): string {
   const ctx = usage?.sessionContext;
   if (!ctx) return '';
   const color = ctx.ratio >= 0.90 ? 'var(--c-danger)' : ctx.ratio >= 0.80 ? 'var(--c-warn)' : 'var(--c-sonnet)';
   const dataStatus = ctx.ratio >= 0.90 ? 'danger' : ctx.ratio >= 0.80 ? 'allowed_warning' : 'allowed';
+  const repoTitle = `${t('context_repo_label')}: ${ctx.cwd}`;
   return `<div class="sb-context-wrap">
     <div class="sb-section-hdr">
       <span class="sb-section-dot" style="background:${color};"></span>
@@ -563,6 +567,9 @@ function buildContextGaugeHtml(usage: UsageSummary | null): string {
       <div class="rate-bar">
         <div class="rate-bar-fill" id="sb-ctx-bar" data-status="${dataStatus}"></div>
       </div>
+    </div>
+    <div class="sb-chip-row">
+      <span class="sb-chip sb-chip--branch" title="${escapeHtml(repoTitle)}">📁 ${escapeHtml(ctx.repoName)}</span>
     </div>
   </div>`;
 }

@@ -212,9 +212,11 @@ export interface AttributionScope {
 }
 
 /**
- * 세션 컨텍스트 점유율(근사치) — records(현재 이 머신의 ~/.claude/projects 전체, 워크스페이스 미필터링 —
- * WorkspaceMapper.cwdMatchesWorkspace()는 존재하나 어디서도 호출되지 않아 activeBranch 등 다른 필드와
- * 동일하게 cross-project 스코프다) 중 timestamp 최댓값 레코드 1건 기준.
+ * 세션 컨텍스트 점유율(근사치) — aggregate()에 workspaceRoot가 주어지면 records 중 cwd가
+ * 그 워크스페이스(또는 하위 디렉토리)인 것만 후보로 스코핑한다(v0.1.50, WorkspaceMapper.
+ * cwdMatchesWorkspace와 동일 로직을 src/utils/workspaceMatch.ts로 공유). workspaceRoot
+ * 미지정 시(예: VS Code 워크스페이스 미오픈) 기존처럼 cross-project 전체에서 선택한다.
+ * 스코핑된 후보 중 timestamp 최댓값 레코드 1건 기준.
  * jsonl 각 assistant 레코드의 input+cache_read+cache_creation 합이 "그 턴 시점의 전체 컨텍스트 크기"이므로
  * 세션 전체를 누적합하면 안 되고, 마지막 레코드 1건만 봐야 "현재 점유율"이 된다.
  * 1M 베타 윈도 활성 여부는 jsonl에 기록되지 않아 보수적 기본값을 쓴다 — 웹뷰에서 "≈"로 고지.
@@ -224,6 +226,8 @@ export interface SessionContextUsage {
   model: string;
   maxWindow: number; // 모델 최대 컨텍스트 윈도(토큰)
   ratio: number;     // 0.0 ~ 1.0
+  cwd: string;       // 마지막 레코드의 작업 디렉토리 전체 경로
+  repoName: string;  // path.basename(cwd) — repo 루트가 아닌 하위 디렉토리에서 기동됐으면 실제 repo명이 아닐 수 있음(cwd로 판별)
 }
 
 /** 브랜치별 사용량 집계. */

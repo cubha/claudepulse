@@ -14,12 +14,19 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.47
+## What's New in v0.1.48
+
+- **Fixed: the session context gauge showed the wrong repo in multi-repo setups.** It used to pick the most recently active session across *all* your projects — so if you had another repo open elsewhere, its context usage could show up in a repo you weren't even working in. It now scopes to the current workspace's first folder, and hides itself entirely if that workspace has no session yet, instead of silently falling back to a different repo's numbers. (In a multi-root workspace it always scopes to the first folder, not whichever one you're focused on — most multi-repo setups use one VS Code window per repo, which this fully covers.)
+- **New: a small repo chip under the context gauge** (`📁 <folder name>`) makes it explicit which workspace the percentage belongs to, with the full path on hover — since a session started from a subdirectory shows that subdirectory's name, not necessarily the repo root.
+
+<details><summary>v0.1.47</summary>
 
 - **New: Session context gauge.** A compact bar in the sidebar showing how full your latest session's context window is — computed from the most recent turn's input + cache tokens against that model's window. Approximate by nature (auto-compact isn't recorded in the logs), so it's labeled `≈` rather than presented as exact.
 - **New: MCP server attribution.** Cost attribution now breaks down MCP usage per server (`mcp__<server>__*`), ranked by call count. Share is deliberately call-count based, not cost based: a single assistant turn can mix MCP and non-MCP tools, so splitting *cost* per server would be false precision.
 - **New: 24h / 7d / All toggle on cost attribution.** The skill, subagent, and MCP breakdowns now scope to the last 24 hours or 7 days instead of only all-time — see what's driving spend *right now*, not just cumulatively.
 - **Fixed: Burn Rate and Safe Until got stuck on "Collecting data…" whenever you paused.** If your usage didn't move between two polls, the measured rate was `0` — which the cards misread as "no data yet" and could stay that way indefinitely. Idle is now a distinct state (`0.00%/min · idle`), separate from genuinely still collecting and from a 5h window reset. The rate is also averaged over the last 30 minutes rather than just the two most recent polls, so it no longer jumps on a single noisy sample.
+
+</details>
 
 <details><summary>v0.1.46</summary>
 
@@ -102,7 +109,7 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Long-term trend chart** (dashboard): Daily cost line chart with 30d / 90d / 180d scope toggle — see spending patterns across months
 - **Monthly cost bar chart** (dashboard): Month-by-month cost aggregation — spot your most expensive periods
 - **This-month chip** (sidebar): `◑ This month $X.XX / ≈$Y.YY` — current month spend + projected end-of-month cost (linear extrapolation)
-- **Session context gauge** (sidebar): How full your latest session's context window is — the most recent turn's input + cache-read + cache-creation tokens against that model's window. Approximate (`≈`) because auto-compact isn't recorded in the logs; hidden entirely until there's a session to measure
+- **Session context gauge** (sidebar): How full your latest session's context window is — the most recent turn's input + cache-read + cache-creation tokens against that model's window. Approximate (`≈`) because auto-compact isn't recorded in the logs; hidden entirely until there's a session to measure. Scoped to the current workspace's first folder — a repo chip (`📁 <folder name>`, full path on hover) makes the source explicit, and the gauge simply hides itself if that workspace has no session yet, instead of falling back to a different repo
 
 ### Git Branch ROI (local `.jsonl`)
 - **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency
