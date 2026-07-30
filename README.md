@@ -14,10 +14,17 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.48
+## What's New in v0.1.49
+
+- **Fixed: the session context gauge never appeared at all on native Windows.** v0.1.48's workspace scoping compared paths case-sensitively, but VS Code lowercases Windows drive letters (`c:\...`) while Claude Code logs them as typed (`C:\...`) — so the match always failed and the gauge silently hid itself, on every native Windows install. Case is now folded only for Windows drive paths; POSIX paths are unaffected.
+- **Fixed: no way to tell that apart from a genuine "no session yet" state.** The gauge now says "No session record for this workspace" when your machine has session history elsewhere but none for the current one, instead of hiding identically to the bug above.
+
+<details><summary>v0.1.48</summary>
 
 - **Fixed: the session context gauge showed the wrong repo in multi-repo setups.** It used to pick the most recently active session across *all* your projects — so if you had another repo open elsewhere, its context usage could show up in a repo you weren't even working in. It now scopes to the current workspace's first folder, and hides itself entirely if that workspace has no session yet, instead of silently falling back to a different repo's numbers. (In a multi-root workspace it always scopes to the first folder, not whichever one you're focused on — most multi-repo setups use one VS Code window per repo, which this fully covers.)
 - **New: a small repo chip under the context gauge** (`📁 <folder name>`) makes it explicit which workspace the percentage belongs to, with the full path on hover — since a session started from a subdirectory shows that subdirectory's name, not necessarily the repo root.
+
+</details>
 
 <details><summary>v0.1.47</summary>
 
@@ -109,7 +116,7 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Long-term trend chart** (dashboard): Daily cost line chart with 30d / 90d / 180d scope toggle — see spending patterns across months
 - **Monthly cost bar chart** (dashboard): Month-by-month cost aggregation — spot your most expensive periods
 - **This-month chip** (sidebar): `◑ This month $X.XX / ≈$Y.YY` — current month spend + projected end-of-month cost (linear extrapolation)
-- **Session context gauge** (sidebar): How full your latest session's context window is — the most recent turn's input + cache-read + cache-creation tokens against that model's window. Approximate (`≈`) because auto-compact isn't recorded in the logs; hidden entirely until there's a session to measure. Scoped to the current workspace's first folder — a repo chip (`📁 <folder name>`, full path on hover) makes the source explicit, and the gauge simply hides itself if that workspace has no session yet, instead of falling back to a different repo
+- **Session context gauge** (sidebar): How full your latest session's context window is — the most recent turn's input + cache-read + cache-creation tokens against that model's window. Approximate (`≈`) because auto-compact isn't recorded in the logs; hidden entirely until there's any session history at all. Scoped to the current workspace's first folder — a repo chip (`📁 <folder name>`, full path on hover) makes the source explicit, and if this workspace specifically has no matching session it says so explicitly instead of falling back to a different repo's numbers
 
 ### Git Branch ROI (local `.jsonl`)
 - **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency

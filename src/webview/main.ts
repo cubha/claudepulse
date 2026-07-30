@@ -550,7 +550,18 @@ function buildSidebarHtml(
  */
 function buildContextGaugeHtml(usage: UsageSummary | null): string {
   const ctx = usage?.sessionContext;
-  if (!ctx) return '';
+  if (!ctx) {
+    // "워크스페이스 매칭 0건"과 "세션 기록 자체가 없음"을 구분한다(v0.1.49). v0.1.48은 두 경우를
+    // 모두 무음 삭제해, Windows 경로 대소문자 회귀로 게이지가 사라졌을 때 사용자가 정상 상태와
+    // 버그를 구분할 방법이 아예 없었다. 기록이 하나라도 있는데 매칭이 0이면 그 사실을 표시한다.
+    if ((usage?.recentSessions?.length ?? 0) === 0) return '';
+    return `<div class="sb-context-wrap">
+      <div class="sb-section-hdr">
+        <span class="sb-section-label" title="${t('context_no_session_tooltip')}" style="cursor:help;">${t('context_usage')}</span>
+      </div>
+      <div class="sb-context-empty" title="${t('context_no_session_tooltip')}">${t('context_no_session')}</div>
+    </div>`;
+  }
   const color = ctx.ratio >= 0.90 ? 'var(--c-danger)' : ctx.ratio >= 0.80 ? 'var(--c-warn)' : 'var(--c-sonnet)';
   const dataStatus = ctx.ratio >= 0.90 ? 'danger' : ctx.ratio >= 0.80 ? 'allowed_warning' : 'allowed';
   const repoTitle = `${t('context_repo_label')}: ${ctx.cwd}`;
