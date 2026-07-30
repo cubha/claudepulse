@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.49] - 2026-07-30
+
+### Fixed
+- **The session context gauge never appeared at all on native Windows.** v0.1.48's workspace scoping compared `cwd` (from `.jsonl`, written as-is from `process.cwd()` — e.g. `C:\_project\...`) against VS Code's `workspaceFolders[0].uri.fsPath`, which lowercases the drive letter (`c:\_project\...`) per `vscode-uri`'s `uriToFsPath`. The match was case-sensitive, so on Windows it always found zero candidates and the gauge silently hid itself — a 100% reproduction on native Windows, unrelated to CLI version or the JS vs. native binary.
+  - **Fix**: path comparison now folds case only when *both* sides look like a Windows drive path (`X:\...`); POSIX paths keep case-sensitive matching untouched. `WorkspaceMapper`'s workspace↔project matching shares the same fix since it uses the same utility.
+- **No way to tell a real "no session" state apart from this bug.** The gauge hid itself unconditionally on zero match, so a genuine "no session for this workspace yet" looked identical to the Windows bug above — which is why the regression went unnoticed through release. It now shows "No session record for this workspace" whenever the machine has session history but none of it matches the current workspace, and only hides itself when there's no session history at all.
+
 ## [0.1.48] - 2026-07-27
 
 ### Fixed
