@@ -83,8 +83,16 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
   return { skillBreakdown, skillUnattributed, subagentStats, mcpServerBreakdown };
 }
 
+/**
+ * 레코드의 실제 컨텍스트 창 점유량(S2) — contextTokens(JsonlParser가 iterations 기준으로 계산)를
+ * 우선하고, 없으면(손으로 만든 레거시 테스트 픽스처 등) 기존 usage 합계로 폴백한다.
+ */
+function resolveContextTokens(r: SessionRecord): number {
+  return r.contextTokens ?? (r.usage.input_tokens + r.usage.cache_read_input_tokens + r.usage.cache_creation_input_tokens);
+}
+
 export class UsageAggregator {
-  aggregate(records: SessionRecord[], workspaceRoot?: string): UsageSummary {
+  aggregate(records: SessionRecord[], workspaceRoot?: string, knownOneMillionModels?: Set<string>): UsageSummary {
     const now = new Date();
     const todayKey = toUtcDateKey(now);
 
@@ -269,24 +277,35 @@ export class UsageAggregator {
 
     // 세션 컨텍스트 점유율(근사치, #④) — 마지막 레코드 1건만(누적합 금지, 타당한 이유는 SessionContextUsage 문서 참조)
     // workspaceRoot 지정 시 그 하위 cwd 레코드만 후보로 스코핑(v0.1.50 B) — 미지정이면 기존처럼 전체(records)에서 선택.
-    const contextCandidates = workspaceRoot
+    // isSidechain 제외(S3, 2026-08-03) — 배경/자동 실행된 서브에이전트 세션이 사용자가 열지도 않은
+    // 워크스페이스의 게이지를 가로채는 것을 방지(project_context_gauge_overcount 메모리 RC3).
+    const contextCandidates = (workspaceRoot
       ? records.filter(r => cwdMatchesWorkspace(r.cwd, workspaceRoot))
-      : records;
+      : records
+    ).filter(r => !r.isSidechain);
     const contextLastRecord = contextCandidates.length > 0
       ? contextCandidates.reduce((a, b) => a.timestamp > b.timestamp ? a : b)
       : null;
     const sessionContext: SessionContextUsage | null = contextLastRecord
       ? (() => {
-          const tokens = contextLastRecord.usage.input_tokens
-            + contextLastRecord.usage.cache_read_input_tokens
-            + contextLastRecord.usage.cache_creation_input_tokens;
+          const model = contextLastRecord.model;
+          const tokens = resolveContextTokens(contextLastRecord);
+          // 분모 3단 계단(S1) — ①관측증명: records 전체(워크스페이스 스코프 무관, isSidechain 무관 —
+          // 이 모델이 어디서든 200K를 넘긴 적 있다는 사실 자체가 1M 활성의 물리적 증거)에서
+          // 같은 모델의 관측 최대 컨텍스트가 200K를 초과하면 1M 확정.
+          // ②~/.claude.json의 [1m] 흔적(호출부가 미리 읽어 전달) ③둘 다 없으면 기존 200K 테이블.
+          const observedMax = records
+            .filter(r => r.model === model)
+            .reduce((max, r) => Math.max(max, resolveContextTokens(r)), 0);
+          const forceOneMillion = observedMax > 200_000 || (knownOneMillionModels?.has(model) ?? false);
           return {
             tokens,
-            model: contextLastRecord.model,
-            maxWindow: findContextWindow(contextLastRecord.model),
-            ratio: calcContextUsageRatio(tokens, contextLastRecord.model),
+            model,
+            maxWindow: findContextWindow(model, forceOneMillion),
+            ratio: calcContextUsageRatio(tokens, model, forceOneMillion),
             cwd: contextLastRecord.cwd,
             repoName: path.basename(contextLastRecord.cwd),
+            timestamp: contextLastRecord.timestamp,
           };
         })()
       : null;

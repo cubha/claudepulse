@@ -1145,6 +1145,16 @@ body[data-mode="sidebar"] #root { height: 100%; }
   color: var(--vscode-descriptionForeground);
   cursor: help;
 }
+/* 토큰 절대값 병기(S1, 2026-08-03) — % 옆 (≈72K/1M) */
+.sb-context-tokens {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  margin-left: 2px;
+}
+/* 경과 4시간 초과 시 dim(S3) — 오래된/배경 세션 값임을 시각적으로 고지 */
+.sb-context-stale {
+  opacity: 0.55;
+}
 .sb-overage-card {
   padding: var(--sp-2) var(--sp-4) var(--sp-3);
   background: transparent;

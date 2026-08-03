@@ -57,3 +57,35 @@ describe('findContextWindow — 상속 프로퍼티명 방어', () => {
     expect(r).toBeCloseTo(0.5, 5);
   });
 });
+
+describe('findContextWindow — forceOneMillion 3단 폴백 계단 (S1, 2026-08-03)', () => {
+  it('forceOneMillion=true면 테이블 값과 무관하게 1M 반환 — 테이블 명시등재(200K)도 override', () => {
+    expect(findContextWindow('claude-opus-4-8', true)).toBe(1_000_000);
+  });
+
+  it('forceOneMillion=true면 테이블 미등재 모델도 1M 반환', () => {
+    expect(findContextWindow('claude-opus-5', true)).toBe(1_000_000);
+    expect(findContextWindow('claude-sonnet-5', true)).toBe(1_000_000);
+  });
+
+  it('forceOneMillion 미지정(기존 호출부) 시 기존 동작 완전 보존', () => {
+    expect(findContextWindow('claude-opus-4-8')).toBe(200_000);
+  });
+
+  it('forceOneMillion=false는 기존 동작과 동일', () => {
+    expect(findContextWindow('claude-opus-4-8', false)).toBe(200_000);
+  });
+});
+
+describe('calcContextUsageRatio — forceOneMillion 전파', () => {
+  it('forceOneMillion=true 시 1M 분모로 계산 — 200K 폴백이면 100% 클램프였을 값이 정상 비율로', () => {
+    // 실측 사례: daily-news-dispatch 72,492 토큰. 200K 분모=36.2%(오탐), 1M 분모=7.2%(실제)
+    expect(calcContextUsageRatio(72_492, 'claude-sonnet-5', true)).toBeCloseTo(0.072492, 5);
+  });
+
+  it('forceOneMillion=true 시 200K 초과 레코드도 클램프 없이 정상 비율 — dev-note 303,186토큰 사례', () => {
+    const r = calcContextUsageRatio(303_186, 'claude-sonnet-5', true);
+    expect(r).toBeCloseTo(0.303186, 5);
+    expect(r).toBeLessThan(1); // 기존 버그: 200K 분모면 1.0(100%)로 클램프됨
+  });
+});

@@ -168,6 +168,20 @@ export class JsonlParser {
           }
         }
 
+        // 컨텍스트 창 점유량(S2) — iterations 있으면 advisor_message 제외 마지막 message
+        // iteration 기준(top-level usage는 여러 API 호출의 합산이라 컨텍스트 크기로 부적합).
+        // iterations 없거나 전부 advisor_message뿐이면 top-level usage 합계로 폴백.
+        const rawIterations = usage['iterations'];
+        const messageIterations = Array.isArray(rawIterations)
+          ? (rawIterations as Array<Record<string, unknown>>).filter(it => it['type'] !== 'advisor_message')
+          : [];
+        const lastMessageIter = messageIterations.length > 0 ? messageIterations[messageIterations.length - 1] : undefined;
+        const contextTokens = lastMessageIter
+          ? Number(lastMessageIter['input_tokens'] ?? 0)
+            + Number(lastMessageIter['cache_read_input_tokens'] ?? 0)
+            + Number(lastMessageIter['cache_creation_input_tokens'] ?? 0)
+          : journalUsage.input_tokens + journalUsage.cache_read_input_tokens + journalUsage.cache_creation_input_tokens;
+
         const model = String(msg['model'] ?? 'unknown');
         const record: SessionRecord = {
           messageId,
@@ -185,6 +199,7 @@ export class JsonlParser {
           isSidechain: entry['isSidechain'] === true,
           agentId: entry['agentId'] !== undefined ? String(entry['agentId']) : undefined,
           mcpServerCounts: Object.keys(mcpServerCounts).length > 0 ? mcpServerCounts : undefined,
+          contextTokens,
         };
 
         // 같은 requestId → 마지막 엔트리로 교체 (스트리밍 중복 처리)

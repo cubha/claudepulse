@@ -125,6 +125,7 @@ const dict: Record<string, Record<Lang, string>> = {
                       en: 'Context usage counts only sessions started in the current workspace. Sessions run from another folder are not shown here.',
                       ja: 'コンテキスト使用率は現在のワークスペースで実行されたセッションのみを集計します。他のフォルダで実行した場合はここに表示されません。',
                       zh: '上下文使用率仅统计在当前工作区中运行的会话。若在其他文件夹运行则不会显示。' },
+  context_age_label: { ko: '측정 시각', en: 'Measured', ja: '測定時刻', zh: '测量时间' },
   // 장기 트렌드
   this_month:       { ko: '이번달',              en: 'This Month',            ja: '今月',                    zh: '本月' },
   projected:        { ko: '예상',               en: 'Projected',             ja: '予測',                    zh: '预测' },

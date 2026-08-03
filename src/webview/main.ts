@@ -244,6 +244,20 @@ function fmtTokens(n: number): string {
   return String(n);
 }
 
+/** 경과시간(측정 시각 → 지금) — fmtReset과 동일 포맷이나 "지남" 의미라 별도 함수(S3). */
+function fmtAge(ms: number): string {
+  const totalMin = Math.floor(Math.max(0, ms) / 60000);
+  const days = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
+}
+
+/** 경과 4시간 초과 시 stale 표시(S3) — 배경 폴링 간격(15s)보다 훨씬 커, 진짜 오래된 값만 dim. */
+const CONTEXT_STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+
 
 // 모델 문자열 분류 단일 소스 (이름·액센트·색상 3개 함수가 공유)
 type ModelKind = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other';
@@ -565,12 +579,19 @@ function buildContextGaugeHtml(usage: UsageSummary | null): string {
   const color = ctx.ratio >= 0.90 ? 'var(--c-danger)' : ctx.ratio >= 0.80 ? 'var(--c-warn)' : 'var(--c-sonnet)';
   const dataStatus = ctx.ratio >= 0.90 ? 'danger' : ctx.ratio >= 0.80 ? 'allowed_warning' : 'allowed';
   const repoTitle = `${t('context_repo_label')}: ${ctx.cwd}`;
-  return `<div class="sb-context-wrap">
+  // 경과시간(S3) — 배경/자동 세션이 오래전 값을 게이지에 남겨도 사용자가 판별 가능하게.
+  const ageMs = Date.now() - new Date(ctx.timestamp).getTime();
+  const isStale = ageMs > CONTEXT_STALE_THRESHOLD_MS;
+  const ageTitle = `${t('context_age_label')}: ${fmtAge(ageMs)}`;
+  // 토큰 절대값 병기(S1) — 분모가 200K 폴백 구간이어도 사용자가 실제 규모를 직접 판별 가능.
+  const tokensLabel = `(${fmtTokens(ctx.tokens)}/${fmtTokens(ctx.maxWindow)})`;
+  return `<div class="sb-context-wrap${isStale ? ' sb-context-stale' : ''}">
     <div class="sb-section-hdr">
       <span class="sb-section-dot" style="background:${color};"></span>
       <span class="sb-section-label" title="${t('context_gauge_tooltip')}" style="cursor:help;">${t('context_usage')}</span>
       <span class="sb-section-right">
         <span class="mono" style="color:${color};">${fmtPct(ctx.ratio)}</span>
+        <span class="sb-context-tokens mono" title="${t('context_gauge_tooltip')}">${tokensLabel}</span>
         <span class="retro-approx-badge" title="${t('context_gauge_tooltip')}">${t('retro_approx_badge')}</span>
       </span>
     </div>
@@ -581,6 +602,7 @@ function buildContextGaugeHtml(usage: UsageSummary | null): string {
     </div>
     <div class="sb-chip-row">
       <span class="sb-chip sb-chip--branch" title="${escapeHtml(repoTitle)}">📁 ${escapeHtml(ctx.repoName)}</span>
+      <span class="sb-chip" title="${escapeHtml(ageTitle)}">🕐 ${fmtAge(ageMs)}</span>
     </div>
   </div>`;
 }
