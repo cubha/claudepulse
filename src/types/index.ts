@@ -106,6 +106,15 @@ export interface SessionRecord {
   isSidechain: boolean;       // jsonl entry.isSidechain (서브에이전트 소비 여부)
   agentId?: string;           // jsonl entry.agentId (서브에이전트 식별자)
   mcpServerCounts?: Record<string, number>;  // mcp__<server>__<tool> 서버별 호출수 (MCP 호출 없으면 미정의)
+  /**
+   * 이 레코드 시점의 실제 컨텍스트 창 점유량(S2, 2026-08-03) — 과금용 usage 합계와 다르다.
+   * top-level usage는 한 assistant 턴 안 여러 API 호출(iterations)의 **합산값**이라, 컨텍스트
+   * 크기로 쓰면 최대 2× 과대계산된다(reference_jsonl_new_fields_2026h1 실측). iterations가 있으면
+   * advisor_message를 제외한 마지막 message iteration의 input+cache_read+cache_creation 합.
+   * 옵셔널: JsonlParser가 파싱한 실 레코드는 항상 채워지고, 손으로 만든 테스트 픽스처는 생략 시
+   * usage 합계로 폴백(UsageAggregator 소비부)한다 — 기존 테스트 파일 대량 수정 회피.
+   */
+  contextTokens?: number;
 }
 
 /** 하루 집계 (UTC 날짜 기준). */
@@ -216,18 +225,23 @@ export interface AttributionScope {
  * 그 워크스페이스(또는 하위 디렉토리)인 것만 후보로 스코핑한다(v0.1.50, WorkspaceMapper.
  * cwdMatchesWorkspace와 동일 로직을 src/utils/workspaceMatch.ts로 공유). workspaceRoot
  * 미지정 시(예: VS Code 워크스페이스 미오픈) 기존처럼 cross-project 전체에서 선택한다.
- * 스코핑된 후보 중 timestamp 최댓값 레코드 1건 기준.
- * jsonl 각 assistant 레코드의 input+cache_read+cache_creation 합이 "그 턴 시점의 전체 컨텍스트 크기"이므로
- * 세션 전체를 누적합하면 안 되고, 마지막 레코드 1건만 봐야 "현재 점유율"이 된다.
- * 1M 베타 윈도 활성 여부는 jsonl에 기록되지 않아 보수적 기본값을 쓴다 — 웹뷰에서 "≈"로 고지.
+ * 스코핑된 후보 중 timestamp 최댓값 레코드(isSidechain=false만, S3) 1건 기준.
+ * 토큰값은 레코드의 contextTokens(S2) — iterations 있으면 마지막 message iteration 기준, top-level
+ * usage 합계가 아니다(합산값이라 최대 2× 과대). 세션 전체를 누적합하면 안 되고, 마지막 레코드
+ * 1건만 봐야 "현재 점유율"이 된다.
+ * 1M 베타 윈도 활성 여부는 jsonl에 기록되지 않지만(S1, 2026-08-03) UsageAggregator가 ①records
+ * 전체에서 해당 모델의 관측 최대 컨텍스트가 200K 초과인지(물리적 증명) ②`~/.claude.json`의
+ * `[1m]` 흔적을 조합해 판정한다(project_context_gauge_overcount 메모리) — 둘 다 없을 때만 200K
+ * 테이블로 폴백. 그래도 근사인 이유(auto-compact 등)는 웹뷰에서 "≈"로 고지.
  */
 export interface SessionContextUsage {
-  tokens: number;   // 마지막 레코드의 input+cache_read+cache_creation 합
+  tokens: number;   // 마지막 레코드의 contextTokens(iterations 있으면 마지막 message 기준, 없으면 usage 합)
   model: string;
-  maxWindow: number; // 모델 최대 컨텍스트 윈도(토큰)
+  maxWindow: number; // 모델 최대 컨텍스트 윈도(토큰) — S1 3단 계단(관측증명→claude.json→테이블) 적용됨
   ratio: number;     // 0.0 ~ 1.0
   cwd: string;       // 마지막 레코드의 작업 디렉토리 전체 경로
   repoName: string;  // path.basename(cwd) — repo 루트가 아닌 하위 디렉토리에서 기동됐으면 실제 repo명이 아닐 수 있음(cwd로 판별)
+  timestamp: string; // 이 값이 측정된 레코드의 timestamp(ISO8601, S3) — webview 경과시간 라벨용
 }
 
 /** 브랜치별 사용량 집계. */

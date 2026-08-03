@@ -27,6 +27,7 @@ import { RetroStore } from './services/RetroStore';
 import { PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
 import { resolveCredentialsPath } from './utils/credentialsPath';
+import { readOneMillionModelsFromClaudeJson } from './utils/claudeJsonModels';
 import type { CommitMeta, PollHistoryPoint, PollerError, RateLimitSnapshot, RetroSummary, SessionRecord, UsageSummary } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -143,7 +144,10 @@ export function activate(context: vscode.ExtensionContext): void {
     // 실사용 패턴은 repo별 별도 VS Code 창(각각 single-root)이라 이걸로 충분히 해결된다.
     // 멀티루트 워크스페이스에서 두 번째 이상 폴더 작업 중인 경우는 알려진 한계로 남긴다.
     const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    lastUsageSummary = aggregator.aggregate(allRecords, workspaceRoot);
+    // 컨텍스트 게이지 분모 3단 계단(S1②) — ~/.claude.json의 [1m] 흔적. 읽기 실패 시
+    // 빈 Set(안전 폴백, project_context_gauge_overcount 메모리) — ①관측증명·③테이블로 계속 판단 가능.
+    const knownOneMillionModels = await readOneMillionModelsFromClaudeJson();
+    lastUsageSummary = aggregator.aggregate(allRecords, workspaceRoot, knownOneMillionModels);
     // jsonl이 보유한 전체 범위(회전 천장 ~30일)를 CacheStore에 영구 저장 — last7Days만
     // merge하면 7일보다 오래된 날짜가 영구 보존되지 않아 히트맵이 얕아진다(v0.1.43).
     await cacheStore.merge(lastUsageSummary.historicalDays);

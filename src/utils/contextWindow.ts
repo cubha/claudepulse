@@ -23,8 +23,16 @@ const CONTEXT_WINDOWS: Record<string, number> = {
 
 export const DEFAULT_CONTEXT_WINDOW = 200_000;
 
-/** 모델명 → 최대 컨텍스트 윈도. 미지의 모델은 보수적 기본값(200K)으로 폴백. */
-export function findContextWindow(model: string): number {
+/**
+ * 모델명 → 최대 컨텍스트 윈도. 미지의 모델은 보수적 기본값(200K)으로 폴백.
+ *
+ * `forceOneMillion`(S1, 2026-08-03): 테이블이 정적이라 계정별 1M 베타 활성 여부를 반영 못 해
+ * 200K로 나누는 과대표시(최대 5×)가 발생했다(project_context_gauge_overcount 메모리 참조).
+ * 호출부(UsageAggregator)가 실측 증거로 계산해 넘기며, 넘기면 테이블 값(명시 등재 포함)을
+ * override 한다. 미지정 시 기존 동작 완전 보존 — 하위호환.
+ */
+export function findContextWindow(model: string, forceOneMillion = false): number {
+  if (forceOneMillion) return 1_000_000;
   // hasOwnProperty 가드 — model이 'constructor' 등 상속 프로퍼티명이면 직접 인덱싱이
   // 상속 함수를 반환해 number 계약이 깨지고 하류 나눗셈이 NaN이 된다.
   if (Object.prototype.hasOwnProperty.call(CONTEXT_WINDOWS, model)) return CONTEXT_WINDOWS[model];
@@ -46,8 +54,8 @@ export function findContextWindow(model: string): number {
 }
 
 /** contextTokens(현재 턴 시점 컨텍스트 점유량) / 모델 최대 윈도, 0.0~1.0로 클램프. */
-export function calcContextUsageRatio(contextTokens: number, model: string): number {
-  const maxWindow = findContextWindow(model);
+export function calcContextUsageRatio(contextTokens: number, model: string, forceOneMillion = false): number {
+  const maxWindow = findContextWindow(model, forceOneMillion);
   if (maxWindow <= 0) return 0;
   return Math.min(1, Math.max(0, contextTokens / maxWindow));
 }
