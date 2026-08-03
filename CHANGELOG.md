@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.50] - 2026-08-03
+
+### Fixed
+- **The session context gauge could over-report usage by up to 5×.** `CONTEXT_WINDOWS` statically classified every current model as a 200K-token window, even for accounts with the 1M beta window active, and `Math.min(1, …)` clamped the ratio to 100% — hiding just how far off the true value was (one workspace's real occupancy was 292%, displayed as a flat 100%).
+  - **Fix**: `findContextWindow`/`calcContextUsageRatio` take a `forceOneMillion` flag. `UsageAggregator` decides it via a two-signal ladder: (1) if any record for that model anywhere in history exceeds 200K tokens, a 200K window couldn't have produced it, so 1M is physically proven; (2) failing that, if `~/.claude.json`'s `projects.*.lastModelUsage` has a `[1m]`-suffixed key for that model (new `src/utils/claudeJsonModels.ts`). Falls back to the static 200K table only when neither signal is present.
+- **The gauge's token count could nearly double on multi-call turns.** The top-level `usage` field in a `.jsonl` record sums every API call (`iterations`) within one assistant turn, not just the one reflecting current context occupancy. `JsonlParser` now derives `contextTokens` from the last non-`advisor_message` iteration, falling back to the summed field when `iterations` is absent (legacy logs).
+- **Background/subagent sessions could hijack the gauge.** `UsageAggregator` now excludes `isSidechain` records when selecting the "most recent session" candidate.
+
+### Added
+- **Absolute token counts next to the gauge percentage** (`≈72K/1M`) and an age chip — the gauge dims after 4 hours of inactivity so a stale reading isn't mistaken for a live one.
+
 ## [0.1.49] - 2026-07-30
 
 ### Fixed

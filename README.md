@@ -14,10 +14,19 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.49
+## What's New in v0.1.50
+
+- **Fixed: the session context gauge could over-report usage by up to 5×.** The lookup table backing the gauge's denominator classified every current model as a 200K-token context window, even for accounts with the 1M window active — and the 100% cap hid just how far off that was (one workspace was actually at 292%, not 100%). The gauge now recognizes a 1M window two ways: if any request in your history ever exceeded 200K tokens for that model (which a 200K window couldn't physically produce), or if Claude Code itself recorded a `[1m]` marker for that model in `~/.claude.json`. Falls back to the old 200K assumption only when neither signal is available.
+- **Fixed (minor): the gauge's token count could nearly double on multi-call turns.** It summed every API call within a turn instead of using only the final one, which is what actually reflects the context window's current occupancy.
+- **Fixed (minor): background/subagent sessions could no longer hijack the gauge.** Sessions running in the background are now excluded when picking "your most recent session."
+- **Added: absolute token counts next to the percentage** (`≈72K/1M`), plus an age indicator — the gauge dims after 4 hours of inactivity so a stale reading doesn't look like a live one.
+
+<details><summary>v0.1.49</summary>
 
 - **Fixed: the session context gauge never appeared at all on native Windows.** v0.1.48's workspace scoping compared paths case-sensitively, but VS Code lowercases Windows drive letters (`c:\...`) while Claude Code logs them as typed (`C:\...`) — so the match always failed and the gauge silently hid itself, on every native Windows install. Case is now folded only for Windows drive paths; POSIX paths are unaffected.
 - **Fixed: no way to tell that apart from a genuine "no session yet" state.** The gauge now says "No session record for this workspace" when your machine has session history elsewhere but none for the current one, instead of hiding identically to the bug above.
+
+</details>
 
 <details><summary>v0.1.48</summary>
 
