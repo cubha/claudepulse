@@ -101,3 +101,107 @@ describe('UsageAggregator — sessionContext 워크스페이스 스코핑 (B, v0
     expect(r.sessionContext).toBeNull();
   });
 });
+
+describe('UsageAggregator — sessionContext 분모 3단 계단 (S1, 2026-08-03)', () => {
+  it('①관측증명: 같은 모델의 records 중 하나라도 200K 초과 contextTokens가 있으면 1M 윈도로 확정', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      // 다른 세션(더 과거)에서 같은 모델이 200K를 넘겼다는 관측 증거
+      rec({
+        costUsd: 1.0, model: 'claude-sonnet-5', timestamp: '2026-08-01T00:00:00.000Z',
+        contextTokens: 756_610,
+      }),
+      // 최신 레코드(실제 게이지에 표시될 값) — 자체는 200K 미만
+      rec({
+        costUsd: 1.0, model: 'claude-sonnet-5', timestamp: '2026-08-03T00:00:00.000Z',
+        contextTokens: 72_492,
+      }),
+    ]);
+    expect(r.sessionContext!.maxWindow).toBe(1_000_000);
+    expect(r.sessionContext!.tokens).toBe(72_492);
+    expect(r.sessionContext!.ratio).toBeCloseTo(0.072492, 5);
+  });
+
+  it('②claude.json 증거: knownOneMillionModels에 해당 모델이 있으면 관측 증거 없이도 1M 확정', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate(
+      [rec({ costUsd: 1.0, model: 'claude-opus-5', contextTokens: 111_909 })],
+      undefined,
+      new Set(['claude-opus-5']),
+    );
+    expect(r.sessionContext!.maxWindow).toBe(1_000_000);
+    expect(r.sessionContext!.ratio).toBeCloseTo(0.111909, 5);
+  });
+
+  it('③폴백: 관측 증거도 claude.json 증거도 없으면 기존 테이블(200K) 그대로', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, model: 'claude-opus-4-8', contextTokens: 50_000 }),
+    ]);
+    expect(r.sessionContext!.maxWindow).toBe(200_000);
+  });
+
+  it('200K 초과 워크스페이스는 더 이상 100% 클램프에 고정되지 않는다 — dev-note 303,186토큰 사례', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, model: 'claude-sonnet-5', contextTokens: 303_186 }),
+    ]);
+    // 자기 자신이 200K를 넘겼다는 사실 자체가 ①의 관측 증거
+    expect(r.sessionContext!.maxWindow).toBe(1_000_000);
+    expect(r.sessionContext!.ratio).toBeCloseTo(0.303186, 5);
+    expect(r.sessionContext!.ratio).toBeLessThan(1);
+  });
+});
+
+describe('UsageAggregator — sessionContext contextTokens 소비 (S2 배선, 2026-08-03)', () => {
+  it('레코드에 contextTokens가 있으면 그 값을 쓴다 — usage 합계가 아님', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({
+        costUsd: 1.0,
+        contextTokens: 35_310, // iterations 마지막 message 기준(정답)
+        usage: { input_tokens: 4, output_tokens: 846, cache_creation_input_tokens: 4_487, cache_creation_5m_input_tokens: 4_487, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 64_847 }, // top-level 합산(69,338) — 오답
+      }),
+    ]);
+    expect(r.sessionContext!.tokens).toBe(35_310);
+  });
+
+  it('contextTokens 미지정(레거시 픽스처)이면 기존처럼 usage 합계로 폴백', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({
+        costUsd: 1.0,
+        usage: { input_tokens: 30_000, output_tokens: 10, cache_creation_input_tokens: 5_000, cache_creation_5m_input_tokens: 5_000, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 20_000 },
+      }),
+    ]);
+    expect(r.sessionContext!.tokens).toBe(55_000);
+  });
+});
+
+describe('UsageAggregator — sessionContext 정직성 강화 (S3, 2026-08-03)', () => {
+  it('isSidechain=true 레코드는 후보에서 제외 — 배경 서브에이전트가 게이지를 가로채지 않는다', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, cwd: '/repo/a', timestamp: '2026-08-03T00:00:00.000Z', isSidechain: false, contextTokens: 10_000 }),
+      // 더 최신이지만 사이드체인(서브에이전트) — 무시돼야 함
+      rec({ costUsd: 1.0, cwd: '/repo/a', timestamp: '2026-08-03T01:00:00.000Z', isSidechain: true, contextTokens: 99_999 }),
+    ]);
+    expect(r.sessionContext!.tokens).toBe(10_000);
+  });
+
+  it('레코드 전부 isSidechain=true면 null(무매칭)', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, isSidechain: true }),
+    ]);
+    expect(r.sessionContext).toBeNull();
+  });
+
+  it('SessionContextUsage에 timestamp 필드가 포함된다(경과시간 UI용)', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, timestamp: '2026-08-03T00:00:00.000Z' }),
+    ]);
+    expect(r.sessionContext!.timestamp).toBe('2026-08-03T00:00:00.000Z');
+  });
+});
