@@ -3,7 +3,7 @@ import { findPricing } from '../utils/pricing';
 import { calcContextUsageRatio, findContextWindow } from '../utils/contextWindow';
 import { cwdMatchesWorkspace } from '../utils/workspaceMatch';
 import { emptyToolCounts } from './JsonlParser';
-import type { AttributionScope, BranchUsage, CacheStats, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
+import type { AttributionScope, BranchUsage, CacheStats, ContextSessionSummary, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -139,7 +139,9 @@ export class UsageAggregator {
       dt.bash += r.toolCounts.bash;
       dt.webSearch += r.toolCounts.webSearch;
 
-      // 세션 집계
+      // 세션 집계 — cwd는 최초 레코드 기준 고정(세션 시작 위치 표시용, recentSessions/대시보드
+      // "최근 세션" 테이블 소비). contextSessionMap(아래, 세션 선택기 전용)은 반대로 최신 레코드의
+      // cwd를 쓴다 — 목적이 다른 별개 계산이라 의도적으로 통일하지 않는다(scope-critic 검토 확인).
       if (!bySession.has(r.sessionId)) {
         bySession.set(r.sessionId, {
           sessionId: r.sessionId,
@@ -151,17 +153,19 @@ export class UsageAggregator {
           lastActivity: r.timestamp,
           model: r.model,
           contextTokens: resolveContextTokens(r),
+          branch: r.gitBranch,
         });
       }
       const s = bySession.get(r.sessionId)!;
       if (r.timestamp < s.startTime) s.startTime = r.timestamp;
-      // lastActivity/model/contextTokens는 세션 선택기(QuickPick)의 정렬·배지 기준 —
+      // lastActivity/model/contextTokens/branch는 세션 선택기(QuickPick)의 정렬·배지 기준 —
       // 입력 배열 순서 무관하게 timestamp 최대인 레코드 1건만 반영(누적 금지, sessionContext와 동일 원칙).
       // 동일 timestamp 타이브레이크는 브랜치 루프(byBranch.lastActive, 아래 `>`)와 동일하게 선입력 우선.
       if (r.timestamp > s.lastActivity) {
         s.lastActivity = r.timestamp;
         s.model = r.model;
         s.contextTokens = resolveContextTokens(r);
+        s.branch = r.gitBranch;
       }
       s.totalTokens += r.usage.input_tokens + r.usage.output_tokens
         + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
@@ -299,6 +303,68 @@ export class UsageAggregator {
       ? records.filter(r => workspaceRootList.some(root => cwdMatchesWorkspace(r.cwd, root)))
       : records
     ).filter(r => !r.isSidechain);
+
+    // 분모 3단 계단(S1) 공용 계산 — ①관측증명: records 전체(워크스페이스 스코프 무관, isSidechain
+    // 무관 — 이 모델이 어디서든 200K를 넘긴 적 있다는 사실 자체가 1M 활성의 물리적 증거)에서 어느
+    // 모델이든 200K를 초과한 레코드가 하나라도 있으면 그 모델은 1M 확정. ②~/.claude.json의 [1m]
+    // 흔적(knownOneMillionModels, 호출부가 미리 읽어 전달). sessionContext(선택된 세션 1건)와
+    // contextSessions(목록 전체, 아래) 양쪽이 동일 판정을 공유해 "목록에서 본 %와 선택 후 게이지 %가
+    // 다르다"는 불일치가 나지 않게 한다 — 세션마다 반복 스캔하지 않고 Set 1회 구성으로 상각.
+    const observedOneMillionModels = new Set<string>();
+    for (const r of records) {
+      if (resolveContextTokens(r) > 200_000) observedOneMillionModels.add(r.model);
+    }
+    const forceOneMillionModels = new Set<string>([
+      ...observedOneMillionModels,
+      ...(knownOneMillionModels ?? []),
+    ]);
+
+    // contextSessions(v0.1.51) — 세션 선택기(QuickPick) 후보 목록. contextCandidates를 세션별로
+    // 그룹핑 — bySession(cross-project, sidechain 포함, cwd=최초 레코드 고정)과는 별개 계산이다.
+    // recentSessions를 재사용/스코핑하지 않는 이유: recentSessions는 main.ts의 "워크스페이스
+    // 매칭 0건" vs "세션 기록 자체가 없음" 구분(v0.1.49)에 cross-project 그대로 쓰인다 — 여기서
+    // 스코핑하면 그 구분이 무너진다(SubTask1에서 scope-critic이 동일 이유로 지적한 회귀).
+    const contextSessionMap = new Map<string, SessionSummary>();
+    for (const r of contextCandidates) {
+      if (!contextSessionMap.has(r.sessionId)) {
+        contextSessionMap.set(r.sessionId, {
+          sessionId: r.sessionId,
+          startTime: r.timestamp,
+          cwd: r.cwd,
+          totalTokens: 0,
+          costUsd: 0,
+          messageCount: 0,
+          lastActivity: r.timestamp,
+          model: r.model,
+          contextTokens: resolveContextTokens(r),
+          branch: r.gitBranch,
+        });
+      }
+      const cs = contextSessionMap.get(r.sessionId)!;
+      if (r.timestamp < cs.startTime) cs.startTime = r.timestamp;
+      if (r.timestamp > cs.lastActivity) {
+        cs.lastActivity = r.timestamp;
+        cs.model = r.model;
+        cs.cwd = r.cwd;
+        cs.contextTokens = resolveContextTokens(r);
+        cs.branch = r.gitBranch;
+      }
+      cs.totalTokens += r.usage.input_tokens + r.usage.output_tokens
+        + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
+      cs.costUsd += r.costUsd;
+      cs.messageCount += 1;
+    }
+    const contextSessions: ContextSessionSummary[] = [...contextSessionMap.values()]
+      .sort((a, b) => b.lastActivity.localeCompare(a.lastActivity))
+      .map(s => {
+        const forceOneMillion = forceOneMillionModels.has(s.model);
+        return {
+          ...s,
+          maxWindow: findContextWindow(s.model, forceOneMillion),
+          ratio: calcContextUsageRatio(s.contextTokens, s.model, forceOneMillion),
+        };
+      });
+
     // 고정(pin) 모드(v0.1.51) — pinnedSessionId가 후보 풀에 있으면 자동 최신값 대신 그 세션의 최신
     // 레코드를 쓴다. 스코프 밖이거나 풀에서 사라진 경우(세션 종료 등)는 "찾지 못함"으로 auto 폴백하고
     // pinMissing=true로 신호해, 호출측(extension.ts)이 죽은 pin을 저장소에서 정리하도록 한다.
@@ -315,14 +381,9 @@ export class UsageAggregator {
       ? (() => {
           const model = contextLastRecord.model;
           const tokens = resolveContextTokens(contextLastRecord);
-          // 분모 3단 계단(S1) — ①관측증명: records 전체(워크스페이스 스코프 무관, isSidechain 무관 —
-          // 이 모델이 어디서든 200K를 넘긴 적 있다는 사실 자체가 1M 활성의 물리적 증거)에서
-          // 같은 모델의 관측 최대 컨텍스트가 200K를 초과하면 1M 확정.
-          // ②~/.claude.json의 [1m] 흔적(호출부가 미리 읽어 전달) ③둘 다 없으면 기존 200K 테이블.
-          const observedMax = records
-            .filter(r => r.model === model)
-            .reduce((max, r) => Math.max(max, resolveContextTokens(r)), 0);
-          const forceOneMillion = observedMax > 200_000 || (knownOneMillionModels?.has(model) ?? false);
+          // 분모 3단 계단(S1) — 위에서 구성한 forceOneMillionModels 공용 Set 조회(③ 둘 다 없으면
+          // findContextWindow의 기존 200K 테이블로 폴백).
+          const forceOneMillion = forceOneMillionModels.has(model);
           return {
             tokens,
             model,
@@ -365,6 +426,7 @@ export class UsageAggregator {
       attributionScopes,
       activeBranch,
       sessionContext,
+      contextSessions,
       // jsonl이 보유한 전체 범위(회전 천장 ~30일)를 반환 — extension.ts가 이를 CacheStore에
       // merge해 last7Days 이후로도 영구 보존한다(v0.1.43 히트맵 backfill). 신규 파싱/dedup 경로
       // 없음 — allRecords가 이미 JsonlParser의 message.id/requestId dedup을 거친 값이다.

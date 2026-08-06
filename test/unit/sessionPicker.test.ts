@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildSessionPickerItems } from '../../src/utils/sessionPicker';
-import type { SessionSummary } from '../../src/types';
+import type { ContextSessionSummary } from '../../src/types';
 
-function summary(p: Partial<SessionSummary> & { sessionId: string }): SessionSummary {
+function summary(p: Partial<ContextSessionSummary> & { sessionId: string }): ContextSessionSummary {
   return {
     startTime: '2026-08-06T09:00:00.000Z',
     cwd: '/repo/APP-FE',
@@ -13,6 +13,8 @@ function summary(p: Partial<SessionSummary> & { sessionId: string }): SessionSum
     lastActivity: '2026-08-06T09:00:00.000Z',
     model: 'claude-sonnet-4-6',
     contextTokens: 50_000,
+    maxWindow: 200_000,
+    ratio: 0.25,
     ...p,
   };
 }
@@ -57,12 +59,14 @@ describe('buildSessionPickerItems — QuickPick 아이템 정렬·라벨(순수�
     expect(items.find(i => i.sessionId === 'stale')!.isStale).toBe(true);
   });
 
-  it('ratio/maxWindow은 model 기준 findContextWindow 테이블값으로 계산된다', () => {
+  it('maxWindow/ratio는 입력의 정밀 계산값을 그대로 전달한다(여기서 재계산하지 않음) — 1M 세션도 정확히 통과', () => {
     const items = buildSessionPickerItems([
-      summary({ sessionId: 'a', model: 'claude-opus-4-8', contextTokens: 100_000 }),
+      // UsageAggregator가 이미 forceOneMillion 3단 계단으로 계산해 넣은 값(dev-note 303,186 사례처럼
+      // 200K를 넘긴 1M 세션) — sessionPicker가 이 값을 무시하고 200K 테이블로 재계산하면 안 됨.
+      summary({ sessionId: 'a', model: 'claude-sonnet-5', contextTokens: 303_186, maxWindow: 1_000_000, ratio: 0.303186 }),
     ], null, NOW, STALE_MS);
-    expect(items[0].maxWindow).toBe(200_000);
-    expect(items[0].ratio).toBeCloseTo(0.5, 6);
+    expect(items[0].maxWindow).toBe(1_000_000);
+    expect(items[0].ratio).toBeCloseTo(0.303186, 6);
   });
 
   it('repoName은 cwd의 마지막 세그먼트', () => {
