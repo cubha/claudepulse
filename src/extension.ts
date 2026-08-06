@@ -5,9 +5,11 @@ import { Logger } from './logger';
 import {
   COMMANDS,
   CONFIG_KEYS,
+  CONTEXT_STALE_THRESHOLD_MS,
   DEFAULT_CREDENTIALS_PATH,
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_WARN_THRESHOLD,
+  PINNED_SESSION_STATE_KEY,
   VIEW_IDS
 } from './constants';
 import { SidebarViewProvider } from './providers/SidebarViewProvider';
@@ -28,6 +30,7 @@ import { PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary } fr
 import { registerHandlers } from './messaging/handlers';
 import { resolveCredentialsPath } from './utils/credentialsPath';
 import { readOneMillionModelsFromClaudeJson } from './utils/claudeJsonModels';
+import { buildSessionPickerItems } from './utils/sessionPicker';
 import type { CommitMeta, PollHistoryPoint, PollerError, RateLimitSnapshot, RetroSummary, SessionRecord, UsageSummary } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -133,21 +136,34 @@ export function activate(context: vscode.ExtensionContext): void {
     return summary;
   }
 
+  /** 사용자가 사이드바 세션 선택기로 고정(pin)한 세션 ID — 창(workspaceState) 단위로 영속(v0.1.51). */
+  function getPinnedSessionId(): string | null {
+    return context.workspaceState.get<string>(PINNED_SESSION_STATE_KEY) ?? null;
+  }
+  function setPinnedSessionId(sessionId: string | null): Thenable<void> {
+    return context.workspaceState.update(PINNED_SESSION_STATE_KEY, sessionId ?? undefined);
+  }
+
   async function refreshUsage(): Promise<void> {
     const files = workspaceMapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
     allRecords = perFile.flat();
     retroDirty = true; // 레코드 변경 → 다음 회고 요청에 1회 재빌드(매-푸시 재빌드 아님)
-    // 첫 워크스페이스 폴더로 스코핑한다. refreshUsage()는 chokidar jsonl 이벤트로만 재실행되고
-    // 포커스 변경 리스너가 없으므로, 활성 에디터 기반 선택은 폴더를 전환해도 재계산되지 않아
-    // "고정된 값에 잘못된 출처 라벨"을 붙이는 결과가 된다(advisor 지적, v0.1.48). 원 문제(multirepo)의
-    // 실사용 패턴은 repo별 별도 VS Code 창(각각 single-root)이라 이걸로 충분히 해결된다.
-    // 멀티루트 워크스페이스에서 두 번째 이상 폴더 작업 중인 경우는 알려진 한계로 남긴다.
-    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    // 열린 워크스페이스 폴더 전체를 sessionContext 후보 풀로 스코핑한다(v0.1.51, 멀티루트 실사용
+    // 재현 수정 — 이전엔 첫 폴더 1개만 써서 다른 폴더의 활성 세션이 게이지에 아예 안 잡혔다).
+    // workspaceFolders가 undefined(폴더 미오픈)면 그대로 undefined 전달 → aggregate()가 cross-project
+    // 폴백으로 처리(빈 배열을 넘기면 "스코프 있음, 매칭 0건"이 되어 의미가 달라진다 — 구분 유지).
+    const workspaceRoots = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath);
     // 컨텍스트 게이지 분모 3단 계단(S1②) — ~/.claude.json의 [1m] 흔적. 읽기 실패 시
     // 빈 Set(안전 폴백, project_context_gauge_overcount 메모리) — ①관측증명·③테이블로 계속 판단 가능.
     const knownOneMillionModels = await readOneMillionModelsFromClaudeJson();
-    lastUsageSummary = aggregator.aggregate(allRecords, workspaceRoot, knownOneMillionModels);
+    const pinnedSessionId = getPinnedSessionId();
+    lastUsageSummary = aggregator.aggregate(allRecords, workspaceRoots, knownOneMillionModels, pinnedSessionId);
+    // 고정한 세션이 후보 풀에서 사라졌다(세션 종료·워크스페이스 밖) — 죽은 pin을 정리해 다음
+    // refresh부터 자동 모드로 조용히 복귀한다(SessionContextUsage.pinMissing, UsageAggregator).
+    if (lastUsageSummary.sessionContext?.pinMissing) {
+      await setPinnedSessionId(null);
+    }
     // jsonl이 보유한 전체 범위(회전 천장 ~30일)를 CacheStore에 영구 저장 — last7Days만
     // merge하면 7일보다 오래된 날짜가 영구 보존되지 않아 히트맵이 얕아진다(v0.1.43).
     await cacheStore.merge(lastUsageSummary.historicalDays);
@@ -156,6 +172,48 @@ export function activate(context: vscode.ExtensionContext): void {
     messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
     // 회고도 push(패널 열렸을 때만 — pushRetro 내부 게이트). retroDirty=true로 갱신본 1회 재빌드.
     pushRetro();
+  }
+
+  /** 사이드바 📁 칩 클릭 — 세션 선택기(QuickPick) 오픈. 선택 결과는 refreshUsage()로 재계산+push. */
+  function openSessionPicker(): void {
+    const items = buildSessionPickerItems(
+      lastUsageSummary?.contextSessions ?? [],
+      getPinnedSessionId(),
+      Date.now(),
+      CONTEXT_STALE_THRESHOLD_MS
+    );
+    if (items.length === 0) {
+      void vscode.window.showInformationMessage('이 워크스페이스에서 관측된 세션이 없습니다.');
+      return;
+    }
+    type PickerEntry = vscode.QuickPickItem & { sessionId: string | null };
+    const qpItems: PickerEntry[] = items.map(it => {
+      const badgeIcon = it.badge === 'pinned' ? '$(pin) ' : it.badge === 'auto' ? '$(sync) ' : '';
+      const pct = Math.round(it.ratio * 100);
+      return {
+        label: `${badgeIcon}${it.repoName}`,
+        description: `${it.branch} · ${fmtAgeShort(it.ageMs)} · ${fmtTokensShort(it.contextTokens)}/${fmtTokensShort(it.maxWindow)} (${pct}%)`,
+        detail: it.cwd,
+        sessionId: it.sessionId,
+      };
+    });
+    if (getPinnedSessionId()) {
+      qpItems.unshift({
+        label: '$(discard) 자동 모드로 되돌리기',
+        description: '가장 최근 활동 세션을 자동으로 표시',
+        sessionId: null,
+      });
+    }
+    void vscode.window.showQuickPick(qpItems, { placeHolder: '컨텍스트 게이지에 표시할 세션 선택' })
+      .then(selected => {
+        if (!selected) return; // Esc — 변경 없음
+        void setPinnedSessionId(selected.sessionId).then(() => refreshUsage());
+      });
+  }
+
+  /** 사이드바 stale-pinned 상태의 "자동 모드로 되돌리기" 링크 클릭. */
+  function clearPinnedSession(): void {
+    void setPinnedSessionId(null).then(() => refreshUsage());
   }
 
   fileWatcher.on('change', () => { void refreshUsage(); });
@@ -184,7 +242,9 @@ export function activate(context: vscode.ExtensionContext): void {
       currentLang = lang;
       void context.globalState.update('ccg-lang', lang);
     },
-    () => buildRetroSummary()
+    () => buildRetroSummary(),
+    () => openSessionPicker(),
+    () => clearPinnedSession()
   );
 
   const sidebarProvider = new SidebarViewProvider(context.extensionUri, messenger);
@@ -315,4 +375,23 @@ function fmtReset(ms: number): string {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${mins}m`;
   return `${mins}m`;
+}
+
+/** 세션 선택기 QuickPick 항목 설명용 — webview/main.ts의 fmtAge와 별개(브라우저 번들에서 import 불가). */
+function fmtAgeShort(ms: number): string {
+  const totalMin = Math.floor(ms / 60000);
+  if (totalMin < 1) return '방금';
+  const days = Math.floor(totalMin / 1440);
+  const hours = Math.floor((totalMin % 1440) / 60);
+  const mins = totalMin % 60;
+  if (days > 0) return `${days}d ${hours}h 전`;
+  if (hours > 0) return `${hours}h ${mins}m 전`;
+  return `${mins}m 전`;
+}
+
+/** 세션 선택기 QuickPick 항목 설명용 — webview/main.ts의 fmtTokens와 별개(브라우저 번들에서 import 불가). */
+function fmtTokensShort(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1000)}K`;
+  return `${n}`;
 }

@@ -1,7 +1,7 @@
 import { Messenger } from 'vscode-messenger';
 import { BROADCAST } from 'vscode-messenger-common';
 import type { PollHistoryPoint, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
-import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from './contracts';
+import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, RequestClearPinnedSession, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestOpenSessionPicker, RequestRefresh, RequestSetLang } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
@@ -14,7 +14,9 @@ export function registerHandlers(
   onOpenBillingSettings: () => void,
   getLang: () => string,
   setLang: (lang: string) => void,
-  getRetroSummary: () => Promise<RetroSummary | null>
+  getRetroSummary: () => Promise<RetroSummary | null>,
+  onOpenSessionPicker: () => void,
+  onClearPinnedSession: () => void
 ): void {
   messenger.onRequest(GetPollHistory, () => getPollHistory());
   messenger.onRequest(GetRateLimit, () => {
@@ -29,6 +31,8 @@ export function registerHandlers(
   messenger.onNotification(RequestLogin, () => { onLogin(); });
   messenger.onNotification(RequestOpenDashboard, () => { onOpenDashboard(); });
   messenger.onNotification(RequestOpenBillingSettings, () => { onOpenBillingSettings(); });
+  messenger.onNotification(RequestOpenSessionPicker, () => { onOpenSessionPicker(); });
+  messenger.onNotification(RequestClearPinnedSession, () => { onClearPinnedSession(); });
   const ALLOWED_LANGS = new Set(['ko', 'en', 'ja', 'zh', 'auto']);
   messenger.onNotification(RequestSetLang, (lang) => {
     if (!ALLOWED_LANGS.has(lang)) return;
