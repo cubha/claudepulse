@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.51] - 2026-08-06
+
+### Fixed
+- **In a multi-root workspace, the context gauge could report a repo you weren't working in.** v0.1.48 scoped the gauge to `workspaceFolders[0]` and documented the multi-root case as a known limitation; dogfooding turned it into a real defect — three repos open in one window, active work in one of them, and the gauge pinned to another repo's session from 1d 19h earlier. The active session wasn't losing the "most recent" comparison, it was never a candidate: the prefix filter excluded it before selection.
+  - **Fix**: `UsageAggregator.aggregate()` takes `workspaceRoots` (`string | string[]`, backward compatible) and treats a record as a candidate if its `cwd` falls under *any* open folder. Zero match across all folders still yields no gauge rather than a silent cross-project fallback, preserving the v0.1.49 honesty rule.
+
+### Added
+- **Session picker for the context gauge.** The `📁` workspace chip is now clickable and opens a native QuickPick listing every session observed in the workspace — repo, branch, idle time, `tokens/window (%)`, and model — sorted by most recent activity. Selecting one pins the gauge to that session; the currently auto-selected entry is badged so the default is visible. Useful when several sessions are live at once and the auto-selected reading would otherwise alternate between them.
+- **Pin safety rails.** Auto (most recently active) remains the default; pinning is an override, not a replacement. A pinned session idle beyond the existing 4h staleness threshold turns the gauge amber and surfaces a "Switch back to auto" link, so pinning cannot reproduce the stale-reading problem this release fixes. A pinned session that leaves the candidate pool entirely (ended, or its folder closed) falls back to auto and clears the stored pin via a `pinMissing` signal.
+
+### Internal
+- `SessionSummary` gained `lastActivity` / `model` / `contextTokens` / `branch`; new `UsageSummary.contextSessions` provides the workspace-scoped session list. `recentSessions` deliberately stays cross-project — the v0.1.49 "no session for this workspace" vs. "no session history at all" distinction depends on it.
+- Session-picker item construction (`src/utils/sessionPicker.ts`) and gauge badge/color/revert-link resolution (`src/webview/contextGaugeState.ts`) are pure functions with unit tests, separate from the VS Code API glue. Picker rows reuse the same 1M-context-window ladder as the gauge, so a session's percentage doesn't change between the list and the gauge after selection.
+- New `test/unit/MultiRepoContextGauge.integration.test.ts` drives the real `WorkspaceMapper` → `JsonlParser` → `UsageAggregator` pipeline against on-disk `.jsonl` fixtures in a temp directory, reproducing the original 3-repo defect and locking the fix.
+
 ## [0.1.50] - 2026-08-03
 
 ### Fixed

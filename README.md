@@ -14,12 +14,20 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.50
+## What's New in v0.1.51
+
+- **Fixed: in a multi-root workspace, the context gauge could sit on a repo you weren't working in.** The gauge only ever looked at the workspace's *first* folder — a limitation v0.1.48 shipped knowingly. In practice that meant opening three repos in one window, working in one of them, and watching the gauge report a different repo's session from a day and a half ago. It now considers every folder open in the window and shows the most recently active session among them.
+- **New: pick which session the gauge tracks.** Click the `📁` workspace chip under the gauge to open a session picker listing every session seen in this workspace — repo, branch, how long ago it was active, its context usage, and model. Pick one to pin the gauge to it, which is useful when you're moving between several live sessions and don't want the reading jumping around.
+- **New: pinned sessions can't quietly go stale.** Auto mode is still the default and follows your most recent activity. If you pin a session and it then goes quiet for more than 4 hours, the gauge turns amber and offers "Switch back to auto" — so a pinned reading can't become the very problem this release fixes. A pinned session that disappears entirely falls back to auto on its own.
+
+<details><summary>v0.1.50</summary>
 
 - **Fixed: the session context gauge could over-report usage by up to 5×.** The lookup table backing the gauge's denominator classified every current model as a 200K-token context window, even for accounts with the 1M window active — and the 100% cap hid just how far off that was (one workspace was actually at 292%, not 100%). The gauge now recognizes a 1M window two ways: if any request in your history ever exceeded 200K tokens for that model (which a 200K window couldn't physically produce), or if Claude Code itself recorded a `[1m]` marker for that model in `~/.claude.json`. Falls back to the old 200K assumption only when neither signal is available.
 - **Fixed (minor): the gauge's token count could nearly double on multi-call turns.** It summed every API call within a turn instead of using only the final one, which is what actually reflects the context window's current occupancy.
 - **Fixed (minor): background/subagent sessions could no longer hijack the gauge.** Sessions running in the background are now excluded when picking "your most recent session."
 - **Added: absolute token counts next to the percentage** (`≈72K/1M`), plus an age indicator — the gauge dims after 4 hours of inactivity so a stale reading doesn't look like a live one.
+
+</details>
 
 <details><summary>v0.1.49</summary>
 
@@ -125,7 +133,8 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Long-term trend chart** (dashboard): Daily cost line chart with 30d / 90d / 180d scope toggle — see spending patterns across months
 - **Monthly cost bar chart** (dashboard): Month-by-month cost aggregation — spot your most expensive periods
 - **This-month chip** (sidebar): `◑ This month $X.XX / ≈$Y.YY` — current month spend + projected end-of-month cost (linear extrapolation)
-- **Session context gauge** (sidebar): How full your latest session's context window is — the most recent turn's input + cache-read + cache-creation tokens against that model's window. Approximate (`≈`) because auto-compact isn't recorded in the logs; hidden entirely until there's any session history at all. Scoped to the current workspace's first folder — a repo chip (`📁 <folder name>`, full path on hover) makes the source explicit, and if this workspace specifically has no matching session it says so explicitly instead of falling back to a different repo's numbers
+- **Session context gauge** (sidebar): How full your latest session's context window is — the most recent turn's input + cache-read + cache-creation tokens against that model's window. Approximate (`≈`) because auto-compact isn't recorded in the logs; hidden entirely until there's any session history at all. Scoped to every folder open in the window (multi-root included) — a repo chip (`📁 <folder name>`, full path on hover) makes the source explicit, and if none of those folders has a matching session it says so explicitly instead of falling back to a different repo's numbers
+- **Session picker** (sidebar): Click the repo chip to choose which session the gauge tracks. Lists every session seen in this workspace with its repo, branch, idle time, context usage, and model. Auto mode (the default) follows your most recently active session; pinning one holds the gauge on it — and if a pinned session goes quiet for over 4 hours the gauge turns amber and offers to switch back to auto, so a pin can't silently become a stale reading
 
 ### Git Branch ROI (local `.jsonl`)
 - **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency
