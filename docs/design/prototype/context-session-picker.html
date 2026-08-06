@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>컨텍스트 세션 선택기 — 시안</title>
+<style>
+  :root {
+    --vscode-editor-background: #1E1E1E;
+    --vscode-card-background: #1F1F1F;
+    --vscode-sideBar-background: #181818;
+    --vscode-panel-border: #2D2D30;
+    --vscode-input-background: #2A2A2C;
+    --vscode-input-border: #3A3A3D;
+    --vscode-list-hoverBackground: #2A2D2E;
+    --vscode-list-activeSelectionBackground: #2C3E55;
+    --vscode-focusBorder: #007FD4;
+    --vscode-foreground: #CCCCCC;
+    --vscode-descriptionForeground: #9D9D9D;
+    --vscode-textLink-foreground: #3794FF;
+    --c-sonnet: #3B82F6;
+    --c-opus: #8B5CF6;
+    --c-warn: #F59E0B;
+    --c-danger: #F43F5E;
+    --c-slate: #64748B;
+    --ff-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text", system-ui, sans-serif;
+    --ff-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 36px 80px;
+    background: var(--vscode-editor-background);
+    color: var(--vscode-foreground);
+    font-family: var(--ff-sans);
+    font-size: 13px;
+  }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--vscode-descriptionForeground); font-size: 12px; margin: 0 0 28px; max-width: 640px; line-height: 1.6; }
+  .sub b { color: var(--vscode-foreground); font-weight: 600; }
+  h2.step-title { font-size: 13px; font-weight: 600; margin: 0 0 2px; color: var(--vscode-foreground); }
+  .step-desc { font-size: 11.5px; color: var(--vscode-descriptionForeground); margin: 0 0 14px; max-width: 560px; line-height: 1.55; }
+  .row { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 44px; }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: rgba(59,130,246,0.16); color: #93C5FD;
+    font-family: var(--ff-mono); font-size: 10px; font-weight: 700;
+    margin-right: 7px; flex-shrink: 0;
+  }
+  .step-head { display: flex; align-items: center; margin-bottom: 2px; }
+
+  /* ── VS Code 사이드바 크롬 mock ── */
+  .vscode-frame {
+    width: 300px; flex-shrink: 0;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--vscode-sideBar-background);
+  }
+  .vscode-titlebar {
+    height: 22px; display: flex; align-items: center; padding: 0 10px;
+    background: #1F1F1F; border-bottom: 1px solid var(--vscode-panel-border);
+    font-size: 10px; color: var(--vscode-descriptionForeground); letter-spacing: 0.03em;
+  }
+  .sb-body { padding-bottom: 4px; }
+
+  /* ── 실제 sidebar 컨텍스트 게이지 마크업 (styles.css 1134~1157행과 동일 클래스) ── */
+  .sb-context-wrap { padding: 0; border-bottom: 1px solid var(--vscode-panel-border); }
+  .sb-section-hdr { display: flex; align-items: center; gap: 6px; padding: 10px 12px 6px; }
+  .sb-section-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .sb-section-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; color: var(--vscode-descriptionForeground); }
+  .sb-section-right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .mono { font-family: var(--ff-mono); font-feature-settings: 'tnum','zero'; }
+  .sb-context-tokens { font-size: 10px; color: var(--vscode-descriptionForeground); margin-left: 2px; }
+  .retro-approx-badge {
+    font-size: 9px; padding: 1px 5px; border-radius: 3px;
+    background: rgba(100,116,139,0.16); color: #94A3B8; margin-left: 2px;
+  }
+  .sb-rate-card { padding: 2px 12px 10px; }
+  .rate-bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.06); overflow: hidden; }
+  .rate-bar-fill { height: 100%; border-radius: 3px; }
+  .sb-chip-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; padding: 2px 12px 10px; }
+  .sb-chip {
+    display: inline-flex; align-items: center; height: 18px; padding: 0 6px;
+    border-radius: 6px; font-size: 10px; font-family: var(--ff-mono); font-weight: 600; letter-spacing: 0.02em;
+    white-space: nowrap;
+  }
+  .sb-chip--branch { background: rgba(100,116,139,0.12); color: var(--vscode-descriptionForeground); }
+  .sb-chip--pin { background: rgba(139,92,246,0.16); color: #C4B5FD; }
+  .sb-chip--warn { background: rgba(245,158,11,0.16); color: #FCD34D; }
+
+  /* 클릭 가능해진 워크스페이스 칩 — 신규 */
+  .sb-chip--clickable {
+    cursor: pointer; border: 1px solid transparent;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .sb-chip--clickable:hover { background: rgba(100,116,139,0.22); border-color: var(--vscode-panel-border); }
+  .sb-chip--clickable .chev { margin-left: 3px; opacity: 0.65; font-size: 8px; }
+
+  .annot {
+    margin-top: 10px; font-size: 10.5px; color: var(--vscode-descriptionForeground);
+    line-height: 1.5; padding: 0 2px;
+  }
+  .annot code {
+    font-family: var(--ff-mono); background: rgba(255,255,255,0.06);
+    padding: 1px 4px; border-radius: 3px; font-size: 10px; color: #93C5FD;
+  }
+
+  /* ── QuickPick 오버레이 mock ── */
+  .qp-frame {
+    width: 380px; flex-shrink: 0;
+    background: #252526;
+    border: 1px solid #454545;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    overflow: hidden;
+  }
+  .qp-input {
+    padding: 9px 12px; border-bottom: 1px solid var(--vscode-panel-border);
+    font-size: 12px; color: var(--vscode-descriptionForeground);
+    background: var(--vscode-input-background);
+  }
+  .qp-list { padding: 4px 0; max-height: 280px; }
+  .qp-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 12px; cursor: pointer; border-left: 2px solid transparent;
+  }
+  .qp-item:hover { background: var(--vscode-list-hoverBackground); }
+  .qp-item.active { background: var(--vscode-list-activeSelectionBackground); border-left-color: var(--vscode-focusBorder); }
+  .qp-item.stale { opacity: 0.6; }
+  .qp-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .qp-main { flex: 1; min-width: 0; }
+  .qp-title-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--vscode-foreground); }
+  .qp-repo { font-weight: 600; }
+  .qp-branch { color: var(--vscode-descriptionForeground); font-family: var(--ff-mono); font-size: 11px; }
+  .qp-badge {
+    font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .qp-badge--auto { background: rgba(59,130,246,0.18); color: #93C5FD; }
+  .qp-badge--pin { background: rgba(139,92,246,0.18); color: #C4B5FD; }
+  .qp-badge--stale { background: rgba(245,158,11,0.18); color: #FCD34D; }
+  .qp-meta {
+    margin-top: 2px; font-size: 10.5px; color: var(--vscode-descriptionForeground);
+    font-family: var(--ff-mono); display: flex; gap: 8px;
+  }
+  .qp-sep-label {
+    padding: 6px 12px 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--vscode-descriptionForeground); opacity: 0.7;
+  }
+  .qp-footer {
+    padding: 7px 12px; border-top: 1px solid var(--vscode-panel-border);
+    font-size: 10.5px; color: var(--vscode-descriptionForeground);
+  }
+  .qp-footer a, .link { color: var(--vscode-textLink-foreground); text-decoration: none; cursor: pointer; }
+  .qp-footer a:hover, .link:hover { text-decoration: underline; }
+
+  .data-box {
+    max-width: 780px; margin-top: 8px; padding: 14px 16px;
+    background: var(--vscode-card-background); border: 1px solid var(--vscode-panel-border);
+    border-radius: 8px; font-size: 11.5px; line-height: 1.7;
+  }
+  .data-box h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
+  .data-box table { border-collapse: collapse; width: 100%; }
+  .data-box td { padding: 3px 8px 3px 0; vertical-align: top; border-bottom: 1px dashed rgba(255,255,255,0.06); }
+  .data-box td:first-child { font-family: var(--ff-mono); color: #93C5FD; white-space: nowrap; }
+  .data-box tr:last-child td { border-bottom: none; }
+  .tag-new { font-size: 9px; font-weight: 700; background: rgba(20,184,166,0.18); color: #5EEAD4; padding: 1px 5px; border-radius: 3px; margin-left: 6px; }
+</style>
+</head>
+<body>
+
+<h1>컨텍스트 사용률 · 세션 선택기 시안</h1>
+<p class="sub">
+  <b>문제</b>: 멀티루트 워크스페이스에서 게이지가 항상 <code style="font-family:var(--ff-mono)">workspaceFolders[0]</code> 하위 최신 레코드 1건만 보여줘, 실제 작업 중인 세션이 아닌
+  다른(비활성) 세션의 값이 뜨는 경우가 있었다. <b>해결</b>: ① 후보 풀을 열린 폴더 전체로 확장(기본값 = 자동/최신) →
+  ② 📁 워크스페이스 칩을 클릭하면 특정 세션을 <b>고정(pin)</b>할 수 있는 선택기 제공. 아래는 3단계 흐름과 그 결과로 사이드바가 어떻게 바뀌는지의 목업이다.
+</p>
+
+<!-- STEP 1 -->
+<div class="step-head"><span class="step-num">1</span><h2 class="step-title">지금 — 클릭 불가, 스코프 불투명</h2></div>
+<p class="step-desc">칩은 정보 표시 전용이다. 어떤 세션이 왜 선택됐는지 알 방법이 없고, 사용자가 개입할 수단도 없다.</p>
+<div class="row">
+  <div class="vscode-frame">
+    <div class="vscode-titlebar">CLAUDEPULSE — 사이드바</div>
+    <div class="sb-body">
+      <div class="sb-context-wrap">
+        <div class="sb-section-hdr">
+          <span class="sb-section-dot" style="background:var(--c-sonnet);"></span>
+          <span class="sb-section-label">컨텍스트 사용률</span>
+          <span class="sb-section-right">
+            <span class="mono" style="color:var(--c-sonnet);">41%</span>
+            <span class="sb-context-tokens mono">(≈82K/200K)</span>
+            <span class="retro-approx-badge">≈ 근사치</span>
+          </span>
+        </div>
+        <div class="sb-rate-card">
+          <div class="rate-bar"><div class="rate-bar-fill" style="width:41%;background:var(--c-sonnet);"></div></div>
+        </div>
+        <div class="sb-chip-row">
+          <span class="sb-chip sb-chip--branch">📁 APP-BE</span>
+          <span class="sb-chip sb-chip--branch">🕐 1d 19h</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="annot" style="max-width:320px;">
+    실제로 APP-FE에서 작업 중이어도 이 값은 바뀌지 않는다 — <code>1d 19h</code> 전 APP-BE 레코드가 박제된 상태.
+    stale 스타일(<code>opacity:.55</code>)이 있긴 하지만 원인·대안을 알려주지 않는다.
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div class="step-head"><span class="step-num">2</span><h2 class="step-title">칩 클릭 → 세션 선택기(QuickPick)</h2></div>
+<p class="step-desc">
+  📁 칩이 클릭 가능해지고(호버 시 보더 강조 + 셰브런), 클릭하면 VS Code 네이티브 QuickPick으로 이 워크스페이스에서 관측된
+  세션 목록이 뜬다. 기본은 <span class="qp-badge qp-badge--auto" style="vertical-align:1px;">AUTO</span> — 가장 최근 활동 세션이 표시 중임을 배지로 알린다.
+</p>
+<div class="row">
+  <div class="vscode-frame" style="align-self:flex-start;">
+    <div class="vscode-titlebar">CLAUDEPULSE — 사이드바</div>
+    <div class="sb-body">
+      <div class="sb-context-wrap">
+        <div class="sb-section-hdr">
+          <span class="sb-section-dot" style="background:var(--c-sonnet);"></span>
+          <span class="sb-section-label">컨텍스트 사용률</span>
+          <span class="sb-section-right">
+            <span class="mono" style="color:var(--c-sonnet);">63%</span>
+            <span class="sb-context-tokens mono">(≈126K/200K)</span>
+          </span>
+        </div>
+        <div class="sb-rate-card">
+          <div class="rate-bar"><div class="rate-bar-fill" style="width:63%;background:var(--c-sonnet);"></div></div>
+        </div>
+        <div class="sb-chip-row">
+          <span class="sb-chip sb-chip--branch sb-chip--clickable" style="border-color:var(--vscode-focusBorder);background:rgba(100,116,139,0.22);">📁 APP-FE<span class="chev">▾</span></span>
+          <span class="sb-chip sb-chip--branch">🕐 방금</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="qp-frame">
+    <div class="qp-input">🔍  세션 선택 — repo·브랜치·시간으로 검색…</div>
+    <div class="qp-sep-label">이 워크스페이스에서 관측된 세션</div>
+    <div class="qp-list">
+      <div class="qp-item active">
+        <span class="qp-dot" style="background:var(--c-sonnet);"></span>
+        <div class="qp-main">
+          <div class="qp-title-row">
+            <span class="qp-repo">APP-FE</span>
+            <span class="qp-branch">feat/checkout-v2</span>
+            <span class="qp-badge qp-badge--auto">AUTO</span>
+          </div>
+          <div class="qp-meta"><span>방금</span><span>·</span><span>126K/200K (63%)</span><span>·</span><span>Sonnet 4.5</span></div>
+        </div>
+      </div>
+      <div class="qp-item">
+        <span class="qp-dot" style="background:var(--c-slate);"></span>
+        <div class="qp-main">
+          <div class="qp-title-row">
+            <span class="qp-repo">APP-FE</span>
+            <span class="qp-branch">main</span>
+          </div>
+          <div class="qp-meta"><span>42분 전</span><span>·</span><span>18K/200K (9%)</span><span>·</span><span>Sonnet 4.5</span></div>
+        </div>
+      </div>
+      <div class="qp-item stale">
+        <span class="qp-dot" style="background:var(--c-slate);"></span>
+        <div class="qp-main">
+          <div class="qp-title-row">
+            <span class="qp-repo">APP-BE</span>
+            <span class="qp-branch">main</span>
+          </div>
+          <div class="qp-meta"><span>1d 19h 전</span><span>·</span><span>82K/200K (41%)</span><span>·</span><span>Sonnet 4.5</span></div>
+        </div>
+      </div>
+      <div class="qp-item stale">
+        <span class="qp-dot" style="background:var(--c-slate);"></span>
+        <div class="qp-main">
+          <div class="qp-title-row">
+            <span class="qp-repo">BATCH-BE</span>
+            <span class="qp-branch">main</span>
+          </div>
+          <div class="qp-meta"><span>2d 3h 전</span><span>·</span><span>4K/200K (2%)</span><span>·</span><span>Opus 4.6</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="qp-footer">Enter로 이 세션을 고정 · Esc로 자동 모드 유지</div>
+  </div>
+</div>
+
+<!-- STEP 3 -->
+<div class="step-head"><span class="step-num">3</span><h2 class="step-title">고정(pin) 후 — 그리고 오래 조용해졌을 때</h2></div>
+<p class="step-desc">
+  특정 세션을 고르면 칩이 <span class="sb-chip sb-chip--pin" style="vertical-align:1px;">📌 고정됨</span> 상태로 바뀐다. 동시에 여러 세션을 오가며 작업할 때 값이
+  계속 튀는 걸 막는 용도다. 단, 고정한 세션이 4시간 넘게 조용해지면(오늘 겪은 것과 같은 상황) 경고 배지로 알리고
+  자동 모드로 되돌리는 링크를 바로 붙여, 오늘 같은 "박제된 값을 못 알아채는" 상황이 재발하지 않게 한다.
+</p>
+<div class="row">
+  <div>
+    <div style="font-size:10.5px;color:var(--vscode-descriptionForeground);margin-bottom:6px;">3-a. 고정 직후 (정상)</div>
+    <div class="vscode-frame">
+      <div class="vscode-titlebar">CLAUDEPULSE — 사이드바</div>
+      <div class="sb-body">
+        <div class="sb-context-wrap">
+          <div class="sb-section-hdr">
+            <span class="sb-section-dot" style="background:var(--c-sonnet);"></span>
+            <span class="sb-section-label">컨텍스트 사용률</span>
+            <span class="sb-section-right">
+              <span class="mono" style="color:var(--c-sonnet);">63%</span>
+              <span class="sb-context-tokens mono">(≈126K/200K)</span>
+            </span>
+          </div>
+          <div class="sb-rate-card">
+            <div class="rate-bar"><div class="rate-bar-fill" style="width:63%;background:var(--c-sonnet);"></div></div>
+          </div>
+          <div class="sb-chip-row">
+            <span class="sb-chip sb-chip--pin sb-chip--clickable">📌 APP-FE<span class="chev">▾</span></span>
+            <span class="sb-chip sb-chip--branch">🕐 방금</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div style="font-size:10.5px;color:var(--vscode-descriptionForeground);margin-bottom:6px;">3-b. 고정한 세션이 4h+ 조용해짐 (경고)</div>
+    <div class="vscode-frame">
+      <div class="vscode-titlebar">CLAUDEPULSE — 사이드바</div>
+      <div class="sb-body">
+        <div class="sb-context-wrap">
+          <div class="sb-section-hdr">
+            <span class="sb-section-dot" style="background:var(--c-warn);"></span>
+            <span class="sb-section-label">컨텍스트 사용률</span>
+            <span class="sb-section-right">
+              <span class="mono" style="color:var(--c-warn);">63%</span>
+              <span class="sb-context-tokens mono">(≈126K/200K)</span>
+            </span>
+          </div>
+          <div class="sb-rate-card">
+            <div class="rate-bar"><div class="rate-bar-fill" style="width:63%;background:var(--c-warn);opacity:.6;"></div></div>
+          </div>
+          <div class="sb-chip-row">
+            <span class="sb-chip sb-chip--warn sb-chip--clickable">📌 APP-FE<span class="chev">▾</span></span>
+            <span class="sb-chip sb-chip--warn">⚠ 5h 12m 전</span>
+          </div>
+          <div style="padding:0 12px 10px;font-size:10.5px;">
+            <span class="link">자동 모드로 되돌리기</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="data-box">
+  <h3>구현 메모 — 데이터 모델 변경 필요분</h3>
+  <table>
+    <tr><td>SessionSummary.lastActivity <span class="tag-new">NEW</span></td><td>QuickPick 정렬(최신순) 기준. 현재 <code>startTime</code>(첫 레코드)만 있어 "최근 활동순"을 못 만든다.</td></tr>
+    <tr><td>SessionSummary.model <span class="tag-new">NEW</span></td><td>목록 항목의 모델 배지/도트 색상용.</td></tr>
+    <tr><td>SessionSummary.contextTokens <span class="tag-new">NEW</span></td><td>목록 항목의 <code>126K/200K (63%)</code> 표기용 — 세션별 마지막 컨텍스트 점유량.</td></tr>
+    <tr><td>UsageAggregator.aggregate()</td><td>후보 풀을 <code>workspaceRoot</code> 단일값 → <code>workspaceRoots: string[]</code>(열린 폴더 전체)로 확장. 미고정 시 풀 내 최신 레코드 자동 선택(기존 로직 그대로, 풀만 확장).</td></tr>
+    <tr><td>고정 상태 저장</td><td><code>context.workspaceState</code>(창 단위) — sessionId pin. 세션이 없어지거나 workspaceRoots 밖으로 나가면 자동 해제.</td></tr>
+    <tr><td>Stale 임계</td><td>기존 <code>CONTEXT_STALE_THRESHOLD_MS</code>(4h) 재사용 — 신규 상수 불필요.</td></tr>
+  </table>
+</div>
+
+</body>
+</html>

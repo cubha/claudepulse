@@ -137,6 +137,21 @@ export interface SessionSummary {
   totalTokens: number;
   costUsd: number;
   messageCount: number;
+  lastActivity: string;   // ISO8601 (마지막 레코드 timestamp) — 세션 선택기 최근활동순 정렬용
+  model: string;          // 마지막 레코드의 모델 — 세션 선택기 모델 배지용
+  contextTokens: number;  // 마지막 레코드의 컨텍스트 점유량(resolveContextTokens, 누적 아님) — 세션 선택기 토큰/윈도 표기용
+  branch: string;         // 마지막 레코드의 gitBranch — 세션 선택기 표시용
+}
+
+/**
+ * 세션 선택기(QuickPick) 후보 항목 — SessionSummary + 정밀 컨텍스트 윈도 정보.
+ * maxWindow/ratio는 UsageAggregator가 sessionContext와 동일한 분모 3단 계단(S1: 관측증명→
+ * claude.json→200K 테이블)으로 미리 계산해 넣는다 — 선택 전(목록)과 선택 후(게이지)의 ratio가
+ * 서로 달라 보이는 걸 방지한다(sessionPicker.ts는 이 값을 재계산하지 않고 그대로 소비).
+ */
+export interface ContextSessionSummary extends SessionSummary {
+  maxWindow: number;
+  ratio: number;
 }
 
 /** 모델별 사용량 분해 (오늘 기준). */
@@ -242,6 +257,9 @@ export interface SessionContextUsage {
   cwd: string;       // 마지막 레코드의 작업 디렉토리 전체 경로
   repoName: string;  // path.basename(cwd) — repo 루트가 아닌 하위 디렉토리에서 기동됐으면 실제 repo명이 아닐 수 있음(cwd로 판별)
   timestamp: string; // 이 값이 측정된 레코드의 timestamp(ISO8601, S3) — webview 경과시간 라벨용
+  sessionId: string; // 세션 선택기(QuickPick) 하이라이트·pin 매칭용(v0.1.51 세션 선택기)
+  mode: 'auto' | 'pinned'; // 'auto' = 후보 풀 내 최신 레코드 자동선택, 'pinned' = 사용자가 고정한 세션
+  pinMissing?: boolean;    // pinnedSessionId를 요청했으나 후보 풀에서 찾지 못해 auto로 폴백했음을 신호(호출측이 저장된 pin을 정리하는 트리거)
 }
 
 /** 브랜치별 사용량 집계. */
@@ -274,6 +292,13 @@ export interface UsageSummary {
   };
   activeBranch: string;              // 가장 최근 활성 브랜치명 (사이드바 칩용)
   sessionContext: SessionContextUsage | null;  // 가장 최근 활동 세션의 컨텍스트 점유율(근사치, cross-project 스코프)
+  /**
+   * 세션 선택기(QuickPick) 후보 목록 — sessionContext와 동일한 workspaceRoots+isSidechain
+   * 필터를 거친 세션들을 lastActivity 내림차순으로 그룹핑(v0.1.51). recentSessions와 의도적으로
+   * 분리: recentSessions는 cross-project를 유지해야 하는 v0.1.49 계약("매칭 0건" vs "세션 없음"
+   * 구분, main.ts 참조)이 있어 스코핑할 수 없다.
+   */
+  contextSessions: ContextSessionSummary[];
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601
 }

@@ -3,12 +3,13 @@
 import { Chart, registerables } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestRefresh, RequestSetLang } from '../messaging/contracts';
+import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary, RequestClearPinnedSession, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestOpenSessionPicker, RequestRefresh, RequestSetLang } from '../messaging/contracts';
 import type { DailyUsage, PollerError, RateLimitSnapshot, SessionSummary, UnifiedWindow, UsageSummary } from '../types';
 import { getLang, setLang, t } from './i18n';
 import { escapeHtml, fmtCost } from './format';
 import { renderRetro } from './retroView';
 import { buildCalendarCells, heatLevel, monthLabelFlags, type CalendarDay } from './calendarView';
+import { resolveContextGaugeState } from './contextGaugeState';
 import {
   calcSafeUntil,
   calcProjAtReset,
@@ -234,6 +235,12 @@ function initSidebar(): void {
     });
     root!.querySelectorAll<HTMLButtonElement>('.js-open-billing').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestOpenBillingSettings, HOST_EXTENSION));
+    });
+    root!.querySelectorAll<HTMLButtonElement>('.js-open-session-picker').forEach(btn => {
+      btn.addEventListener('click', () => messenger.sendNotification(RequestOpenSessionPicker, HOST_EXTENSION));
+    });
+    root!.querySelectorAll<HTMLButtonElement>('.js-clear-pinned-session').forEach(btn => {
+      btn.addEventListener('click', () => messenger.sendNotification(RequestClearPinnedSession, HOST_EXTENSION));
     });
   }
 }
@@ -576,16 +583,21 @@ function buildContextGaugeHtml(usage: UsageSummary | null): string {
       <div class="sb-context-empty" title="${t('context_no_session_tooltip')}">${t('context_no_session')}</div>
     </div>`;
   }
-  const color = ctx.ratio >= 0.90 ? 'var(--c-danger)' : ctx.ratio >= 0.80 ? 'var(--c-warn)' : 'var(--c-sonnet)';
-  const dataStatus = ctx.ratio >= 0.90 ? 'danger' : ctx.ratio >= 0.80 ? 'allowed_warning' : 'allowed';
-  const repoTitle = `${t('context_repo_label')}: ${ctx.cwd}`;
+  // 배지·색상·경고링크 판정은 순수함수(contextGaugeState.ts)에 위임 — 사이드바는 그 결과만 렌더.
+  const gauge = resolveContextGaugeState(ctx, Date.now(), CONTEXT_STALE_THRESHOLD_MS);
+  const color = gauge.colorStatus === 'danger' ? 'var(--c-danger)' : gauge.colorStatus === 'allowed_warning' ? 'var(--c-warn)' : 'var(--c-sonnet)';
+  // 세션 선택기(v0.1.51) — 워크스페이스 칩 클릭으로 QuickPick을 열어 세션을 고정(pin)할 수 있다.
+  const isPinned = ctx.mode === 'pinned';
+  const repoChipClass = isPinned ? (gauge.showRevertLink ? 'sb-chip--warn' : 'sb-chip--pin') : 'sb-chip--branch';
+  const repoIcon = isPinned ? '📌' : '📁';
+  const pickerHint = isPinned ? t('context_pinned_tooltip') : t('context_picker_tooltip');
+  const repoTitle = `${pickerHint}\n${t('context_repo_label')}: ${ctx.cwd}`;
   // 경과시간(S3) — 배경/자동 세션이 오래전 값을 게이지에 남겨도 사용자가 판별 가능하게.
   const ageMs = Date.now() - new Date(ctx.timestamp).getTime();
-  const isStale = ageMs > CONTEXT_STALE_THRESHOLD_MS;
   const ageTitle = `${t('context_age_label')}: ${fmtAge(ageMs)}`;
   // 토큰 절대값 병기(S1) — 분모가 200K 폴백 구간이어도 사용자가 실제 규모를 직접 판별 가능.
   const tokensLabel = `(${fmtTokens(ctx.tokens)}/${fmtTokens(ctx.maxWindow)})`;
-  return `<div class="sb-context-wrap${isStale ? ' sb-context-stale' : ''}">
+  return `<div class="sb-context-wrap${gauge.isStale ? ' sb-context-stale' : ''}">
     <div class="sb-section-hdr">
       <span class="sb-section-dot" style="background:${color};"></span>
       <span class="sb-section-label" title="${t('context_gauge_tooltip')}" style="cursor:help;">${t('context_usage')}</span>
@@ -597,13 +609,16 @@ function buildContextGaugeHtml(usage: UsageSummary | null): string {
     </div>
     <div class="sb-rate-card">
       <div class="rate-bar">
-        <div class="rate-bar-fill" id="sb-ctx-bar" data-status="${dataStatus}"></div>
+        <div class="rate-bar-fill" id="sb-ctx-bar" data-status="${gauge.colorStatus}"></div>
       </div>
     </div>
     <div class="sb-chip-row">
-      <span class="sb-chip sb-chip--branch" title="${escapeHtml(repoTitle)}">📁 ${escapeHtml(ctx.repoName)}</span>
-      <span class="sb-chip" title="${escapeHtml(ageTitle)}">🕐 ${fmtAge(ageMs)}</span>
+      <button class="sb-chip ${repoChipClass} sb-chip--clickable js-open-session-picker" title="${escapeHtml(repoTitle)}">${repoIcon} ${escapeHtml(ctx.repoName)}<span class="chev">▾</span></button>
+      <span class="sb-chip${gauge.showRevertLink ? ' sb-chip--warn' : ''}" title="${escapeHtml(ageTitle)}">${gauge.showRevertLink ? '⚠' : '🕐'} ${fmtAge(ageMs)}</span>
     </div>
+    ${gauge.showRevertLink
+      ? `<div class="sb-context-revert-row"><button class="sb-context-revert-link js-clear-pinned-session" title="${escapeHtml(t('context_revert_tooltip'))}">${escapeHtml(t('context_revert_link'))}</button></div>`
+      : ''}
   </div>`;
 }
 

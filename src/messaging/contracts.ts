@@ -87,6 +87,23 @@ export const PushRetroSummary: NotificationType<RetroSummary | null> = {
 };
 
 /**
+ * Notification: webview → extension. 사이드바 📁 워크스페이스 칩 클릭 — 세션 선택기(QuickPick)를
+ * 연다(v0.1.51). 결과(선택된 세션 고정 또는 취소)는 기존 PushUsageSummary 브로드캐스트로 반영된다
+ * — 별도 응답 계약을 만들지 않는다(RequestRefresh와 동일 패턴).
+ */
+export const RequestOpenSessionPicker: NotificationType<void> = {
+  method: 'requestOpenSessionPicker'
+};
+
+/**
+ * Notification: webview → extension. 고정(pin)된 세션이 stale해졌을 때 사이드바에 뜨는
+ * "자동 모드로 되돌리기" 링크 클릭(v0.1.51). 결과는 PushUsageSummary로 반영.
+ */
+export const RequestClearPinnedSession: NotificationType<void> = {
+  method: 'requestClearPinnedSession'
+};
+
+/**
  * webview(사이드바·패널)가 BROADCAST로 수신해야 하는 알림 method 목록.
  *
  * ⚠️ vscode-messenger 계약: registerWebviewView/Panel의 broadcastMethods에 등재된

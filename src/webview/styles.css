@@ -1308,6 +1308,43 @@ body[data-mode="sidebar"] #root { height: 100%; }
 }
 .theme-light .sb-chip--branch { background: rgba(100,116,139,0.08); }
 
+/* 세션 선택기(v0.1.51) — 클릭 가능한 워크스페이스 칩(button 리셋) + 고정/경고 상태 */
+.sb-chip--clickable {
+  border: 1px solid transparent;
+  background-color: rgba(100,116,139,0.12);
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: 0.02em;
+  appearance: none;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.sb-chip--clickable:hover { border-color: var(--vscode-panel-border); }
+.sb-chip--clickable:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+/* margin은 --sp-1(4px 그리드) 준수, font-size는 별도 축소 없이 부모 .sb-chip의 10px 상속(design-lint D-TYPE-07) */
+.sb-chip--clickable .chev { margin-left: var(--sp-1); opacity: 0.65; }
+/* 고정(pin)됨 — opus 톤 재사용(신규 액센트 추가 없음, 5+1 cap 유지) */
+.sb-chip--pin { background: rgba(139,92,246,0.14); color: #C4B5FD; }
+.theme-light .sb-chip--pin { background: rgba(139,92,246,0.10); color: #6D28D9; }
+/* 고정된 세션이 stale — warn 톤(sb-chip--cache와 동일 팔레트 재사용) */
+.sb-chip--warn { background: rgba(245,158,11,0.14); color: #FCD34D; }
+.theme-light .sb-chip--warn { background: rgba(245,158,11,0.10); color: #B45309; }
+
+.sb-context-revert-row { padding: 0 var(--sp-3) var(--sp-2); }
+.sb-context-revert-link {
+  display: inline-block;
+  font-size: var(--fs-label);
+  color: var(--vscode-textLink-foreground);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sb-context-revert-link:hover { opacity: 0.8; }
+.sb-context-revert-link:focus-visible { outline: 2px solid var(--vscode-focusBorder); outline-offset: 1px; }
+
 /* ── 이번달 비용 칩 ── */
 .sb-monthly-row { padding-bottom: var(--sp-2); }
 .sb-chip--monthly {
