@@ -92,7 +92,7 @@ function resolveContextTokens(r: SessionRecord): number {
 }
 
 export class UsageAggregator {
-  aggregate(records: SessionRecord[], workspaceRoot?: string, knownOneMillionModels?: Set<string>): UsageSummary {
+  aggregate(records: SessionRecord[], workspaceRoots?: string | string[], knownOneMillionModels?: Set<string>, pinnedSessionId?: string | null): UsageSummary {
     const now = new Date();
     const todayKey = toUtcDateKey(now);
 
@@ -287,15 +287,29 @@ export class UsageAggregator {
     const activeBranch = lastRecord?.gitBranch ?? '';
 
     // 세션 컨텍스트 점유율(근사치, #④) — 마지막 레코드 1건만(누적합 금지, 타당한 이유는 SessionContextUsage 문서 참조)
-    // workspaceRoot 지정 시 그 하위 cwd 레코드만 후보로 스코핑(v0.1.50 B) — 미지정이면 기존처럼 전체(records)에서 선택.
+    // workspaceRoots 지정 시 그중 어느 폴더든 하위 cwd 레코드면 후보로 스코핑(v0.1.51, 멀티루트 워크스페이스
+    // 전체를 합집합으로 — v0.1.50 B의 단일 workspaceRoot는 이 배열의 1개짜리 상위집합). 미지정이면 기존처럼
+    // 전체(records)에서 선택. 문자열 하나만 넘겨도(하위호환) 동작한다.
     // isSidechain 제외(S3, 2026-08-03) — 배경/자동 실행된 서브에이전트 세션이 사용자가 열지도 않은
     // 워크스페이스의 게이지를 가로채는 것을 방지(project_context_gauge_overcount 메모리 RC3).
-    const contextCandidates = (workspaceRoot
-      ? records.filter(r => cwdMatchesWorkspace(r.cwd, workspaceRoot))
+    const workspaceRootList = workspaceRoots === undefined
+      ? undefined
+      : (Array.isArray(workspaceRoots) ? workspaceRoots : [workspaceRoots]);
+    const contextCandidates = (workspaceRootList
+      ? records.filter(r => workspaceRootList.some(root => cwdMatchesWorkspace(r.cwd, root)))
       : records
     ).filter(r => !r.isSidechain);
-    const contextLastRecord = contextCandidates.length > 0
-      ? contextCandidates.reduce((a, b) => a.timestamp > b.timestamp ? a : b)
+    // 고정(pin) 모드(v0.1.51) — pinnedSessionId가 후보 풀에 있으면 자동 최신값 대신 그 세션의 최신
+    // 레코드를 쓴다. 스코프 밖이거나 풀에서 사라진 경우(세션 종료 등)는 "찾지 못함"으로 auto 폴백하고
+    // pinMissing=true로 신호해, 호출측(extension.ts)이 죽은 pin을 저장소에서 정리하도록 한다.
+    const pinnedCandidates = pinnedSessionId
+      ? contextCandidates.filter(r => r.sessionId === pinnedSessionId)
+      : [];
+    const pinMissing = !!pinnedSessionId && pinnedCandidates.length === 0;
+    const mode: 'auto' | 'pinned' = pinnedCandidates.length > 0 ? 'pinned' : 'auto';
+    const autoPool = pinnedCandidates.length > 0 ? pinnedCandidates : contextCandidates;
+    const contextLastRecord = autoPool.length > 0
+      ? autoPool.reduce((a, b) => a.timestamp > b.timestamp ? a : b)
       : null;
     const sessionContext: SessionContextUsage | null = contextLastRecord
       ? (() => {
@@ -317,6 +331,9 @@ export class UsageAggregator {
             cwd: contextLastRecord.cwd,
             repoName: path.basename(contextLastRecord.cwd),
             timestamp: contextLastRecord.timestamp,
+            sessionId: contextLastRecord.sessionId,
+            mode,
+            ...(pinMissing ? { pinMissing: true } : {}),
           };
         })()
       : null;

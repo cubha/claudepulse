@@ -245,6 +245,9 @@ export interface SessionContextUsage {
   cwd: string;       // 마지막 레코드의 작업 디렉토리 전체 경로
   repoName: string;  // path.basename(cwd) — repo 루트가 아닌 하위 디렉토리에서 기동됐으면 실제 repo명이 아닐 수 있음(cwd로 판별)
   timestamp: string; // 이 값이 측정된 레코드의 timestamp(ISO8601, S3) — webview 경과시간 라벨용
+  sessionId: string; // 세션 선택기(QuickPick) 하이라이트·pin 매칭용(v0.1.51 세션 선택기)
+  mode: 'auto' | 'pinned'; // 'auto' = 후보 풀 내 최신 레코드 자동선택, 'pinned' = 사용자가 고정한 세션
+  pinMissing?: boolean;    // pinnedSessionId를 요청했으나 후보 풀에서 찾지 못해 auto로 폴백했음을 신호(호출측이 저장된 pin을 정리하는 트리거)
 }
 
 /** 브랜치별 사용량 집계. */
