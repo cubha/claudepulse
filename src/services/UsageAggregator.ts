@@ -148,10 +148,21 @@ export class UsageAggregator {
           totalTokens: 0,
           costUsd: 0,
           messageCount: 0,
+          lastActivity: r.timestamp,
+          model: r.model,
+          contextTokens: resolveContextTokens(r),
         });
       }
       const s = bySession.get(r.sessionId)!;
       if (r.timestamp < s.startTime) s.startTime = r.timestamp;
+      // lastActivity/model/contextTokens는 세션 선택기(QuickPick)의 정렬·배지 기준 —
+      // 입력 배열 순서 무관하게 timestamp 최대인 레코드 1건만 반영(누적 금지, sessionContext와 동일 원칙).
+      // 동일 timestamp 타이브레이크는 브랜치 루프(byBranch.lastActive, 아래 `>`)와 동일하게 선입력 우선.
+      if (r.timestamp > s.lastActivity) {
+        s.lastActivity = r.timestamp;
+        s.model = r.model;
+        s.contextTokens = resolveContextTokens(r);
+      }
       s.totalTokens += r.usage.input_tokens + r.usage.output_tokens
         + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
       s.costUsd += r.costUsd;

@@ -137,6 +137,9 @@ export interface SessionSummary {
   totalTokens: number;
   costUsd: number;
   messageCount: number;
+  lastActivity: string;   // ISO8601 (마지막 레코드 timestamp) — 세션 선택기 최근활동순 정렬용
+  model: string;          // 마지막 레코드의 모델 — 세션 선택기 모델 배지용
+  contextTokens: number;  // 마지막 레코드의 컨텍스트 점유량(resolveContextTokens, 누적 아님) — 세션 선택기 토큰/윈도 표기용
 }
 
 /** 모델별 사용량 분해 (오늘 기준). */
