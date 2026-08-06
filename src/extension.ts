@@ -192,7 +192,7 @@ export function activate(context: vscode.ExtensionContext): void {
       const pct = Math.round(it.ratio * 100);
       return {
         label: `${badgeIcon}${it.repoName}`,
-        description: `${it.branch} · ${fmtAgeShort(it.ageMs)} · ${fmtTokensShort(it.contextTokens)}/${fmtTokensShort(it.maxWindow)} (${pct}%)`,
+        description: `${it.branch} · ${fmtAgeShort(it.ageMs)} · ${fmtTokensShort(it.contextTokens)}/${fmtTokensShort(it.maxWindow)} (${pct}%) · ${fmtModelShort(it.model)}`,
         detail: it.cwd,
         sessionId: it.sessionId,
       };
@@ -394,4 +394,17 @@ function fmtTokensShort(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1000)}K`;
   return `${n}`;
+}
+
+/**
+ * 세션 선택기 QuickPick 항목의 모델 표기 — 같은 repo에 여러 세션이 있을 때 모델이 구분 단서가 된다
+ * (시안 docs/design/prototype/context-session-picker.html의 목록 메타 행 참조).
+ * webview/main.ts의 modelShortName과 동일 규칙이지만 별도 정의 — main.ts는 Chart.js·DOM을 모듈
+ * 레벨에서 쓰는 webview 진입점이라 extension host가 import할 수 없다(fmtAgeShort/fmtTokensShort와 동일 사유).
+ */
+const MODEL_KINDS_SHORT = ['fable', 'opus', 'sonnet', 'haiku'] as const;
+function fmtModelShort(model: string): string {
+  const kind = MODEL_KINDS_SHORT.find(k => model.includes(k));
+  if (!kind) return model.split('-').slice(-2).join('-');
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
