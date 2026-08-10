@@ -14,11 +14,18 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.51
+## What's New in v0.1.52
+
+- **Fixed: the Usage Calendar's month labels no longer drift away from the days they label.** On a wide dashboard the heatmap's day cells stretched to fill the card while the month labels stayed put, so the labels ended up describing the wrong weeks — by as much as 704px on a 1600px-wide window, which made your most recent activity look like it belonged to a month far in the future. The calendar is now fixed-width on both the dashboard and the sidebar: cells stay the same size no matter how wide the panel gets, and the leftover space is simply left empty, the way contribution graphs normally work. If the panel is *narrower* than the calendar, it scrolls sideways as before.
+- **Fixed: month labels in Korean, Japanese and Chinese no longer break across two lines and overlap the top row of cells.** The labels now stay on one line in every language, and English labels ("Aug", "Sep") no longer nudge the spacing out of alignment either.
+
+<details><summary>v0.1.51</summary>
 
 - **Fixed: in a multi-root workspace, the context gauge could sit on a repo you weren't working in.** The gauge only ever looked at the workspace's *first* folder — a limitation v0.1.48 shipped knowingly. In practice that meant opening three repos in one window, working in one of them, and watching the gauge report a different repo's session from a day and a half ago. It now considers every folder open in the window and shows the most recently active session among them.
 - **New: pick which session the gauge tracks.** Click the `📁` workspace chip under the gauge to open a session picker listing every session seen in this workspace — repo, branch, how long ago it was active, its context usage, and model. Pick one to pin the gauge to it, which is useful when you're moving between several live sessions and don't want the reading jumping around.
 - **New: pinned sessions can't quietly go stale.** Auto mode is still the default and follows your most recent activity. If you pin a session and it then goes quiet for more than 4 hours, the gauge turns amber and offers "Switch back to auto" — so a pinned reading can't become the very problem this release fixes. A pinned session that disappears entirely falls back to auto on its own.
+
+</details>
 
 <details><summary>v0.1.50</summary>
 

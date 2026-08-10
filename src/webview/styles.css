@@ -296,6 +296,9 @@ body[data-mode="sidebar"] #root { height: 100%; }
 .heat-cell.is-today { box-shadow: 0 0 0 1px var(--vscode-focusBorder); }
 
 /* Usage Calendar (v0.1.43) */
+/* 캘린더는 컨테이너 폭에 따라 늘어나지 않는다(GitHub 기여도 그래프 관례) — 셀은 항상 12px,
+   남는 폭은 여백으로 둔다. block이 fit-content라 레전드도 그리드 우측 끝에 붙는다(카드 우측 X). */
+.calendar-block { width: fit-content; max-width: 100%; }
 .calendar-heat-wrap { display: flex; gap: 8px; }
 .calendar-weekday-col {
   display: grid;
@@ -309,12 +312,27 @@ body[data-mode="sidebar"] #root { height: 100%; }
    overflow-y는 지정하지 않는다 — hidden이면 하단 행 .is-today의 spread 1px shadow가 잘림. */
 .calendar-grid-area { flex: 1; overflow-x: auto; }
 .calendar-months { display: flex; height: 14px; margin-bottom: 2px; }
-.calendar-months span { font-size: 9px; color: var(--vscode-descriptionForeground); flex: 0 0 14px; }
+/* 라벨 피치는 셀 열 피치(12px+2px gap)와 반드시 같아야 한다. flex 아이템 기본 min-width:auto가
+   min-content 바닥으로 작용해 "Aug"(분해불가) 같은 라벨이 basis 14px를 밀어내면 주 단위로
+   누적 드리프트가 생기므로 min-width:0으로 해제하고, CJK("10월")가 세로 줄바꿈해 셀 행을
+   덮지 않도록 nowrap으로 우측(빈 span) 방향 오버플로만 허용한다. */
+.calendar-months span {
+  font-size: 9px;
+  color: var(--vscode-descriptionForeground);
+  flex: 0 0 14px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: visible;
+}
+/* grid-auto-columns 미지정 시 트랙이 auto → justify-content 기본값(normal=stretch)이 남는 폭을
+   트랙에 분배해 셀 열만 벌어지고 14px 고정인 월 라벨과 어긋난다(카드폭 > 54주×14px에서 발동). */
 .calendar-cells {
   display: grid;
   grid-auto-flow: column;
+  grid-auto-columns: 12px;
   grid-template-rows: repeat(7, 12px);
   gap: 2px;
+  justify-content: start;
 }
 .calendar-legend {
   display: flex;

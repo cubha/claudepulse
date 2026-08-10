@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.52] - 2026-08-10
+
+### Fixed
+- **The Usage Calendar's month labels drifted away from the cells they label, and recent usage looked like it belonged to a future month.** The heatmap grid used `grid-auto-flow: column` without a fixed track size, so the columns were `auto`-sized and the grid's default `justify-content` (`normal`, which resolves to `stretch`) distributed leftover width across them. Once the card was wider than the grid's intended width (54 weeks × 14px = 756px), the cells spread out while the month labels stayed pinned at 14px each — measured drift reached **704px** at a 1600px-wide dashboard, putting the colored recent-activity cells far to the right of the last month label. The sidebar's mini calendar had the same defect at a smaller scale (49px drift at 300px, 152px at 420px).
+  - **Fix**: the calendar is now fixed-width on both surfaces — cells stay 12px with a 14px column pitch regardless of container width, and leftover width is left as margin (the convention contribution graphs follow). When the display area is *narrower* than the fixed grid, it scrolls horizontally as before rather than clipping.
+- **CJK month labels wrapped vertically and overlapped the first row of cells.** Flex items default to `min-width: auto` (a min-content floor), so a 14px-wide label span behaved differently per locale: `"10월"` can break anywhere, so it wrapped onto a second line and spilled past the 14px label row into the grid, while `"Aug"` can't break at all, so it forced the span wider and inflated the label pitch — misaligning English labels by a cumulative 26px even at narrow widths. Labels now set `min-width: 0` with `white-space: nowrap`, so the pitch is exactly one column in every locale.
+
+### Internal
+- `scripts/verify-calendar-clip.js` grew from 5 narrow-width checks to 25 across three phases (dashboard at 700px and 1600px in `ko`/`en`, sidebar at 300/420/180px). Verifying a single viewport width is what let this defect pass through nine releases: the old harness ran only at 700px, where the grid always overflowed and therefore never entered the stretching regime. Assertions are on invariants — column pitch, label pitch, label-to-column drift, wrap height — not on pixel screenshots.
+
 ## [0.1.51] - 2026-08-06
 
 ### Fixed
