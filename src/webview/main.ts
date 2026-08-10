@@ -1121,16 +1121,20 @@ function buildCalendarHtml(allDays: CalendarDay[], windowDays: number, todayKey:
     </div>`
     : '';
 
+  // .calendar-block = fit-content 래퍼. 그리드가 늘어나지 않으므로 레전드도 카드 우측이 아니라
+  // 그리드 우측 끝에 붙어야 한 덩어리로 읽힌다.
   return `
-    <div class="calendar-heat-wrap">
-      <div class="calendar-weekday-col">
-        <span></span><span>${t('calendar_mon')}</span><span></span><span>${t('calendar_wed')}</span><span></span><span>${t('calendar_fri')}</span><span></span>
-      </div>
-      <div class="calendar-grid-area">
-        <div class="calendar-months">${monthLabelsHtml.join('')}</div>
-        <div class="calendar-cells">${cellsHtml}</div>
-      </div>
-    </div>${legendHtml}`;
+    <div class="calendar-block">
+      <div class="calendar-heat-wrap">
+        <div class="calendar-weekday-col">
+          <span></span><span>${t('calendar_mon')}</span><span></span><span>${t('calendar_wed')}</span><span></span><span>${t('calendar_fri')}</span><span></span>
+        </div>
+        <div class="calendar-grid-area">
+          <div class="calendar-months">${monthLabelsHtml.join('')}</div>
+          <div class="calendar-cells">${cellsHtml}</div>
+        </div>
+      </div>${legendHtml}
+    </div>`;
 }
 
 /**
