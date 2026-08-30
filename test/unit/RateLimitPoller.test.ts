@@ -13,7 +13,7 @@ class TestablePoller extends RateLimitPoller {
 function makePoller(onSnapshot: (s: RateLimitSnapshot) => void): TestablePoller {
   const mockReader = { read: vi.fn() } as unknown as CredentialsReader;
   const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), dispose: vi.fn() } as unknown as Logger;
-  return new TestablePoller(mockReader, '/fake/.credentials.json', mockLogger, onSnapshot);
+  return new TestablePoller(mockReader, '/fake/.credentials.json', mockLogger, onSnapshot, () => {});
 }
 
 /** poll() 분류 로직 검증용 — read()와 postMinimalMessage()를 스텁한다. */

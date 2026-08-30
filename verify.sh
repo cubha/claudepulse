@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # verify.sh — Claudepulse 통합 검증 스크립트
-# 호출: bash verify.sh
+# 호출: bash verify.sh [--ts-only|--no-build|--full]
 
 set -e
 
@@ -9,6 +9,18 @@ cd "$ROOT"
 
 PASS=0
 FAIL=0
+
+# ── 실행 모드 (게이트 계층화 — ~/.claude/skills/_shared/impl-handoff.md §3-1) ──
+#   --ts-only  : 가장 싼 컴파일 확인만 (worktree 스모크용)
+#   --no-build : 빌드 스킵 (SubTask/그룹 경계 게이트용)
+#   --full     : 전체 (기본 — COMPLETE 게이트용)
+VERIFY_MODE="full"
+case "${1:-}" in
+  --ts-only)  VERIFY_MODE="ts-only" ;;
+  --no-build) VERIFY_MODE="no-build" ;;
+  --full|"")  VERIFY_MODE="full" ;;
+  *) echo "⚠️  알 수 없는 플래그 '$1' — full 로 실행합니다" ;;
+esac
 
 step() {
   local label="$1"
@@ -24,22 +36,62 @@ step() {
   fi
 }
 
+finish() {
+  echo ""
+  echo "═══════════════════════════════════════"
+  echo "  Verify 결과: PASS=$PASS · FAIL=$FAIL  (mode=$VERIFY_MODE)"
+  echo "═══════════════════════════════════════"
+  [[ $FAIL -eq 0 ]] || exit 1
+  exit 0
+}
+
 # 1. node_modules 존재
 step "node_modules 존재 확인" test -d node_modules
 
 # 2. TypeScript 타입 체크
 step "TypeScript typecheck" npx tsc --noEmit
 
-# 3. ESLint
+# 2b. test/ 디렉토리 typecheck — tsconfig.json이 test를 exclude하고 vitest는 typecheck 안 함이라
+#     생겼던 사각지대(v0.1.54 ST2a). src/webview import를 포함한 테스트가 있어 src 전체를 함께 본다.
+step "TypeScript typecheck (test)" npx tsc --noEmit -p tsconfig.test.json
+
+# 2c. 측정 무결성 바닥 — include 패턴이 깨져 파일 0개를 조용히 통과시키는 걸 차단(D-0류, 디자인토큰
+#     게이트와 동일 원칙). 기준선 71(2026-08) 대비 넉넉히 잡음.
+TEST_TS_FILE_COUNT=$(npx tsc -p tsconfig.test.json --listFilesOnly 2>/dev/null | grep -vc node_modules || true)
+step "tsconfig.test.json 측정 무결성 (≥50 files)" bash -c "[ '$TEST_TS_FILE_COUNT' -ge 50 ]"
+
+# 2d. webview typecheck — 루트 tsconfig.json이 src/webview를 exclude하고 tsconfig.webview.json은
+#     여태 어디에도 배선 안 돼(package.json·verify.sh 미참조) main.ts(1882줄)가 tsc 사각지대에
+#     있었다(v0.1.54 ST2b, ST5 분리의 하드 선행조건).
+step "TypeScript typecheck (webview)" npx tsc --noEmit -p tsconfig.webview.json
+
+[[ "$VERIFY_MODE" == "ts-only" ]] && finish
+
+# 3. ESLint — .eslintrc.cjs의 src/webview/** ignore를 해제(v0.1.54 ST2b)해 이 한 스텝이 webview도 포함한다
 step "ESLint" npx eslint src --ext ts
 
-# 4. esbuild 빌드
-step "esbuild build" node esbuild.config.mjs
+# 4~5. esbuild 빌드 + dist 산출물 확인 (--no-build 시 스킵)
+if [[ "$VERIFY_MODE" == "no-build" ]]; then
+  echo ""
+  echo "⏭  esbuild 빌드·dist 산출물 확인 스킵 (--no-build)"
+else
+  step "esbuild build" node esbuild.config.mjs
+  step "dist/extension.js 생성 확인" test -f dist/extension.js
+  step "dist/webview/main.js 생성 확인" test -f dist/webview/main.js
+  step "dist/webview/styles.css 복사 확인" test -f dist/webview/styles.css
 
-# 5. dist 산출물 확인
-step "dist/extension.js 생성 확인" test -f dist/extension.js
-step "dist/webview/main.js 생성 확인" test -f dist/webview/main.js
-step "dist/webview/styles.css 복사 확인" test -f dist/webview/styles.css
+  # 5b. 웹뷰 전면 DOM digest 골든 (v0.1.54 ST4/ST5) — main.ts 분리 이후 update* 렌더 함수가
+  #     조용히 안 불리는 회귀를 잡는다. --full에서만(실 빌드 산출물 필요 + ~17s).
+  if [[ "$VERIFY_MODE" == "full" ]]; then
+    step "웹뷰 전면 DOM digest (golden)" node scripts/verify-webview-surface.mjs
+    # test:e2e(vscode-messenger 0.6.1 라운드트립, v0.1.54 ST6) — VS Code 테스트 바이너리가
+    # 캐시돼 있으면 ~5s. 미설치 환경(최초 실행)은 다운로드로 오래 걸릴 수 있어 120s 타임아웃.
+    step "test:e2e (vscode-messenger 라운드트립)" bash -c "timeout 120 npm run test:e2e >/tmp/verify-e2e-cpulse.log 2>&1 || { tail -20 /tmp/verify-e2e-cpulse.log; exit 1; }"
+  fi
+  # verify-calendar-clip.js는 여기 배선하지 않는다 — v0.1.52부터 존재하는 날짜의존 기존 결함(6건,
+  # docs/plan/verify-spec/ST4-v0.1.54.md 참조)으로 상시 FAIL 상태라 그대로 걸면 실제 회귀와
+  # 구분이 안 된다. 그 결함이 해소된 뒤 배선할 것.
+fi
 
 # 6. package.json 메타 검증
 step "package.json publisher=cubha" bash -c "grep -q '\"publisher\": \"cubha\"' package.json"
@@ -92,9 +144,101 @@ else
   fi
 fi
 
-echo ""
-echo "═══════════════════════════════════════"
-echo "  Verify 결과: PASS=$PASS · FAIL=$FAIL"
-echo "═══════════════════════════════════════"
+# 11. 디자인 토큰 게이트 (docs/design/DESIGN-TOKENS.md §13)
+#   Ground Truth = src/webview/styles.css. 이 파일은 토큰 선언과 스타일시트를 겸하므로
+#   판정은 파일 단위가 아니라 **줄 단위**다 — '^\s*--x:' 선언 줄의 hex/rgba는 정상이다.
+#   (파일을 통째로 제외하면 드리프트가 2건으로 보이는 착시가 실제로 났다)
+DESIGN_CSS="src/webview/styles.css"
+if [ -f "$DESIGN_CSS" ] && [ -f docs/design/DESIGN-TOKENS.md ]; then
+  echo ""
+  echo "▶ 디자인 토큰 게이트"
+  DT=$(mktemp -d)
 
-[[ $FAIL -eq 0 ]] || exit 1
+  # ── D-0 측정 온전성 (fail) ──
+  #   D-1/D-3은 '건수가 기준선 이하면 통과'다. 따라서 **측정이 붕괴하면 0건 = 개선**으로 읽힌다
+  #   (파일 이동·형식 변경·grep 실패 시 파이프 끝 tr이 항상 성공해 0을 돌려준다).
+  #   초록으로 보이는 고장이 가장 위험하므로, 재기 전에 자를 먼저 검사한다.
+  DECL_MIN=50
+  DECL_N=$(grep -cE '^[[:space:]]*--[a-zA-Z0-9-]+[[:space:]]*:' "$DESIGN_CSS") || DECL_N=0
+  if [ "$DECL_N" -lt "$DECL_MIN" ]; then
+    echo "  ❌ [D-0] 측정 실패 — 토큰 선언 ${DECL_N}개 (최소 $DECL_MIN 기대, 현재 GT는 108줄/66개)"
+    echo "       $DESIGN_CSS 경로·선언 형식을 확인하라. 이 상태의 D-1/D-3 '통과'는 신뢰할 수 없다."
+    FAIL=$((FAIL + 1))
+    rm -rf "$DT"
+  else
+
+    # ── D-1 선언 밖 색 리터럴 (fail) ──
+  #   백로그가 0이라 warn→fail로 승격했다(2026-08-28). 정당한 예외는 같은 줄 `design-lint-ignore`로 면제되므로
+  #   승격해도 파이프라인이 오탐에 막히지 않는다. 기준선을 0이 아닌 값으로 되돌리려면 CLAUDE.md §9도 함께 고친다.
+  #   ⚠️ hex만 세면 과소평가된다 — 착수 시 이 repo는 hex 41 < rgba 81이었다.
+  DRIFT_BASELINE=0
+  DRIFT=$(grep -nE '.*' "$DESIGN_CSS" | grep -vE '^[0-9]+:[[:space:]]*--' \
+    | grep -v 'design-lint-ignore' \
+    | grep -oE '#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)' | wc -l | tr -d ' ') || DRIFT=0
+  if [ "$DRIFT" -gt "$DRIFT_BASELINE" ]; then
+    echo "  ❌ [D-1] 선언 밖 색 리터럴 $DRIFT건 (기준선 $DRIFT_BASELINE)"
+    grep -nE '.*' "$DESIGN_CSS" | grep -vE '^[0-9]+:[[:space:]]*--' | grep -v 'design-lint-ignore' \
+      | grep -E '#[0-9a-fA-F]{3,8}\b|rgba?\(' | head -5 | sed 's/^/       /'
+    echo "       --tint-*/--fg-*/--shadow-*/var(--vscode-*) 토큰으로 교체하거나, 정당하면 design-lint-ignore 주석"
+    FAIL=$((FAIL + 1))
+  else
+    echo "  ✅ [D-1] 선언 밖 색 리터럴 0건"
+  fi
+
+  # ── D-2 미정의 토큰 참조 (fail) ──
+    #   선언되지 않은 var(--x)는 브라우저가 **선언째 폐기**한다 — tsc·eslint·빌드 전부 통과하고
+    #   스타일만 사라지는 무성 실패다. 실제로 .panel-title의 --ff-display가 이 상태였다(v0.1.52).
+    #   폴백 var(--x, y)·동적 조립 var(--a-${k})은 같은 줄에서 ')'로 닫히는 참조만 매칭해 구조적으로 배제.
+    grep -oE '^[[:space:]]*--[a-zA-Z0-9-]+[[:space:]]*:' "$DESIGN_CSS" \
+      | sed -E 's/[[:space:]]//g; s/:$//' | sort -u > "$DT/decl"
+    grep -oE 'var\(--[a-zA-Z0-9-]+\)' "$DESIGN_CSS" \
+      | sed -E 's/var\((--[a-zA-Z0-9-]+)\)/\1/' | sort -u > "$DT/used"
+    UNDEF=$(comm -23 "$DT/used" "$DT/decl") || UNDEF=""
+    if [ -n "$UNDEF" ]; then
+      echo "  ❌ [D-2] 미정의 토큰 참조 — 선언이 통째로 폐기된다(무성 실패):"
+      echo "$UNDEF" | sed 's/^/       /'
+      FAIL=$((FAIL + 1))
+    else
+      echo "  ✅ [D-2] 미정의 토큰 참조 0건"
+    fi
+
+    # ── D-3 다크/라이트 페어 (warn) ──
+    #   DESIGN-TOKENS.md §0.5 신규 토큰 페어 의무. dead 토큰 21개 제거로 예외가 사라져 기준선은 0이다.
+    PAIR_BASELINE=0
+    awk '/^\.theme-dark[[:space:]]*\{/{f=1;next} f&&/^\}/{f=0} f' "$DESIGN_CSS" \
+      | grep -oE '^[[:space:]]*--[a-zA-Z0-9-]+' | tr -d ' \t' | sort -u > "$DT/dark"
+    awk '/^\.theme-light[[:space:]]*\{/{f=1;next} f&&/^\}/{f=0} f' "$DESIGN_CSS" \
+      | grep -oE '^[[:space:]]*--[a-zA-Z0-9-]+' | tr -d ' \t' | sort -u > "$DT/light"
+    UNPAIRED=$(comm -3 "$DT/dark" "$DT/light" | tr -d '\t' | sort -u) || UNPAIRED=""
+    UNPAIRED_N=$(printf '%s' "$UNPAIRED" | grep -c . || true)
+    if [ "$UNPAIRED_N" -gt "$PAIR_BASELINE" ]; then
+      echo "  ⚠️  [D-3] 다크/라이트 페어 미충족 ${UNPAIRED_N}개 — 기준선 $PAIR_BASELINE 초과:"
+      echo "$UNPAIRED" | sed 's/^/       /'
+    else
+      echo "  ✅ [D-3] 다크/라이트 페어 미충족 ${UNPAIRED_N}개 (기준선 $PAIR_BASELINE)"
+    fi
+
+    rm -rf "$DT"
+    PASS=$((PASS + 1))
+  fi
+fi
+
+# 12. design-lint — 프로토타입 HTML (보고 전용, --gate 미적용)
+#   D-TYPE-07(11px=--fs-label 등)·D-TOKEN-01은 의도/한계로 남는 값이라 게이트를 걸면 영구 red가 된다.
+#   사유는 DESIGN-TOKENS.md §13.1. 담당 표면이 달라 위 D-1~3을 대체하지 않는다.
+#   --token-source(실 선언 harvest, structured:true)로 전환(v0.1.53) — 이전 --tokens는 문서 전체를
+#   정규식으로 긁는 unstructured 경로라 위반값을 문서에 적으면 허용집합에 흡수되는 결함이 있었다.
+DESIGN_LINT="$HOME/.claude/skills/design-lint/scripts/design-lint.mjs"
+DESIGN_TARGETS=$(ls docs/design/prototype/*.html 2>/dev/null || true)
+if [ -n "$DESIGN_TARGETS" ] && [ -f "$DESIGN_LINT" ] && command -v node >/dev/null 2>&1; then
+  echo ""
+  echo "▶ design-lint (프로토타입 HTML · 보고 전용)"
+  DL_OUT=$(timeout 60 node "$DESIGN_LINT" $DESIGN_TARGETS --token-source "$DESIGN_CSS" 2>&1) || true
+  DL_E=$(printf '%s' "$DL_OUT" | grep -c '"severity": "error"' || true)
+  DL_W=$(printf '%s' "$DL_OUT" | grep -c '"severity": "warn"' || true)
+  echo "  ℹ️  error ${DL_E}건 · warn ${DL_W}건 (게이트 미적용 — DESIGN-TOKENS.md §13.1, --token-source $DESIGN_CSS)"
+else
+  [ -n "$DESIGN_TARGETS" ] && echo "  ℹ️  design-lint 스킵 — node 또는 스킬 스크립트 없음" || true
+fi
+
+finish

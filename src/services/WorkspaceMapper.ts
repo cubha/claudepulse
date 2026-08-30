@@ -39,15 +39,15 @@ export class WorkspaceMapper {
   }
 
   /** ~/.claude/projects 하위 모든 jsonl 파일 경로를 반환. */
-  getAllJsonlFiles(): string[] {
+  async getAllJsonlFiles(): Promise<string[]> {
     const results: string[] = [];
     try {
-      const projects = fs.readdirSync(this.projectsDir, { withFileTypes: true });
+      const projects = await fs.promises.readdir(this.projectsDir, { withFileTypes: true });
       for (const entry of projects) {
         if (!entry.isDirectory() && !entry.isFile()) continue;
         const projectPath = path.join(this.projectsDir, entry.name);
         try {
-          const files = fs.readdirSync(projectPath);
+          const files = await fs.promises.readdir(projectPath);
           for (const f of files) {
             if (f.endsWith('.jsonl')) {
               results.push(path.join(projectPath, f));

@@ -89,7 +89,7 @@ describe('멀티루트 3-repo 실 파이프라인 재현 (SubTask6)', () => {
   });
 
   it('오늘 재현된 버그 시나리오 — 3-repo 전부 열려있어도 실제 활성(APP-FE)이 자동 선택된다(구버전: APP-BE 고정)', async () => {
-    const files = mapper.getAllJsonlFiles();
+    const files = await mapper.getAllJsonlFiles();
     expect(files.length).toBe(3);
     const perFile = await Promise.all(files.map(f => parser.parseFile(f)));
     const records = perFile.flat();
@@ -108,7 +108,7 @@ describe('멀티루트 3-repo 실 파이프라인 재현 (SubTask6)', () => {
   });
 
   it('contextSessions에 3-repo 세션이 모두 최근활동순으로 담긴다', async () => {
-    const files = mapper.getAllJsonlFiles();
+    const files = await mapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => parser.parseFile(f)));
     const records = perFile.flat();
 
@@ -118,7 +118,7 @@ describe('멀티루트 3-repo 실 파이프라인 재현 (SubTask6)', () => {
   });
 
   it('APP-BE를 세션 선택기로 고정(pin)하면 방금 활성인 APP-FE보다 우선 표시된다', async () => {
-    const files = mapper.getAllJsonlFiles();
+    const files = await mapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => parser.parseFile(f)));
     const records = perFile.flat();
 
@@ -130,7 +130,7 @@ describe('멀티루트 3-repo 실 파이프라인 재현 (SubTask6)', () => {
   });
 
   it('세션이 종료된 뒤(다음 jsonl 스캔에서 사라짐) 고정을 시도하면 자동으로 폴백 + pinMissing 신호', async () => {
-    const files = mapper.getAllJsonlFiles();
+    const files = await mapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => parser.parseFile(f)));
     const records = perFile.flat();
 
@@ -142,7 +142,7 @@ describe('멀티루트 3-repo 실 파이프라인 재현 (SubTask6)', () => {
   });
 
   it('세션 선택기(QuickPick) 아이템이 실 파이프라인 데이터로도 올바르게 배지·정렬된다', async () => {
-    const files = mapper.getAllJsonlFiles();
+    const files = await mapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => parser.parseFile(f)));
     const records = perFile.flat();
 

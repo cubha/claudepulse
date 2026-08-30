@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.54] - 2026-08-30
+
+No user-visible changes of its own. This release is vNext migration R2, the "safety net" phase that had to land before the Codex/multi-IDE work (v0.2.0) could safely begin: test coverage for previously-untested core services, a previously-nonexistent typecheck for the webview and test directories, an async I/O fix on the extension activation path, and a full mechanical split of the 1882-line webview entry point.
+
+It is published together with **v0.1.53**, which was completed but never released separately — so upgrading from v0.1.52 delivers both, and the only user-facing change in that span is v0.1.53's HTML-escaping fix below.
+
+### Internal
+- **Test coverage backfilled** for `UsageAggregator`'s core rollup (`today`/`last7Days`/`cacheHitRate`/`modelBreakdown`/`cacheStats`/`todayToolCounts`/`recentSessions`/`recentEditedFiles`), `CacheStore`, and `WorkspaceMapper` — none of these had dedicated unit tests before. 30 new characterization tests, all green on first run (no bugs found in the process — `aggregate()`'s lack of dedup is correct by design; dedup is `JsonlParser`'s job).
+- **`WorkspaceMapper.getAllJsonlFiles()` converted from sync to async** (`fs.readdirSync` → `fs.promises.readdir`) — this ran on every `refreshUsage()` call on the extension activation path and blocked the event loop. TDD (RED confirmed, then implemented). The one production call site (`extension.ts`) and 5 call sites in an existing integration test were updated to `await`.
+- **`tsconfig.test.json` added and wired into `verify.sh`.** The `test/` directory had never been typechecked (excluded from the root `tsconfig.json`, and `vitest` doesn't typecheck by default) — turning this on surfaced 5 real, previously-invisible bugs: a test helper passing one fewer constructor argument than the real class requires (silently `undefined`), a Vitest hook returning the wrong type, and two small type errors in `main.ts` (a `Chart` constructor-parameters mistype, an implicit `any`). All fixed.
+- **`tsconfig.webview.json` wired in** (`npm run build`, `npm run typecheck`, `verify.sh`) — it existed but was never referenced anywhere, so the webview's ~1900 lines had zero compile-time type checking. Also removed from ESLint's ignore list for the same reason.
+- **`src/webview/main.ts` split** from a single 1882-line file into `webviewApi.ts`, `webviewShared.ts`, `sidebarView.ts`, and `panelView.ts` (entry point now 27 lines). Verified behaviorally identical via a new structural DOM-digest snapshot harness (`scripts/verify-webview-surface.mjs`, 8 viewport/locale combinations, 0 diffs) plus a real Extension Development Host screenshot pass (sidebar and dashboard both render correctly with live data, including both Chart.js charts).
+- **`vscode-messenger`/`-common`/`-webview` bumped 0.5.1 → 0.6.1**, verified via the existing `test:e2e` broadcast round-trip test (both before and after the bump).
+- `verify.sh --full` gained two new gates from the above: the webview DOM-digest check and `test:e2e`.
+
+### Known Issues (pre-existing, not introduced by this release)
+- `scripts/verify-calendar-clip.js` (Usage Calendar width/scroll regression test) currently fails 6 of its assertions on certain days of the week. Root cause: `calendarView.ts`'s cell-grid padding makes the total rendered cell count depend on which weekday the window boundary falls on (±6 cells across a 7-day cycle), which the test's fixed 54-week/14-week width constants don't account for. This is a test-assertion gap, not a rendering defect — filed for a future fix.
+
+## [0.1.53] - 2026-08-28
+
+### Fixed
+- **Webview error messages were injected into `innerHTML` unescaped.** Five sites in the sidebar/panel initialization paths (`Messenger init/start failed`, top-level webview boot failure) interpolated `err.message` directly into HTML strings without escaping. `escapeHtml()` already existed and was used at 20+ other call sites (extracted in v0.1.39), but these five error-path renders predated that convention and were missed.
+  - **Fix**: extracted the shared `err instanceof Error ? err.message : String(err)` pattern into `formatErrorHtml()` (`src/webview/format.ts`), which escapes before returning, and applied it at all five sites.
+
+### Internal
+- **Design token Ground Truth re-established.** `src/webview/styles.css` is now the single source of truth for the extension's 75 CSS custom properties (`:root` 24 · `.theme-dark` 51 · `.theme-light` 51). `docs/design/DESIGN-TOKENS.md` was stale (22 tokens documented vs. 69 actually declared) and has been rewritten from the code. Declaration-outside-`:root` color literals dropped from 122 to 0, dead tokens from 21 to 0, and a real silent-failure bug was found and fixed: `.panel-title`'s `font-family: var(--ff-display)` referenced a token that was never declared, so the browser silently dropped the whole declaration — surviving undetected through v0.1.52.
+- **`verify.sh` gained a design-token gate (D-0~D-3)**: declaration-count integrity, undeclared-token references (fail — these are silent style-loss bugs, not just messy code), and dark/light pair coverage, each validated against 6 negative-test cases.
+- **Prototype HTML hardcoded-color drift resolved** (`docs/design/prototype/*.html`, design-lint `D-COLOR-02`: 4 → 0) by promoting each file's one-off literals to file-local CSS custom properties (byte-identical rendering) and removing a dead duplicate `background` declaration in `usage-heatmap.html`. `verify.sh`'s design-lint invocation switched from `--tokens` (whole-document regex harvest, vulnerable to allow-set poisoning if a violating value is ever written into the docs) to `--token-source src/webview/styles.css` (structured harvest from real declarations). Off-scale spacing/font-size findings (`D-TOKEN-01`, `D-TYPE-07`) were investigated and deliberately left unresolved — the harvest doesn't distinguish spacing tokens from font-size/border-width values, so snapping to the nearest allowed number would fit the mockups to a linter artifact rather than an actual design-scale violation.
+
 ## [0.1.52] - 2026-08-10
 
 ### Fixed

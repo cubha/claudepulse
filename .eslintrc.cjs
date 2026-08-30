@@ -4,7 +4,7 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',
-    project: './tsconfig.json'
+    project: ['./tsconfig.json', './tsconfig.webview.json']
   },
   plugins: ['@typescript-eslint'],
   extends: [
@@ -18,5 +18,5 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     'no-console': 'off'
   },
-  ignorePatterns: ['dist/**', 'node_modules/**', 'src/webview/**']
+  ignorePatterns: ['dist/**', 'node_modules/**']
 };

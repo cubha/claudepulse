@@ -145,7 +145,7 @@ export function activate(context: vscode.ExtensionContext): void {
   }
 
   async function refreshUsage(): Promise<void> {
-    const files = workspaceMapper.getAllJsonlFiles();
+    const files = await workspaceMapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
     allRecords = perFile.flat();
     retroDirty = true; // 레코드 변경 → 다음 회고 요청에 1회 재빌드(매-푸시 재빌드 아님)

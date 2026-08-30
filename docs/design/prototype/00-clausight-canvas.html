@@ -14,10 +14,11 @@
   <link rel="stylesheet" href="styles.css" />
 
   <style>
+    :root { --canvas-surface: #f0eee9; }
     html, body { margin: 0; height: 100%; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-      background: #f0eee9;
+      background: var(--canvas-surface);
     }
     /* Make codicons render at the size we ask for, not their default 16px */
     .codicon { font-size: inherit !important; line-height: 1; }

@@ -7,8 +7,8 @@ function fire(fw: FileWatcher, p: string): void {
 }
 
 describe('FileWatcher — 디바운스 (#2)', () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
 
   it('다발 이벤트를 1회 change 로 합치고 마지막 경로를 emit', () => {
     const fw = new FileWatcher('/tmp/none', 500);
