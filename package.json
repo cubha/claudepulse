@@ -2,7 +2,7 @@
   "name": "claude-code-gauge",
   "displayName": "Claude Code Gauge",
   "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.1.52",
+  "version": "0.1.54",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -95,10 +95,10 @@
     }
   },
   "scripts": {
-    "build": "node esbuild.config.mjs && tsc --noEmit",
+    "build": "node esbuild.config.mjs && tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
     "watch": "node esbuild.config.mjs --watch",
     "lint": "eslint src --ext ts",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:integration": "vscode-test",
@@ -109,11 +109,12 @@
   },
   "dependencies": {
     "chart.js": "^4.5.1",
-    "vscode-messenger": "^0.5.0",
-    "vscode-messenger-common": "^0.5.0",
-    "vscode-messenger-webview": "^0.5.0"
+    "vscode-messenger": "^0.6.1",
+    "vscode-messenger-common": "^0.6.1",
+    "vscode-messenger-webview": "^0.6.1"
   },
   "devDependencies": {
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",

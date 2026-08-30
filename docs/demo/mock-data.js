@@ -83,7 +83,22 @@ window.MOCK_USAGE = {
   subagentStats: { mainCostUsd: 7.31, subagentCostUsd: 3.19, subagentShare: 0.304, subagentCount: 12 },
   branchBreakdown: [],
   activeBranch: 'main',
-  historicalDays: [],
+  // v0.1.54 ST4(웹뷰 전면 DOM digest 골든) — Usage Calendar/컨텍스트 게이지가 실제로 셀·바를 그리도록
+  // 최소 데이터 채움. 이전엔 빈 배열이라 두 섹션이 "collecting_data" 플레이스홀더 상태로만 캡처돼
+  // golden이 그 구간의 회귀를 못 잡았음.
+  historicalDays: Array.from({ length: 40 }, (_, i) => {
+    const d = new Date(now); d.setDate(d.getDate() - (39 - i));
+    return {
+      date: d.toISOString().slice(0, 10),
+      inputTokens: 1000, outputTokens: 2000, cacheCreationTokens: 3000, cacheReadTokens: 40000,
+      totalTokens: 46000, costUsd: 0.5 + (i % 5) * 0.7, cacheHitRate: 0.9,
+    };
+  }),
+  sessionContext: {
+    tokens: 84000, model: 'claude-sonnet-4-5-20251022', maxWindow: 200000, ratio: 0.42,
+    cwd: '/mnt/d/workspace/claudepulse', repoName: 'claudepulse',
+    timestamp: now.toISOString(), sessionId: 's1', mode: 'auto',
+  },
   generatedAt: now.toISOString(),
   last7DaysTools: (() => {
     const edits  = [12, 23, 18, 31, 27, 15, 89];

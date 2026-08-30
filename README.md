@@ -14,10 +14,17 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.52
+## What's New in v0.1.54
+
+- **Fixed: a handful of error messages shown in the sidebar/panel weren't HTML-escaped before being displayed.** If the webview's messaging layer ever failed to start, its error text was inserted into the page without escaping first — a defensive hardening fix, not a reported exploit. (Completed as v0.1.53, which was never published on its own; it reaches you here.)
+- Everything else in v0.1.54 is internal and changes nothing you can see: unit-test coverage for the usage-rollup, cache and workspace-mapping services that had none; type checking turned on for the webview and test code, which had been silently excluded; an off-the-event-loop fix for a directory scan that ran on every refresh; and the 1882-line webview entry point split into four modules, checked against a structural snapshot of the rendered UI across both surfaces, two widths and two languages to confirm nothing moved.
+
+<details><summary>v0.1.52</summary>
 
 - **Fixed: the Usage Calendar's month labels no longer drift away from the days they label.** On a wide dashboard the heatmap's day cells stretched to fill the card while the month labels stayed put, so the labels ended up describing the wrong weeks — by as much as 704px on a 1600px-wide window, which made your most recent activity look like it belonged to a month far in the future. The calendar is now fixed-width on both the dashboard and the sidebar: cells stay the same size no matter how wide the panel gets, and the leftover space is simply left empty, the way contribution graphs normally work. If the panel is *narrower* than the calendar, it scrolls sideways as before.
 - **Fixed: month labels in Korean, Japanese and Chinese no longer break across two lines and overlap the top row of cells.** The labels now stay on one line in every language, and English labels ("Aug", "Sep") no longer nudge the spacing out of alignment either.
+
+</details>
 
 <details><summary>v0.1.51</summary>
 

@@ -13,7 +13,8 @@ ccusage(★14k CLI)의 데이터 정확성 + Claudemeter의 실시간성 - 비�
 |---|---|
 | `docs/research/RESEARCH-claude-usage-dashboard-2026-05-10.md` | 시장·기술·UX 사전 리서치 |
 | `docs/design/UX-BRIEF.md` | 화면 맵·스토리보드·구현 원칙 |
-| `docs/design/DESIGN-TOKENS.md` | 색·폰트·스페이싱 토큰 (변경 시 styles.css 동기화) |
+| `src/webview/styles.css` | **토큰 Ground Truth**(75토큰/126줄) — 값이 어긋나면 이 파일이 옳다 |
+| `docs/design/DESIGN-TOKENS.md` | 위 선언의 서술 + 의도적 잔존·dead 인벤토리 (§9 바인딩) |
 | `docs/design/prototype/00-clausight-canvas.html` | 시각 Ground Truth (브라우저로 열어 확인) |
 | `docs/INIT-PLAN-2026-05-10.md` | 채택 스택 + 디렉토리 구조 |
 
@@ -34,8 +35,8 @@ ccusage(★14k CLI)의 데이터 정확성 + Claudemeter의 실시간성 - 비�
 2. **`vscode.workspace.createFileSystemWatcher` 사용 금지** — 워크스페이스 외부(`~/.claude/`) 감시 불가. chokidar 필수
 3. **claude.ai 비공개 HTTP API 사용 금지** — Claudemeter 방식. 즉시 중단 위험. jsonl 직접 파싱만 허용
 4. **`unsafe-eval` 의존 차트 라이브러리 사용 금지** — Webview CSP 위배 (Recharts/Tremor 제외)
-5. **하드코딩 색상 0개** — `var(--vscode-*)` 또는 `var(--c-opus|sonnet|haiku|warn|danger|slate)` 토큰만
-6. **5+1 액센트 cap** — 새 색 추가 시 합의 필수
+5. **선언 밖 색 리터럴 금지** — `styles.css`의 `--x:` 선언 줄 밖에서는 hex/rgba 금지. `var(--vscode-*)` · `var(--c-*)` · `var(--tint-*|--fg-*|--shadow-*|--btn-*)` 토큰만. **현재 0건이며 게이트가 `fail`로 막는다** (예외는 `design-lint-ignore` 주석 + DESIGN-TOKENS.md §12.1 등재 필수)
+6. **7+1 액센트 cap** — fable·opus·sonnet·haiku·warn·danger·success + slate(중립). 8번째 추가 시 합의 필수
 7. **외부 폰트 임포트 금지** — 시스템 폰트만 (`-apple-system, "Segoe UI", system-ui, sans-serif`)
 
 ## 4. 디렉토리 책임
@@ -90,3 +91,49 @@ ccusage(★14k CLI)의 데이터 정확성 + Claudemeter의 실시간성 - 비�
 1. https://github.com/BerriAI/litellm 의 model_prices_and_context_window.json 참조
 2. 본 파일 수동 갱신
 3. CHANGELOG에 기록
+
+---
+
+## 9. 🎨 디자인 토큰 바인딩
+
+| 항목 | 값 |
+|---|---|
+| **Ground Truth** | `src/webview/styles.css` — 토큰 선언과 스타일시트를 **겸한다** |
+| **문서(서술)** | `docs/design/DESIGN-TOKENS.md` — 코드가 우선, 문서가 따라간다 |
+| 토큰 실체 | CSS 커스텀 프로퍼티 **75개** (`:root` 24 · `.theme-dark` 51 · `.theme-light` 51). dead 0 · 미정의 0 · 페어 미충족 0 |
+| 네임스페이스 | `--sp-*` `--fs-*` `--r-*` `--ff-*` (불변) · `--c-*` `--fg-on-accent` (액센트, `:root`) · `--vscode-*` `--heat-*` `--tooltip-*` `--tint-*` `--fg-*` `--outline-*` (테마별) |
+| 소비 형태 | CSS `var(--x)` 단일. `.ts`는 색을 갖지 않는다(실측 hex 2건 = HTML 엔티티 `&#9888;`) |
+| 예외 표기 | 같은 줄 `design-lint-ignore` 주석 |
+| 현재 드리프트 | **0건** (착수 시 122). `.theme-light` 오버라이드 규칙도 25→0 — 전부 토큰이 흡수했다 |
+
+### 판정 규약 (틀리기 쉬운 지점)
+
+- **줄 단위로 가른다.** `styles.css`를 "토큰 파일"이라며 통째 제외하면 드리프트가 2건으로 보인다(실제로 그 착시가 났다). 반대로 통째로 세면 선언의 hex 112건이 전부 위반으로 잡힌다. 기준은 `^\s*--x:` 선언 줄 여부다.
+- **hex만 세지 않는다.** 이 repo는 rgba가 더 많았다(hex 41 < rgba 81). 두 패턴을 함께 센다.
+- **`var(--vscode-*)` 142건은 정상이다.** VS Code 테마 연동이며 치환 대상이 아니다.
+- **측정 시 `.vscode-test/` 제외.** 다운로드된 VS Code 바이너리까지 세면 hex가 65,742로 잡힌다. 게이트는 `styles.css` 단일 파일만 보므로 이 함정을 구조적으로 회피한다.
+
+### 게이트 (`bash verify.sh`)
+
+| 규칙 | 판정 | 기준선 |
+|---|---|---|
+| D-0 측정 온전성(선언 수) | **fail** | ≥50 (붕괴가 '개선'으로 읽히는 것 차단) |
+| D-1 선언 밖 색 리터럴 | **fail** | **0** (백로그 청소 후 승격. 예외는 `design-lint-ignore` + DESIGN-TOKENS §12.1 등재) |
+| D-2 미정의 토큰 참조 | **fail** | 0 |
+| D-3 다크/라이트 페어 미충족 | warn | **0** (dead 21개 제거로 예외 소멸) |
+| design-lint (프로토타입 HTML) | 보고 전용 | — |
+
+**D-2가 fail인 이유**: 선언되지 않은 `var(--x)`는 브라우저가 **선언째 폐기**한다 — tsc·eslint·빌드가 전부 통과하고 스타일만 사라지는 무성 실패다. 실제로 `.panel-title`의 `--ff-display`가 v0.1.52까지 이 상태였다.
+
+**design-lint에 `--gate`를 걸지 않는 이유**: `D-TYPE-07`이 `--fs-label`(11px, VS Code 네이티브 규격)에 상시 발화해 영원히 녹색이 될 수 없다. 게이트를 걸면 프로토타입을 고치는 방향으로 스코프가 샌다. `D-TOKEN-01`도 상시 잔존 대상이다 — harvest가 spacing과 font-size/border-width를 구분하지 않는 flat 집합이라, 0으로 스냅하면 정리가 아니라 왜곡이다(DESIGN-TOKENS.md §13.1). 기준선 **error 6 · warn 29**(v0.1.53, `--token-source src/webview/styles.css` 기준 — 플래그가 바뀌면 숫자도 바뀐다).
+
+⚠️ **`design-lint-ignore` 주석은 프로토타입 HTML에서 동작하지 않는다** — 이 마커는 `--tokens`/`--token-source`가 가리키는 토큰 소스 문서의 harvest 줄 필터 전용이다. §3#5의 `design-lint-ignore` 예외는 `verify.sh` D-1(`styles.css`) 컨벤션이며 별개 메커니즘이다.
+
+⚠️ **(구 `--tokens` 경로 한정, 현재 미사용) DESIGN-TOKENS.md에 위반 사례를 hex/px 값으로 적지 말 것** — 문서 전체를 정규식으로 긁는 unstructured harvest라 위반값을 적으면 탐지기가 삼켜 눈이 먼다(실측: error 9→6, `80px`·`9px` 재발). v0.1.53부터 `--token-source`(실 선언 harvest)로 전환해 이 문서 문구는 더 이상 허용집합에 영향을 주지 않지만, 설명 기술 관행은 유지한다(§13.1).
+
+### 신규 토큰 추가 시
+
+1. `.theme-dark`·`.theme-light` **양쪽에** 선언 (§11.2 — 예외는 §12.2에 사유와 함께 등재)
+2. `DESIGN-TOKENS.md` 해당 표에 동시 기재
+3. 액센트라면 7+1 cap 확인 (§3#6). **Fable 솔리드가 필요하면 `--c-fable: #E0529C;`를 되살린다** — 하드코딩 금지(DESIGN-TOKENS §12.2)
+4. `bash verify.sh --full`로 D-1~3 통과 확인

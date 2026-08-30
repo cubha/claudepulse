@@ -9,6 +9,11 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** 에러 메시지를 HTML-safe 문자열로 변환(innerHTML 삽입 전용 — XSS 방지). */
+export function formatErrorHtml(err: unknown): string {
+  return escapeHtml(err instanceof Error ? err.message : String(err));
+}
+
 /** USD 비용 표시. <$0.01은 절삭 표기. */
 export function fmtCost(usd: number): string {
   if (usd < 0.01) return '<$0.01';
