@@ -1,9 +1,9 @@
 {
   "_meta": {
     "source": "https://platform.claude.com/docs/en/about-claude/models/overview.md",
-    "fetched_at": "2026-06-11",
+    "fetched_at": "2026-09-02",
     "unit": "USD per 1M tokens",
-    "note": "수동 갱신(코드 미import, 참조용). 모델 가격 변경 시 본 파일과 src/utils/pricing.ts 동시 갱신 후 CHANGELOG 기록. 캐시 생성: 5m(cache_creation)=input×1.25 · 1h(cache_creation_1h)=input×2.0 · read=input×0.1 (Anthropic 표준)."
+    "note": "src/utils/pricing.ts의 PRICING과 **동일해야 한다** — test/unit/pricing.snapshot.test.ts가 강제한다. 이 파일을 코드가 import하지 않는다는 이유로 v0.1.54까지 조용히 낡아 있었다(현행 세대 모델 전원 누락). 캐시 생성: 5m(cache_creation)=input×1.25 · 1h(cache_creation_1h)=input×2.0 · read=input×0.1 (Anthropic 표준). claude-5 세대 값은 문서가 아니라 CLI가 기록한 cost-state 실측 역산이다(test/fixtures/vendor-cost-oracle.json)."
   },
   "models": {
     "claude-fable-5": {
@@ -12,6 +12,20 @@
       "cache_creation": 12.5,
       "cache_creation_1h": 20.0,
       "cache_read": 1.0
+    },
+    "claude-opus-5": {
+      "input": 5,
+      "output": 25,
+      "cache_creation": 6.25,
+      "cache_creation_1h": 10,
+      "cache_read": 0.5
+    },
+    "claude-sonnet-5": {
+      "input": 2,
+      "output": 10,
+      "cache_creation": 2.5,
+      "cache_creation_1h": 4,
+      "cache_read": 0.2
     },
     "claude-opus-4-8": {
       "input": 5.0,

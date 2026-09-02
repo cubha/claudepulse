@@ -2,6 +2,8 @@
 // 렌더링을 스크린샷으로 확인한다. docs/demo/*.html(가짜 postMessage) 검증과 달리 실제
 // activate() → SidebarViewProvider → chokidar/jsonl 파싱 → 실 ~/.claude 데이터 경로를 탄다.
 // Usage: xvfb-run -a node scripts/verify-real-extension-visual.mjs
+// verify-gate: skip(non-hermetic) — 실 ~/.claude 데이터와 로컬 VS Code 바이너리에 의존해
+//   머신마다 결과가 다르다. 게이트에 넣으면 재현 불가능한 red를 만든다. 육안 검증 전용.
 import { chromium } from 'playwright-core';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -11,7 +13,16 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(__dirname, '..');
-const codeBin = path.resolve(repo, '.vscode-test/vscode-linux-x64-1.126.0/code');
+// VS Code 바이너리는 버전을 하드코딩하지 않는다 — .vscode-test/에 여러 버전이 공존하고
+// (실측 2026-08-31: 1.126.0 · 1.135.0), 하드코딩한 버전이 정리되면 이 스크립트가 조용히 죽는다.
+const codeBin = (() => {
+  const root = path.resolve(repo, '.vscode-test');
+  const dirs = fs.existsSync(root)
+    ? fs.readdirSync(root).filter((d) => d.startsWith('vscode-linux-x64-')).sort()
+    : [];
+  if (!dirs.length) throw new Error('.vscode-test에 VS Code 바이너리가 없습니다 — npm run test:e2e를 먼저 1회 실행하세요');
+  return path.resolve(root, dirs[dirs.length - 1], 'code');
+})();
 const OUT_DIR = path.resolve(repo, '.playwright-mcp');
 const DEBUG_PORT = 9333;
 

@@ -1,9 +1,10 @@
 import * as path from 'node:path';
-import { findPricing } from '../utils/pricing';
+import { findPricing, resolvePricing } from '../utils/pricing';
+import type { PricingSource } from '../utils/pricing';
 import { calcContextUsageRatio, findContextWindow } from '../utils/contextWindow';
 import { cwdMatchesWorkspace } from '../utils/workspaceMatch';
 import { emptyToolCounts } from './JsonlParser';
-import type { AttributionScope, BranchUsage, CacheStats, ContextSessionSummary, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
+import type { AttributionScope, BranchUsage, CacheStats, ContextSessionSummary, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, ModelShareBasis, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -98,7 +99,7 @@ export class UsageAggregator {
 
     const byDay = new Map<string, DailyUsage>();
     const bySession = new Map<string, SessionSummary>();
-    const byModel = new Map<string, { tokens: number; costUsd: number }>();
+    const byModel = new Map<string, { tokens: number; costUsd: number; pricingSource: PricingSource }>();
     const byDayTools = new Map<string, DailyToolStats>();
     const byBranch = new Map<string, BranchUsage>();
     const branchSessionSets = new Map<string, Set<string>>();
@@ -204,7 +205,7 @@ export class UsageAggregator {
       // 오늘 전용 집계
       if (day === todayKey) {
         // 모델별 집계
-        const existing = byModel.get(r.model) ?? { tokens: 0, costUsd: 0 };
+        const existing = byModel.get(r.model) ?? { tokens: 0, costUsd: 0, pricingSource: resolvePricing(r.model).source };
         existing.tokens += r.usage.input_tokens + r.usage.output_tokens
           + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
         existing.costUsd += r.costUsd;
@@ -256,16 +257,40 @@ export class UsageAggregator {
       .sort((a, b) => b.startTime.localeCompare(a.startTime))
       .slice(0, 20);
 
-    // 모델별 분해 (비용 내림차순)
+    // 모델별 분해.
+    //
+    // share 기준이 비용 고정이면 안 된다: 가격표에 없는 모델의 costUsd는 0인데, 그 0이 **측정된
+    // 0처럼** 분모·분자에 들어간다. 그러면 가격이 남아있는 레거시 모델 한 건이 100%를 독식하고
+    // (사용자 실측: 토큰의 97%인 sonnet이 0%, 나머지가 100%) 총액은 실제의 1~2%로 찍힌다.
+    // 전 모델의 가격을 아는 경우에만 비용 기준을 쓰고, 하나라도 모르면 **토큰 기준으로 바꾸고
+    // 그 사실을 modelShareBasis로 밝힌다**. 정렬 기준도 같이 바꾼다 — 아니면 1위 행과 최대
+    // share 행이 어긋난다.
+    //
+    // ⚠️ 트리거는 `totalCost === 0`이 아니다. 미가격 모델과 가격 모델이 섞인 실제 사고 상황에서는
+    // totalCost > 0이라 그 조건은 발화하지 않는다(advisor 지적, 2026-09-02).
+    const unpricedModels = [...byModel.entries()]
+      .filter(([, v]) => v.pricingSource === 'none' && v.tokens > 0)
+      .map(([model]) => model)
+      .sort();
     const totalCost = [...byModel.values()].reduce((sum, v) => sum + v.costUsd, 0);
+    const totalModelTokens = [...byModel.values()].reduce((sum, v) => sum + v.tokens, 0);
+    const modelShareBasis: ModelShareBasis = unpricedModels.length > 0 || totalCost <= 0 ? 'tokens' : 'cost';
+    const shareDenom = modelShareBasis === 'cost' ? totalCost : totalModelTokens;
+    const shareOf = (v: { tokens: number; costUsd: number }): number =>
+      shareDenom > 0 ? (modelShareBasis === 'cost' ? v.costUsd : v.tokens) / shareDenom : 0;
     const modelBreakdown: ModelBreakdown[] = [...byModel.entries()]
+      // 사용량이 전혀 없는 유사모델은 뺀다 — Claude Code는 도구 결과 등을 `<synthetic>` 레코드로
+      // 남기는데 토큰이 전부 0이다. 가격표에 없으니 pricingSource='none'이 되어, 걸러내지 않으면
+      // 실제로 쓰지도 않은 항목이 "가격 미상" 행으로 상시 노출된다(ST9가 새로 만들 뻔한 오탐).
+      .filter(([, v]) => v.tokens > 0 || v.costUsd > 0)
       .map(([model, v]) => ({
         model,
         tokens: v.tokens,
         costUsd: v.costUsd,
-        share: totalCost > 0 ? v.costUsd / totalCost : 0,
+        share: shareOf(v),
+        pricingSource: v.pricingSource,
       }))
-      .sort((a, b) => b.costUsd - a.costUsd);
+      .sort((a, b) => b.share - a.share || b.tokens - a.tokens);
 
     // 오늘 캐시 효율
     const cacheDenom = todayInput + todayCacheCreation + todayCacheRead;
@@ -414,6 +439,8 @@ export class UsageAggregator {
       last7Days,
       recentSessions,
       modelBreakdown,
+      unpricedModels,
+      modelShareBasis,
       cacheStats,
       todayToolCounts: todayTools,
       last7DaysTools,

@@ -2,7 +2,7 @@
   "name": "claude-code-gauge",
   "displayName": "Claude Code Gauge",
   "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.1.54",
+  "version": "0.1.55",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -90,6 +90,20 @@
           "minimum": 0,
           "maximum": 1,
           "description": "Show a warning when utilization exceeds this value (0–1). Default: 0.8 (80%)."
+        },
+        "claudeCodeGauge.retroCommitScope": {
+          "type": "string",
+          "enum": [
+            "mine",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Only commits authored by your git config user.email, among those reachable from the current branch (default).",
+            "Every commit on the current branch — your usage may be attributed to other people's commits."
+          ],
+          "default": "mine",
+          "description": "Which commits the usage×git retrospective may attribute cost to. Repositories with no user.email configured fall back to 'all' automatically, and the retrospective says so.",
+          "scope": "window"
         }
       }
     }

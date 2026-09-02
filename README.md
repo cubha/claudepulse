@@ -14,10 +14,22 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.54
+## What's New in v0.1.55
 
-- **Fixed: a handful of error messages shown in the sidebar/panel weren't HTML-escaped before being displayed.** If the webview's messaging layer ever failed to start, its error text was inserted into the page without escaping first — a defensive hardening fix, not a reported exploit. (Completed as v0.1.53, which was never published on its own; it reaches you here.)
-- Everything else in v0.1.54 is internal and changes nothing you can see: unit-test coverage for the usage-rollup, cache and workspace-mapping services that had none; type checking turned on for the webview and test code, which had been silently excluded; an off-the-event-loop fix for a directory scan that ran on every refresh; and the 1882-line webview entry point split into four modules, checked against a structural snapshot of the rendered UI across both surfaces, two widths and two languages to confirm nothing moved.
+- **Fixed: your costs were being reported as roughly 1–2% of what you actually spent.** The price table hadn't been updated for the current model generation — `claude-opus-5` and `claude-sonnet-5` were missing outright, and the fallback that was supposed to catch new models had never once fired, so nearly every record was priced at $0 while everything else looked normal. Prices are now taken from Anthropic's own per-model figures that Claude Code records in its logs (Opus 5 at $5/$25; Sonnet 5 at **$2/$10** — cheaper than Sonnet 4.x), web search billing is counted, and a fixture keeps those numbers honest when prices change again.
+- **Fixed: the Model Breakdown pointed at the wrong model.** Because shares were computed from cost, the missing prices meant whichever older model still had one took 100% of the chart while the model doing almost all the work showed 0%. When any model's price is unknown, shares now switch to a token basis and say so, the affected row reads "price unknown" instead of `$0.00`, and the card warns you which models are involved — rather than showing a zero that looks like a measurement.
+- **Fixed: the commit retrospective credited your spending to other people's commits.** On a shared repository it considered every colleague's commit from the last six months. It now only considers commits you authored (`claudeCodeGauge.retroCommitScope` restores the old behaviour), and tells you when a repository has no `user.email` to filter by.
+- **New: long lists fold.** Recently Edited Files, Recent Sessions and the branch list were unbounded and pushed the cards below them off-screen. They now show six rows with a "Show more (+N)" toggle that tells you how many are hidden.
+- **Fixed: on a narrow dashboard the Usage Calendar stopped short of today, cutting today's square off the right edge.** The calendar scrolls itself to the right after every refresh so you see the most recent week — but that scroll was applied before the panel's layout had settled, so it landed 52px short and never corrected itself. Worse, the wrong position was then mistaken for "you scrolled into the past" and preserved on every later refresh. Dashboards wider than about 750px were unaffected, which is why this went unnoticed since v0.1.52. Scrolling back into history still works exactly as before.
+- **Fixed: the sidebar's mini calendar never scrolled to today at all.** On a narrow sidebar (220px and below) it showed the oldest weeks and clipped today entirely. It now behaves like the dashboard.
+- The rest of this release is internal, and mostly about why the above took three releases to notice: the test that had been catching it every day was never wired into the build. That's fixed, along with the checks that could report "all clear" while examining nothing.
+
+<details><summary>v0.1.54</summary>
+
+- **Fixed: a handful of error messages shown in the sidebar/panel weren't HTML-escaped before being displayed.** If the webview's messaging layer ever failed to start, its error text was inserted into the page without escaping first — a defensive hardening fix, not a reported exploit. (Completed as v0.1.53, which was never published on its own; it reached you in v0.1.54.)
+- Everything else in v0.1.54 was internal and changed nothing you can see: unit-test coverage for the usage-rollup, cache and workspace-mapping services that had none; type checking turned on for the webview and test code, which had been silently excluded; an off-the-event-loop fix for a directory scan that ran on every refresh; and the 1882-line webview entry point split into four modules, checked against a structural snapshot of the rendered UI across both surfaces, two widths and two languages to confirm nothing moved.
+
+</details>
 
 <details><summary>v0.1.52</summary>
 

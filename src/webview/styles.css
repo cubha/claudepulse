@@ -1707,3 +1707,61 @@ body[data-mode="sidebar"] #root { height: 100%; }
   color: var(--vscode-descriptionForeground);
   opacity: 0.85;
 }
+
+/* ── v0.1.55: 가격 신호 정직성 + 행 상한 ─────────────────────────────── */
+
+/* 계측되지 않은 값을 계측된 것처럼 보이지 않게 하는 표기들. */
+.panel-warn-note {
+  margin-bottom: var(--sp-2);
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-label);
+  line-height: 1.4;
+  color: var(--c-warn);
+  border-left: 2px solid var(--c-warn);
+  background: var(--tint-warn);
+  border-radius: var(--r-sm);
+}
+.panel-basis-note {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.85;
+  margin-bottom: var(--sp-1);
+}
+.model-bar-cost--unknown {
+  color: var(--c-warn);
+  text-align: right;
+  font-size: 10px;
+}
+.model-approx {
+  color: var(--vscode-descriptionForeground);
+  margin-left: 2px;
+}
+
+/* 행 상한 + 더보기 토글. 목록이 화면을 통째로 먹는 것을 막되, 접힌 사실과 남은 개수를
+   항상 드러낸다 — 조용히 잘라내면 "그게 전부"로 읽힌다. */
+.list-more-row {
+  display: flex;
+  justify-content: center;
+  padding-top: var(--sp-1);
+}
+.list-more-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: var(--fs-label);
+  color: var(--vscode-textLink-foreground);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+}
+.list-more-btn:hover { background: var(--vscode-list-hoverBackground); }
+.retro-scope-note {
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: var(--sp-1);
+}
+.retro-scope-warn {
+  font-size: var(--fs-label);
+  color: var(--c-warn);
+  margin-bottom: var(--sp-1);
+}

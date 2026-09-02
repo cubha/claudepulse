@@ -14,12 +14,23 @@ import type { CalendarDay } from './calendarView';
 import type { PollPoint } from './burnRate';
 import { vsApi } from './webviewApi';
 import {
+  createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
+} from './calendarScroll';
+import {
   FH_WINDOW_MS, SD_WINDOW_MS, fmtPct, fmtReset, fmtTime, statusColor, statusLabel,
   fmtPlanTier, buildBurnRow, fmtTokens, modelKind, modelShortName, buildCalendarHtml,
   SIDEBAR_CALENDAR_WINDOW_DAYS,
 } from './webviewShared';
 
 const root = document.getElementById('root');
+
+/**
+ * 사이드바 미니 Usage Calendar의 가로 스크롤 계약 상태(v0.1.55).
+ * v0.1.54까지 사이드바에는 스크롤 정렬 코드가 아예 없어, 폭이 고정 그리드(196px)보다
+ * 좁으면(실측 ≤220px) 왼쪽 끝=과거만 보이고 오늘 셀이 잘렸다. 기존 검증기 둘 다
+ * "오버플로가 존재하는가"만 단언하고 "오늘이 보이는가"는 단언하지 않아 통과했다.
+ */
+const sidebarCalendarScroll = createCalendarScrollState();
 
 export function initSidebar(): void {
   if (!root) return;
@@ -106,7 +117,11 @@ export function initSidebar(): void {
     .catch(() => renderSidebar(null, lastError));
 
   function renderSidebar(snapshot: RateLimitSnapshot | null, error: PollerError | null): void {
+    const CAL_AREA = '.sb-calendar-wrap .calendar-grid-area';
+    captureCalendarScroll(root!.querySelector(CAL_AREA), sidebarCalendarScroll);
     root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory, lastUsage);
+    // 좁은 사이드바에서 오늘 셀이 잘리지 않도록 우측 끝 정렬(대시보드와 동일 계약).
+    applyCalendarScroll(root!.querySelector(CAL_AREA), sidebarCalendarScroll);
     // JS로 진행바 width 설정 (innerHTML 내 inline style은 CSP 안전망으로 차단될 수 있음)
     if (snapshot) {
       const fhBar = root!.querySelector<HTMLElement>('#sb-fh-bar');
@@ -175,9 +190,14 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
     return `<div class="sb-usage-row">${t('no_usage_today')}</div>`;
   }
 
+  // modelBreakdown은 share 내림차순이고 share 기준은 가격을 다 알 때만 비용이다(v0.1.55).
+  // 그래서 여기서 다시 정렬하지 않는다 — 예전엔 비용 정렬이라, 가격표에 없는 모델이 실제
+  // 대부분을 차지해도 레거시 모델이 대표 칩으로 올라왔다.
   const topModel = modelBreakdown[0];
+  const modelUnpriced = topModel !== undefined && topModel.pricingSource === 'none';
   const modelChip = topModel
-    ? `<span class="sb-chip sb-chip--model ${modelAccentClass(topModel.model)}">${escapeHtml(modelShortName(topModel.model))}</span>`
+    ? `<span class="sb-chip sb-chip--model ${modelAccentClass(topModel.model)}"${modelUnpriced ? ` title="${escapeHtml(t('pricing_unknown_note'))}"` : ''}>`
+      + `${escapeHtml(modelShortName(topModel.model))}${modelUnpriced ? ' ⚠' : ''}</span>`
     : '';
 
   const cacheChip = cacheStats.hitRate > 0

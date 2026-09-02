@@ -13,6 +13,9 @@ import { renderRetro } from './retroView';
 import { calcSafeUntil, calcProjAtReset, deriveBurnState, burnStateLabelKey, type PollPoint } from './burnRate';
 import { vsApi } from './webviewApi';
 import {
+  createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
+} from './calendarScroll';
+import {
   fmtPct, fmtReset, fmtTime, statusLabel, fmtPlanTier, fmtTokens, modelKind, modelShortName,
   barFillWidth, buildCalendarHtml, CALENDAR_WINDOW_DAYS, FH_WINDOW_MS,
 } from './webviewShared';
@@ -44,6 +47,8 @@ let panelUsage: UsageSummary | null = null;
 let lastPanelSnapshot: RateLimitSnapshot | null = null;
 // 회고 섹션은 extension에 lazy 요청(GetRetroSummary)하므로 messenger 참조 보관
 let panelMessenger: InstanceType<typeof Messenger> | null = null;
+/** Usage Calendar 가로 스크롤 계약 상태 — 이 모듈이 단독 소유한다(v0.1.55 결함 A). */
+const panelCalendarScroll = createCalendarScrollState();
 
 function destroyCharts(): void {
   if (trendChart) { trendChart.destroy(); trendChart = null; }
@@ -82,6 +87,30 @@ function wirePanelButtons(messenger: InstanceType<typeof Messenger>): void {
       btn.classList.add('active');
       updateSkillSection();
     });
+  });
+  wireListMoreDelegation();
+}
+
+/**
+ * "더보기/접기" 클릭 위임 (v0.1.55).
+ *
+ * 이 버튼은 목록 innerHTML 안에 있고 목록은 push마다 통째로 교체되므로, 버튼에 직접 리스너를
+ * 걸면 첫 갱신에서 사라진다. 그래서 문서 레벨 위임 1회로 처리한다. wirePanelButtons는 셸
+ * 재빌드마다 호출되므로 중복 등록을 플래그로 막는다 — 안 막으면 클릭 1회에 토글이 N번 일어나
+ * 짝수 번째 재빌드부터 버튼이 먹통이 된다.
+ */
+let listMoreWired = false;
+function wireListMoreDelegation(): void {
+  if (listMoreWired) return;
+  listMoreWired = true;
+  document.addEventListener('click', (ev) => {
+    const target = ev.target as HTMLElement | null;
+    const btn = target?.closest?.('.js-list-more') as HTMLElement | null;
+    if (!btn) return;
+    const key = btn.dataset.list;
+    if (!key) return;
+    listExpanded[key] = !listExpanded[key];
+    LIST_UPDATERS[key]?.();
   });
 }
 
@@ -349,6 +378,7 @@ function buildPanelShell(): string {
           <canvas id="chart-longterm" style="display:none"></canvas>
           <div class="panel-loading" id="longterm-empty">${t('collecting_data')}</div>
         </div>
+        <div id="longterm-cost-note"></div>
       </div>
 
       <!-- 월별 비용 -->
@@ -358,6 +388,7 @@ function buildPanelShell(): string {
           <canvas id="chart-monthly" style="display:none"></canvas>
           <div class="panel-loading" id="monthly-empty">${t('collecting_data')}</div>
         </div>
+        <div id="monthly-cost-note"></div>
       </div>
     </div>`;
 }
@@ -461,10 +492,9 @@ function updateUsageCalendar(): void {
 
   // 재렌더(innerHTML 교체)는 스크롤 상태를 지운다 — 사용자가 과거로 스크롤해둔 위치는 보존하고,
   // 우측 끝(기본)에 있었거나 첫 렌더면 갱신 후에도 우측 끝(오늘)을 유지한다.
-  const prevArea = bodyEl.querySelector('.calendar-grid-area');
-  const prevScrollLeft = prevArea && prevArea.scrollLeft < prevArea.scrollWidth - prevArea.clientWidth - 2
-    ? prevArea.scrollLeft
-    : null;
+  // 소유·판정은 calendarScroll.ts가 한다(v0.1.55 — 좌표 역추론이 클램프된 잘못된 위치를
+  // '의도적 과거 탐색'으로 오인해 영구 고착시키던 결함 A).
+  captureCalendarScroll(bodyEl.querySelector('.calendar-grid-area'), panelCalendarScroll);
 
   const allDays = panelUsage?.historicalDays ?? [];
   const hasData = allDays.some(d => d.costUsd > 0 || d.totalTokens > 0);
@@ -478,8 +508,7 @@ function updateUsageCalendar(): void {
 
   // 카드 폭 < 그리드 고정폭이면 좌측(과거)부터 보이는 게 기본인데, 최신 주가 화면 밖으로
   // 밀려 "사용내역 없음"처럼 보인다 — 기본 스크롤을 오른쪽 끝(오늘)으로 정렬(GitHub 관례).
-  const gridArea = bodyEl.querySelector('.calendar-grid-area');
-  if (gridArea) gridArea.scrollLeft = prevScrollLeft ?? gridArea.scrollWidth;
+  applyCalendarScroll(bodyEl.querySelector('.calendar-grid-area'), panelCalendarScroll);
 }
 
 function modelColor(model: string): string {
@@ -502,27 +531,45 @@ function updateModelBreakdown(): void {
   const borderColor = getCssVar('--vscode-panel-border');
 
   const labels = breakdown.map(b => modelShortName(b.model));
-  const data = breakdown.map(b => Number(b.costUsd.toFixed(4)));
+  // 도넛도 share와 같은 기준으로 그린다. 비용 기준으로 고정하면 가격 미상 모델이 0으로 들어가
+  // 조각이 아예 사라지고, 사용자는 "그 모델을 안 썼다"로 읽는다(실측 사고의 시각적 형태).
+  const byTokens = panelUsage?.modelShareBasis === 'tokens';
+  const data = breakdown.map(b => byTokens ? b.tokens : Number(b.costUsd.toFixed(4)));
   const colors = breakdown.map(b => modelColor(b.model));
 
-  // 모델 바 목록 렌더
-  const barsHtml = breakdown.map(b => `
+  // 모델 바 목록 렌더 — 비용을 모르는 행은 금액 자리에 '가격 미상'을 쓴다. $0.00을 찍으면
+  // 그건 계측된 0으로 읽힌다(v0.1.55가 다루는 거짓초록과 같은 부류).
+  const barsHtml = breakdown.map(b => {
+    const costCell = b.pricingSource === 'none'
+      ? `<span class="model-bar-cost model-bar-cost--unknown" title="${escapeHtml(t('pricing_unknown_note'))}">${escapeHtml(t('pricing_unknown'))}</span>`
+      : `<span class="model-bar-cost mono">${fmtCost(b.costUsd)}${b.pricingSource === 'family' ? `<span class="model-approx" title="${escapeHtml(t('pricing_unknown_note'))}">~</span>` : ''}</span>`;
+    return `
     <div class="model-bar-row">
       <span class="model-bar-label">${escapeHtml(modelShortName(b.model))}</span>
       <div class="model-bar-track">
         <div class="model-bar-fill" style="width:${(b.share * 100).toFixed(1)}%;background:${modelColor(b.model)};"></div>
       </div>
-      <span class="model-bar-cost mono">${fmtCost(b.costUsd)}</span>
+      ${costCell}
       <span class="model-bar-pct mono">${(b.share * 100).toFixed(0)}%</span>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+
+  const unpriced = panelUsage?.unpricedModels ?? [];
+  const noteHtml = unpriced.length > 0
+    ? `<div class="panel-warn-note" title="${escapeHtml(unpriced.join(', '))}">⚠ ${escapeHtml(t('pricing_unknown_note'))}</div>`
+    : '';
+  const basisHtml = byTokens
+    ? `<div class="panel-basis-note">${escapeHtml(t('share_by_tokens'))}</div>`
+    : '';
 
   const canvasId = 'chart-model';
   bodyEl.innerHTML = `
+    ${noteHtml}
     <div class="panel-model-layout">
       <div class="panel-model-donut">
         <canvas id="${canvasId}" width="100" height="100"></canvas>
       </div>
-      <div class="panel-model-bars">${barsHtml}</div>
+      <div class="panel-model-bars">${basisHtml}${barsHtml}</div>
     </div>`;
 
   const canvas = document.getElementById(canvasId) as HTMLCanvasElement | null;
@@ -546,7 +593,10 @@ function updateModelBreakdown(): void {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx: { parsed: unknown }) => ` ${fmtCost(ctx.parsed as number)}`,
+            // 도넛 데이터가 토큰으로 바뀌면 툴팁도 같이 바뀌어야 한다 — 토큰 수에 $를 붙이면
+            // 그게 가장 눈에 띄는 거짓말이 된다.
+            label: (ctx: { parsed: unknown }) =>
+              byTokens ? ` ${fmtTokens(ctx.parsed as number)}` : ` ${fmtCost(ctx.parsed as number)}`,
           },
         },
       },
@@ -720,6 +770,31 @@ function updateToolChart(): void {
   }
 }
 
+/**
+ * 목록 기본 노출 행 수 (v0.1.55).
+ *
+ * 이전에는 상한이 없어 최근 파일 20행·세션 20행·브랜치 전량이 카드를 세로로 밀어냈고,
+ * 아래 카드들이 화면 밖으로 나갔다. 잘라내되 **잘랐다는 사실과 남은 개수를 항상 드러낸다** —
+ * 조용한 절단은 "그게 전부"로 읽히기 때문이다.
+ */
+const LIST_COLLAPSED_ROWS = 6;
+
+/** 목록별 펼침 상태. 재렌더(push)마다 innerHTML이 교체되므로 DOM이 아니라 여기서 보존한다. */
+const listExpanded: Record<string, boolean> = {};
+
+/** 목록 갱신 함수 — 더보기 클릭 시 해당 목록만 다시 그린다. */
+const LIST_UPDATERS: Record<string, () => void> = {};
+
+function cappedListHtml(rows: string[], key: string): string {
+  const expanded = listExpanded[key] === true;
+  if (rows.length <= LIST_COLLAPSED_ROWS) return rows.join('');
+  const visible = expanded ? rows : rows.slice(0, LIST_COLLAPSED_ROWS);
+  const hidden = rows.length - visible.length;
+  const label = expanded ? escapeHtml(t('show_less')) : `${escapeHtml(t('show_more'))} (+${hidden})`;
+  return visible.join('')
+    + `<div class="list-more-row"><button class="list-more-btn js-list-more" data-list="${escapeHtml(key)}">${label}</button></div>`;
+}
+
 function updateFilesList(): void {
   const listEl = document.getElementById('panel-files-list');
   if (!listEl) return;
@@ -730,7 +805,7 @@ function updateFilesList(): void {
     return;
   }
 
-  listEl.innerHTML = files.map(fp => {
+  const rows = files.map(fp => {
     const parts = fp.split(/[/\\]/);
     const fileName = parts[parts.length - 1] ?? fp;
     const dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
@@ -740,7 +815,8 @@ function updateFilesList(): void {
         ${dir ? `<span class="file-dir" title="${escapeHtml(fp)}">${escapeHtml(dir)}</span>` : ''}
       </div>
     </div>`;
-  }).join('');
+  });
+  listEl.innerHTML = cappedListHtml(rows, 'files');
 }
 
 function updateSessionList(): void {
@@ -753,8 +829,13 @@ function updateSessionList(): void {
     return;
   }
 
-  listEl.innerHTML = sessions.map(s => buildSessionRow(s)).join('');
+  listEl.innerHTML = cappedListHtml(sessions.map(s => buildSessionRow(s)), 'sessions');
 }
+
+// 더보기 토글이 되돌아올 지점. 선언 순서 때문에 여기서 채운다(함수 선언은 호이스팅되지만
+// const 객체 초기화는 안 되므로, 모듈 최상단이 아니라 정의 뒤에 등록한다).
+LIST_UPDATERS['files'] = updateFilesList;
+LIST_UPDATERS['sessions'] = updateSessionList;
 
 function updateBranchSection(): void {
   const listEl = document.getElementById('panel-branch-list');
@@ -784,10 +865,11 @@ function updateBranchSection(): void {
       <span class="branch-sessions mono">${b.sessionCount}</span>
       <span class="branch-last mono">${escapeHtml(lastStr)}</span>
     </div>`;
-  }).join('');
+  });
 
-  listEl.innerHTML = headerRow + rows;
+  listEl.innerHTML = headerRow + cappedListHtml(rows, 'branches');
 }
+LIST_UPDATERS['branches'] = updateBranchSection;
 
 function updateSkillSection(): void {
   const listEl = document.getElementById('panel-skill-list');
@@ -871,7 +953,18 @@ function updateLongTermSection(): void {
   cutoff.setUTCDate(cutoff.getUTCDate() - longTermScopeDays);
   const cutoffKey = cutoff.toISOString().slice(0, 10);
   const filtered = allDays.filter(d => d.date >= cutoffKey);
-  const hasData = filtered.some(d => d.costUsd > 0);
+  // 판정 기준이 비용이면 안 된다: CacheStore에 영구 저장된 과거 일자는 당시 가격표에 그 모델이
+  // 없었으면 costUsd가 0인데(토큰 수는 정상), 그걸 "데이터 없음"으로 부르면 실제로는 관측된
+  // 사용량이 화면에서 사라진다. jsonl 회전(~30일) 이전 구간은 재계산도 불가능하다 —
+  // 그래서 숨기지 않고 그리되, 왜 0인지 아래 note로 밝힌다.
+  const hasData = filtered.some(d => d.totalTokens > 0);
+  const costUnknownDays = filtered.filter(d => d.totalTokens > 0 && d.costUsd === 0).length;
+  const noteEl = document.getElementById('longterm-cost-note');
+  if (noteEl) {
+    noteEl.innerHTML = costUnknownDays > 0
+      ? `<div class="panel-basis-note">⚠ ${escapeHtml(t('cost_unknown_days'))} (${costUnknownDays}d)</div>`
+      : '';
+  }
 
   if (!hasData) {
     canvas.style.display = 'none';
@@ -946,7 +1039,17 @@ function updateMonthlyChart(): void {
     byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + d.costUsd);
   }
   const sortedMonths = [...byMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  const hasData = sortedMonths.some(([, v]) => v > 0);
+  // 장기 트렌드(updateLongTermSection)와 **같은 기준**이어야 한다. 비용으로만 판정하면 가격표가
+  // 낡았던 시기의 일자(비용 0·토큰 정상)만 남은 달이 통째로 "기록 없음"이 되고, 같은 데이터를 두고
+  // 장기 트렌드는 그래프를 그리는데 여기서는 없다고 말하는 모순이 생긴다.
+  const hasData = allDays.some(d => d.totalTokens > 0);
+  const costUnknownDays = allDays.filter(d => d.totalTokens > 0 && d.costUsd === 0).length;
+  const monthlyNoteEl = document.getElementById('monthly-cost-note');
+  if (monthlyNoteEl) {
+    monthlyNoteEl.innerHTML = costUnknownDays > 0
+      ? `<div class="panel-basis-note">⚠ ${escapeHtml(t('cost_unknown_days'))} (${costUnknownDays}d)</div>`
+      : '';
+  }
 
   if (!hasData) {
     canvas.style.display = 'none';

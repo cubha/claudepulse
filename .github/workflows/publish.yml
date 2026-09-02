@@ -1,4 +1,19 @@
-name: Publish Extension
+# 태그 푸시(v*.*.*) 시 패키징 검증을 돌리고, 배포 시크릿이 있을 때만 게시한다.
+#
+# [v0.1.55] 이 워크플로는 그전까지 **배포량 0인데 초록 체크를 띄우고 있었다.** 두 겹이었다:
+#   ① repo에 VSCE_PAT/OVSX_PAT 시크릿이 없다(`gh secret list` 빈 출력)
+#   ② 있어도 `if: env.VSCE_PAT != ''`는 동작하지 않는다 — step의 `if`는 그 step의 `env`가
+#      적용되기 전에 평가되므로 항상 빈 문자열로 판정돼 skip된다
+# 결과적으로 build/lint/typecheck/package까지 성공하고 publish만 조용히 skip됐는데, 최종 상태가
+# 초록이라 "태그 밀었으니 배포됐겠지"로 읽혔다. 이건 A·B·C(탐지기가 안 돎)와 다른 부류의 결함이다
+# — **탐지기가 돌았고 틀린 초록을 냈다.** 그래서 처방도 다르다: 배선이 아니라 신호 정직성이다.
+#
+# 지금 구조:
+#   package job — 항상 실행. 시크릿 유무를 output으로 내보내고, 없으면 Job Summary에 크게 적는다.
+#   publish job — needs.package.outputs.can_publish == 'true'일 때만 **생성된다**.
+#                 (job-level `if`에서는 secrets 컨텍스트를 쓸 수 없어 needs를 경유한다.
+#                  step-level `if`는 secrets를 볼 수 있으므로 마켓별 분기는 거기서 한다.)
+name: Package & Publish
 
 on:
   push:
@@ -7,8 +22,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  publish:
+  package:
     runs-on: ubuntu-latest
+    outputs:
+      can_publish: ${{ steps.probe.outputs.can_publish }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,20 +42,55 @@ jobs:
       - name: Package
         run: npx vsce package --no-dependencies
 
-      - name: Publish to VS Code Marketplace
-        if: env.VSCE_PAT != ''
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx vsce publish --no-dependencies -p $VSCE_PAT
-
-      - name: Publish to Open VSX
-        if: env.OVSX_PAT != ''
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx ovsx publish *.vsix -p $OVSX_PAT
-
       - name: Upload .vsix artifact
         uses: actions/upload-artifact@v4
         with:
           name: claudepulse-vsix
           path: '*.vsix'
+
+      # 배포 가능 여부를 여기서 판정해 output으로 넘긴다. 결과를 Job Summary에 적는 것이
+      # 핵심 — 로그 한 줄은 아무도 읽지 않는다(이 repo에서 test:integration이 3.5개월간
+      # exit 127이었는데 아무도 몰랐던 것과 같은 이유).
+      - name: Probe publish credentials
+        id: probe
+        env:
+          HAS_VSCE: ${{ secrets.VSCE_PAT != '' }}
+          HAS_OVSX: ${{ secrets.OVSX_PAT != '' }}
+        run: |
+          if [ "$HAS_VSCE" = "true" ] || [ "$HAS_OVSX" = "true" ]; then
+            echo "can_publish=true" >> "$GITHUB_OUTPUT"
+            echo "### ✅ 배포 진행 (VS Marketplace: $HAS_VSCE · Open VSX: $HAS_OVSX)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "can_publish=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### ⚠️ 이 실행은 **아무것도 배포하지 않았습니다**"
+              echo ""
+              echo "\`VSCE_PAT\`·\`OVSX_PAT\` 시크릿이 없어 publish job을 생성하지 않았습니다."
+              echo "이 워크플로가 초록이어도 마켓플레이스 버전은 **바뀌지 않았습니다** — 수동 배포가 필요합니다."
+              echo ""
+              echo "자동 배포를 켜려면: \`gh secret set VSCE_PAT\` · \`gh secret set OVSX_PAT\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=배포 안 함::시크릿 부재로 publish job을 생성하지 않았습니다. 수동 배포가 필요합니다."
+          fi
+
+  publish:
+    needs: package
+    if: needs.package.outputs.can_publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: claudepulse-vsix
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # step-level `if`는 secrets 컨텍스트를 볼 수 있다 — 한쪽 시크릿만 있는 경우도 지원한다.
+      - name: Publish to VS Code Marketplace
+        if: ${{ secrets.VSCE_PAT != '' }}
+        run: npx vsce publish --no-dependencies --packagePath *.vsix -p "${{ secrets.VSCE_PAT }}"
+
+      - name: Publish to Open VSX
+        if: ${{ secrets.OVSX_PAT != '' }}
+        run: npx -y ovsx publish *.vsix --pat "${{ secrets.OVSX_PAT }}"
