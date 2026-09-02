@@ -65,6 +65,77 @@ step "tsconfig.test.json 측정 무결성 (≥50 files)" bash -c "[ '$TEST_TS_FI
 #     있었다(v0.1.54 ST2b, ST5 분리의 하드 선행조건).
 step "TypeScript typecheck (webview)" npx tsc --noEmit -p tsconfig.webview.json
 
+# 2e. 게이트 커버리지 무결성 (v0.1.55) — D-0과 같은 계열: "자를 먼저 검사한다".
+#     이 repo의 실패는 "검증기가 없다"가 아니었다. verify-calendar-clip.js는 v0.1.52부터 실제
+#     제품 결함을 매일 잡고 있었는데 verify.sh에 배선되지 않아 3릴리즈 내내 아무도 보지 않았다
+#     (실측: verify-* 6개 중 배선 1개). CLAUDE.md에 "강제는 산문이 아니라 기계가 한다"가 적힌
+#     채로 그렇게 됐다 — 조항은 **사건 기반**이라 새 스크립트를 만들 때 읽혀야 하고 한 번 놓치면
+#     영구히 놓친다. 게이트는 **상태 기반**이라 놓친 것이 다음 실행에서 다시 잡힌다.
+#
+#     계약: scripts/verify-* 는 헤더에 `verify-gate: <full|no-build|skip(<사유코드>)> — <사유>`를
+#     선언한다. 예외를 금지하지 않고 **비싸고 보이게** 만든다(design-lint-ignore와 같은 구조 —
+#     마커가 파일 안에 있어 파일과 함께 이동·삭제되므로 별도 allowlist처럼 드리프트할 수 없다).
+UNWIRED=""
+for f in scripts/verify-*; do
+  base=$(basename "$f")
+  marker=$(grep -m1 -oE 'verify-gate:[[:space:]]*(full|no-build|skip\([a-z-]+\))' "$f" || true)
+  if [[ -z "$marker" ]]; then
+    UNWIRED="${UNWIRED}
+    - ${base} (verify-gate 마커 없음)"
+  elif [[ "$marker" == *skip* ]]; then
+    grep -qE 'verify-gate:[[:space:]]*skip\([a-z-]+\)[[:space:]]*—[[:space:]]*[^[:space:]]' "$f" \
+      || UNWIRED="${UNWIRED}
+    - ${base} (skip인데 사유 문자열 없음)"
+  else
+    # 자기매칭 함정: `grep -q "$base" verify.sh`로 쓰면 이 루프 자신·에러 메시지가 매칭돼
+    # 항상 통과한다. 실제 호출문 형태로만 찾는다.
+    grep -qE "node +scripts/${base}" verify.sh \
+      || UNWIRED="${UNWIRED}
+    - ${base} (${marker##*: } 선언인데 verify.sh에 호출 없음)"
+  fi
+done
+[[ -n "$UNWIRED" ]] && echo "  미배선 검증 자산:${UNWIRED}"
+step "검증 자산 게이트 커버리지 (미배선 0건)" test -z "$UNWIRED"
+
+# 2f. 실행가능 스모크 (v0.1.55) — 2e로는 안 잡히는 **다른 부류**. package.json에 등록돼 있어
+#     "배선된 것처럼" 보이지만 호출하면 즉시 죽는 자산을 잡는다. 실측 근거: test:integration이
+#     2026-05-10 도입 이래 3.5개월·약 50릴리즈 동안 `vscode-test: not found`(exit 127)였고,
+#     아무도 호출하지 않아 아무도 몰랐다. 미배선(2e)과 실행불가(2f)는 다른 결함이다.
+#
+#     실제로 돌리지 않고 판별한다 — 건강한 스크립트는 수십 초가 걸리므로 스모크가 될 수 없다.
+#     대신 각 스크립트의 **첫 명령어가 해석 가능한지**(node_modules/.bin 또는 PATH)만 본다.
+#     알려진 실행불가는 사유와 함께 등재하되 **매번 화면에 뜨게** 한다 — 조용히 늘어나는 것이
+#     이 게이트가 막으려는 것이므로, 예외를 금지하는 대신 비싸고 보이게 만든다.
+DEAD_ALLOW="test:integration"  # @vscode/test-cli 미설치+.vscode-test 설정 부재+extension ID 오류 3겹, v0.1.55 범위 밖(별건)
+DEAD=""
+DEAD_KNOWN=""
+while IFS=$'\t' read -r name cmd; do
+  [[ -z "$name" ]] && continue
+  first="${cmd%% *}"
+  if [[ -x "node_modules/.bin/$first" ]] || command -v "$first" >/dev/null 2>&1; then
+    continue
+  fi
+  if [[ " $DEAD_ALLOW " == *" $name "* ]]; then
+    DEAD_KNOWN="${DEAD_KNOWN}
+    - npm '${name}': '${first}' 실행 불가 (등재된 예외 — 별건 처리 대기)"
+  else
+    DEAD="${DEAD}
+    - npm '${name}': '${first}' 실행 불가 — 호출 즉시 exit 127"
+  fi
+done < <(node -e "
+  const s=require('./package.json').scripts||{};
+  for (const [k,v] of Object.entries(s)) if (k.startsWith('test')) console.log(k+'\t'+v);
+")
+# 구문 오류로 호출 즉시 죽는 하네스도 같은 부류다(비용 0으로 판별 가능).
+for f in scripts/verify-*.js scripts/verify-*.mjs; do
+  [[ -e "$f" ]] || continue
+  node --check "$f" >/dev/null 2>&1 || DEAD="${DEAD}
+    - $(basename "$f") 구문 오류 — 호출 즉시 실패"
+done
+[[ -n "$DEAD_KNOWN" ]] && echo "  ⚠️  알려진 실행불가(등재 예외):${DEAD_KNOWN}"
+[[ -n "$DEAD" ]] && echo "  실행 불가 자산:${DEAD}"
+step "검증 자산 실행가능 스모크" test -z "$DEAD"
+
 [[ "$VERIFY_MODE" == "ts-only" ]] && finish
 
 # 3. ESLint — .eslintrc.cjs의 src/webview/** ignore를 해제(v0.1.54 ST2b)해 이 한 스텝이 webview도 포함한다
@@ -87,10 +158,14 @@ else
     # test:e2e(vscode-messenger 0.6.1 라운드트립, v0.1.54 ST6) — VS Code 테스트 바이너리가
     # 캐시돼 있으면 ~5s. 미설치 환경(최초 실행)은 다운로드로 오래 걸릴 수 있어 120s 타임아웃.
     step "test:e2e (vscode-messenger 라운드트립)" bash -c "timeout 120 npm run test:e2e >/tmp/verify-e2e-cpulse.log 2>&1 || { tail -20 /tmp/verify-e2e-cpulse.log; exit 1; }"
+    # v0.1.55에서 배선 — 미배선이던 hermetic 하네스 3종. calendar-clip은 요일의존 결함(B)과
+    # 제품 결함(A)이 모두 해소돼 상시 그린이 됐고, sidebar 2종은 애초에 그린이었는데 잊혀 있었다.
+    step "Usage Calendar 고정폭·스크롤 (7-seed)" node scripts/verify-calendar-clip.js
+    step "사이드바 미니 캘린더" node scripts/verify-sidebar-calendar.js
+    step "사이드바 레이아웃" node scripts/verify-sidebar-layout.js
+    step "목록 행 상한·가격 신호 (2폭×2로캘)" node scripts/verify-list-cap.js
   fi
-  # verify-calendar-clip.js는 여기 배선하지 않는다 — v0.1.52부터 존재하는 날짜의존 기존 결함(6건,
-  # docs/plan/verify-spec/ST4-v0.1.54.md 참조)으로 상시 FAIL 상태라 그대로 걸면 실제 회귀와
-  # 구분이 안 된다. 그 결함이 해소된 뒤 배선할 것.
+
 fi
 
 # 6. package.json 메타 검증

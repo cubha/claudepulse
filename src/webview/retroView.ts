@@ -5,7 +5,7 @@
  * placeholder('데이터 수집 중…')를 커밋 막대로 **무조건 교체**한다.
  * 이 replace 계약을 node 단위테스트로 박제하기 위해 분리했다(retroView.test.ts).
  */
-import type { AttributionConfidence, RetroSummary } from '../types';
+import type { AttributionConfidence, CommitScopeInfo, RetroSummary } from '../types';
 import { t } from './i18n';
 import { escapeHtml, fmtCost } from './format';
 
@@ -58,5 +58,18 @@ export function renderRetro(listEl: { innerHTML: string }, retro: RetroSummary |
   }).join('');
 
   listEl.innerHTML = unattRow + rows
-    + `<div class="retro-disclaimer">${t('retro_disclaimer')}</div>`;
+    + `<div class="retro-disclaimer">${scopeNote(retro.commitScopes)}${t('retro_disclaimer')}</div>`;
+}
+
+/**
+ * 어떤 커밋만 후보였는지 밝힌다. 스코프를 좁히면 목록에서 사라진 커밋이 생기는데, 그 사실을
+ * 안 적으면 "커밋이 원래 이것뿐"으로 읽힌다. 요청과 적용이 다른 강등 상황은 더 크게 말한다.
+ */
+function scopeNote(scopes: CommitScopeInfo[] | undefined): string {
+  if (!scopes || scopes.length === 0) return '';
+  if (scopes.some(s => s.degraded)) {
+    return `<div class="retro-scope-warn">⚠ ${t('retro_scope_degraded')}</div>`;
+  }
+  const label = scopes.every(s => s.applied === 'mine') ? t('retro_scope_mine') : t('retro_scope_all');
+  return `<div class="retro-scope-note">${t('scope_label')}: ${label}</div>`;
 }

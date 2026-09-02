@@ -1,4 +1,5 @@
 // 웹뷰 전면 DOM digest 골든 하네스 (v0.1.54 ST4).
+// verify-gate: full — 헤드리스 chromium + docs/demo 고정 입력, 외부 상태 의존 없음(hermetic)
 //
 // 목적: main.ts(1882줄, ST5에서 sidebarView.ts/panelView.ts/panelCharts.ts/webviewApi.ts로 분리 예정)의
 // update* 렌더 함수 ~20개 중 하나가 분리 과정에서 조용히 안 불리게 돼도(호출 누락, import 누락, 모듈
@@ -66,7 +67,7 @@ async function openPage(browser, html, viewport, lang) {
   return page;
 }
 
-/** 커버리지 자체가 무너지는 것(golden capture 시 id 전부 null) 방지 — id 배열이 잘못되면 즉시 드러나야 함. */
+/** 페이지 안에서 실행돼 감시 id별 구조 지문을 만든다. 무결성 검사는 assertCoverage()가 한다. */
 function digest(ids) {
   const bySelector = {};
   for (const id of ids) {
@@ -84,6 +85,36 @@ function digest(ids) {
       heatCells: root ? root.querySelectorAll('.heat-cell').length : 0,
     },
   };
+}
+
+/**
+ * D-0류 감시망 무결성 (v0.1.55). 이 하네스의 diff 루프는 **골든**의 id를 순회하므로,
+ * 골든의 bySelector가 비어 있거나 null투성이면 내부 루프가 0회 돌아 **diff 0건 = 초록**이 된다.
+ * 즉 감시망이 붕괴한 상태가 "이상 없음"으로 읽힌다 — verify.sh D-0이 막으려는 것과 같은 부류다.
+ * (v0.1.54에서 실제로 id 2건이 감시망에서 빠져 있었고, 게이트가 아니라 사람이 잡았다.)
+ */
+function assertCoverage(digests, label) {
+  const problems = [];
+  for (const surface of SURFACES) {
+    for (const width of WIDTHS) {
+      for (const lang of LANGS) {
+        const key = `${surface.mode}@${width}px@${lang}`;
+        const d = digests[key];
+        if (!d || !d.bySelector) { problems.push(`${key}: 캡처 없음`); continue; }
+        const watched = Object.keys(d.bySelector);
+        if (watched.length !== surface.ids.length) {
+          problems.push(`${key}: 감시 id 수 ${watched.length} ≠ 선언 ${surface.ids.length}`);
+        }
+        const nulls = watched.filter((id) => d.bySelector[id] === null);
+        if (nulls.length) problems.push(`${key}: 렌더 안 된 감시 id ${nulls.length}건 — ${nulls.join(', ')}`);
+      }
+    }
+  }
+  if (problems.length) {
+    console.error(`❌ 감시망 무결성 위반(${label}) ${problems.length}건 — 이 상태의 diff 0건은 무의미하다`);
+    for (const p of problems) console.error(`  - ${p}`);
+    process.exit(1);
+  }
 }
 
 async function captureAll(browser) {
@@ -147,20 +178,52 @@ async function main() {
   }
 
   if (mode === 'capture') {
+    // 오염된 골든이 애초에 저장되지 않게 한다 — 저장된 뒤에는 그것이 새 '정답'이 된다.
+    assertCoverage(current, 'capture');
+
+    // 실패 시 가장 싼 해결책이 '재캡처'가 되면 이 하네스는 회귀를 못 잡는다. 기존 골든이
+    // 있으면 사유를 강제한다(verify.sh D-1의 기준선이 소스 안 상수라 완화하려면 코드를
+    // 고쳐야 하고 그 diff가 리뷰에 남는 것과 같은 구조).
+    const reasonIdx = process.argv.indexOf('--accept-regression');
+    const reason = reasonIdx >= 0 ? process.argv[reasonIdx + 1] : null;
+    if (fs.existsSync(GOLDEN_PATH) && !reason) {
+      console.error('❌ 기존 골든이 있습니다. 회귀가 아님을 확인한 경우에만 사유와 함께 덮어쓰세요:');
+      console.error('   node scripts/verify-webview-surface.mjs --capture --accept-regression "<사유>"');
+      process.exit(1);
+    }
+    if (fs.existsSync(GOLDEN_PATH)) {
+      const prev = JSON.parse(fs.readFileSync(GOLDEN_PATH, 'utf8'));
+      const changed = diffDigests(prev.digests ?? prev, current);
+      console.log(`ℹ️  이전 골든 대비 변경 ${changed.length}건 — 사유: ${reason}`);
+      for (const d of changed) console.log(`  - ${d}`);
+    }
+
+    // 언제·왜 갱신했는지를 골든 안에 남긴다 — 재캡처는 큰 기계생성 diff라 리뷰에서 스킵되기
+    // 쉬운데, 파일 첫 줄에 사유가 있으면 diff만 보고도 "이건 회귀를 덮은 것"인지 알 수 있다.
+    const payload = {
+      capturedAt: new Date().toISOString(),
+      reason: reason ?? '최초 캡처',
+      digests: current,
+    };
     fs.mkdirSync(path.dirname(GOLDEN_PATH), { recursive: true });
-    fs.writeFileSync(GOLDEN_PATH, JSON.stringify(current, null, 2) + '\n', 'utf8');
+    fs.writeFileSync(GOLDEN_PATH, JSON.stringify(payload, null, 2) + '\n', 'utf8');
     console.log(`✅ 골든 캡처 완료: ${GOLDEN_PATH} (${Object.keys(current).length}개 조합)`);
     process.exit(0);
   }
 
   if (!fs.existsSync(GOLDEN_PATH)) {
-    console.error(`❌ 골든 파일 없음: ${GOLDEN_PATH} — 먼저 --capture로 생성하세요`);
+    console.error(`❌ 골든 파일 없음: ${GOLDEN_PATH}`);
+    console.error('   최초 생성만 --capture로 합니다. 실패 해결책으로 재캡처하지 마세요.');
     process.exit(1);
   }
-  const golden = JSON.parse(fs.readFileSync(GOLDEN_PATH, 'utf8'));
+  const raw = JSON.parse(fs.readFileSync(GOLDEN_PATH, 'utf8'));
+  const golden = raw.digests ?? raw;  // v0.1.55에서 메타 래핑 도입, 구 평문 포맷도 읽는다
+  assertCoverage(golden, 'golden');   // 골든이 붕괴해 있으면 diff 0건은 거짓 초록이다
+  assertCoverage(current, 'current');
   const diffs = diffDigests(golden, current);
   if (diffs.length === 0) {
-    console.log(`✅ 웹뷰 전면 DOM digest — golden과 diff 0건 (${Object.keys(current).length}개 조합)`);
+    const meta = raw.capturedAt ? ` · golden ${raw.capturedAt.slice(0, 10)} "${raw.reason}"` : '';
+    console.log(`✅ 웹뷰 전면 DOM digest — golden과 diff 0건 (${Object.keys(current).length}개 조합)${meta}`);
     process.exit(0);
   }
   console.error(`❌ 웹뷰 전면 DOM digest — diff ${diffs.length}건`);

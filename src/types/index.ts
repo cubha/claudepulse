@@ -1,3 +1,6 @@
+import type { PricingSource } from '../utils/pricing';
+export type { PricingSource };
+
 // Rate Limit 대시보드 도메인 모델 — Anthropic /v1/messages 응답 헤더 기반
 
 /** 단일 rate limit 윈도우 (5h 또는 7d) 상태. */
@@ -87,6 +90,8 @@ export interface JournalUsage {
   cache_read_input_tokens: number;
   /** usage.service_tier — 'standard' | 'batch' | 'priority' 등. batch 시 비용 −50%. */
   serviceTier?: string;
+  /** usage.server_tool_use.web_search_requests — 건당 $0.01 별도 과금(WEB_SEARCH_USD_PER_REQUEST). */
+  webSearchRequests?: number;
 }
 
 /** dedup+비용 계산 후 남은 단일 assistant 레코드. */
@@ -154,12 +159,24 @@ export interface ContextSessionSummary extends SessionSummary {
   ratio: number;
 }
 
+/** 모델 share를 무엇으로 재는가. 가격 미상 모델이 섞이면 비용 비율이 거짓이 되어 토큰으로 바꾼다. */
+export type ModelShareBasis = 'cost' | 'tokens';
+
 /** 모델별 사용량 분해 (오늘 기준). */
 export interface ModelBreakdown {
   model: string;
   tokens: number;
   costUsd: number;
-  share: number;  // 0.0 ~ 1.0 (비용 기준 비율)
+  /**
+   * 0.0 ~ 1.0. 기준은 UsageSummary.modelShareBasis — 전 모델의 가격을 알면 비용, 하나라도
+   * 모르면 토큰이다. **행마다 다른 기준을 쓰지 않는다**(합이 1이 되어야 하므로).
+   */
+  share: number;
+  /**
+   * 이 행의 비용이 어디서 나왔나. 'none'이면 costUsd는 계측값이 아니라 **미상**이다 —
+   * UI는 0을 측정치처럼 그리면 안 된다(v0.1.55 거짓초록 부류).
+   */
+  pricingSource: PricingSource;
 }
 
 /** 캐시 효율 통계. */
@@ -276,7 +293,15 @@ export interface UsageSummary {
   today: DailyUsage;
   last7Days: DailyUsage[];
   recentSessions: SessionSummary[];  // 최근 20개
-  modelBreakdown: ModelBreakdown[];  // 오늘 모델별 집계
+  modelBreakdown: ModelBreakdown[];  // 오늘 모델별 집계 (modelShareBasis 기준 내림차순)
+  /**
+   * 오늘 관측된 모델 중 가격표에 없어 비용을 계산할 수 없는 것들(pricingSource='none').
+   * 비어있지 않으면 today.costUsd·cacheStats.savedUsd·modelBreakdown[].costUsd가 **과소계상**이다.
+   * v0.1.54까지 이 사실이 어디에도 드러나지 않아, 현행 세대 모델 미등재로 비용이 실제의 1~2%로
+   * 찍히는데도 화면은 정상으로 보였다.
+   */
+  unpricedModels: string[];
+  modelShareBasis: ModelShareBasis;
   cacheStats: CacheStats;            // 오늘 캐시 효율
   todayToolCounts: ToolUseCounts;    // 오늘 도구 사용 집계
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
@@ -350,12 +375,31 @@ export interface UnattributedBucket {
 }
 
 /** 회고 요약 — webview 전달. */
+/** 회고 커밋 후보 스코프. 'mine' = git config user.email 작성분만. */
+export type RetroCommitScope = 'mine' | 'all';
+
+/**
+ * 실제로 적용된 스코프. `requested !== applied`면 UI가 요청대로 말하면 안 된다 —
+ * user.email 미설정 repo에서 'mine'을 요청해도 필터를 걸 수 없어 'all'로 강등된다.
+ */
+export interface CommitScopeInfo {
+  requested: RetroCommitScope;
+  applied: RetroCommitScope;
+  authorEmail: string | null;
+  degraded: boolean;
+}
+
 export interface RetroSummary {
   commits: CommitUsage[];          // 비용 내림차순
   unattributed: UnattributedBucket;
   totalCostUsd: number;            // 전체 레코드 비용 (커밋+미귀속)
   approximate: true;               // UI 근사치 라벨 강제
   generatedAt: string;             // ISO8601
+  /**
+   * 커밋 후보를 어떻게 좁혔는지. repo마다 다를 수 있어 배열이다(멀티 repo 세션).
+   * 비어있으면 스코프 정보 없이 만들어진 구버전 스냅샷(RetroStore 영속본)이다.
+   */
+  commitScopes?: CommitScopeInfo[];
 }
 
 /** extension → webview 전달용 폴링 히스토리 포인트. JSON 직렬화 안전. */

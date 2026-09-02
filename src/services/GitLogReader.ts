@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { CommitMeta } from '../types';
+import type { CommitMeta, CommitScopeInfo, RetroCommitScope } from '../types';
 
 const execFileAsync = promisify(execFile);
 
@@ -30,12 +30,23 @@ const PRETTY = `${REC_SEP}%H${FIELD_SEP}%cI${FIELD_SEP}%D${FIELD_SEP}%s`;
 
 interface RepoCacheEntry {
   headSha: string;
+  /** 스코프가 바뀌면 같은 HEAD여도 결과가 달라진다 — 캐시 키에 포함해야 stale이 안 남는다. */
+  scope: RetroCommitScope;
   commits: CommitMeta[];
+}
+
+/**
+ * `--author`는 git에서 **정규식**이다. 이메일의 `.`은 과잉매칭 정도지만 `user+tag@x.com`의 `+`는
+ * 앞 문자 반복으로 해석돼 의미가 깨진다. 그래서 메타문자를 전부 이스케이프한다.
+ */
+export function escapeGitAuthorPattern(email: string): string {
+  return email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export class GitLogReader {
   private readonly cache = new Map<string, RepoCacheEntry>();
   private readonly repoRootCache = new Map<string, string | null>();
+  private readonly emailCache = new Map<string, string | null>();
 
   /** cwd가 속한 git repo 루트. non-repo이면 null. cwd당 1회만 셸아웃(캐시). */
   async getRepoRoot(cwd: string): Promise<string | null> {
@@ -62,36 +73,68 @@ export class GitLogReader {
     return branch === 'HEAD' ? '' : branch; // detached HEAD
   }
 
+  /** repo에 설정된 커밋 작성자 이메일. 미설정/실패 시 null. */
+  async getUserEmail(repoRoot: string): Promise<string | null> {
+    if (this.emailCache.has(repoRoot)) return this.emailCache.get(repoRoot)!;
+    const out = await this.run(repoRoot, ['config', '--get', 'user.email']);
+    const email = out === null ? null : (out.trim().length > 0 ? out.trim() : null);
+    this.emailCache.set(repoRoot, email);
+    return email;
+  }
+
   /**
-   * repo 커밋 목록을 읽는다. HEAD SHA가 캐시와 같으면 캐시 반환(셸아웃 생략).
+   * repo 커밋 목록을 읽는다. HEAD SHA+스코프가 캐시와 같으면 캐시 반환(셸아웃 생략).
    * non-repo / git 미설치 / 빈 히스토리 → [].
+   *
+   * **브랜치 스코핑은 인자 없는 `git log`가 이미 한다** — HEAD에서 도달 가능한 커밋만 나온다.
+   * 새로 붙이는 것은 작성자 스코핑이다: 여러 사람이 쓰는 repo에서 무필터 `git log`는 동료 커밋까지
+   * 후보로 만들고, 근사조인(repo+시간윈도)이 사용자의 사용량을 **남의 커밋에 귀속**시킨다.
+   *
+   * ⚠️ scope='mine'인데 `user.email`이 없으면 필터를 걸지 **않는다**. `--author=`는 빈 패턴이라
+   * 전부 매칭되므로, 거는 시늉만 하면 필터가 조용히 사라지고 화면은 스코프가 걸린 것처럼 보인다
+   * (이 릴리스가 다루는 무성 실패 부류 그대로). 대신 강등 사실을 CommitScopeInfo로 돌려준다.
    */
-  async readCommits(repoRoot: string): Promise<CommitMeta[]> {
+  async readCommits(repoRoot: string, scope: RetroCommitScope = 'all'): Promise<CommitMeta[]> {
     const headSha = await this.getHeadSha(repoRoot);
     if (headSha === null) return [];
 
     const cached = this.cache.get(repoRoot);
-    if (cached && cached.headSha === headSha) return cached.commits;
+    if (cached && cached.headSha === headSha && cached.scope === scope) return cached.commits;
 
     const branch = await this.getCurrentBranch(repoRoot);
+    const email = scope === 'mine' ? await this.getUserEmail(repoRoot) : null;
+    const authorArgs = email ? [`--author=${escapeGitAuthorPattern(email)}`] : [];
     // v0.1.39: --name-only 드롭. files 미소비인데 대형 repo서 거대 출력 → 동기 git 33초 블로킹의 97%.
     const out = await this.run(repoRoot, [
       'log',
       `--since=${SINCE}`,
+      ...authorArgs,
       '--no-color',
       `--pretty=format:${PRETTY}`,
     ]);
     if (out === null) return [];
 
     const commits = parseGitLog(out, repoRoot, branch);
-    this.cache.set(repoRoot, { headSha, commits });
+    this.cache.set(repoRoot, { headSha, scope, commits });
     return commits;
+  }
+
+  /** 요청한 스코프가 실제로 적용됐는지 — UI가 "내 커밋만"이라고 말해도 되는지 판정한다. */
+  async resolveScope(repoRoot: string, requested: RetroCommitScope): Promise<CommitScopeInfo> {
+    if (requested === 'all') {
+      return { requested, applied: 'all', authorEmail: null, degraded: false };
+    }
+    const email = await this.getUserEmail(repoRoot);
+    return email
+      ? { requested, applied: 'mine', authorEmail: email, degraded: false }
+      : { requested, applied: 'all', authorEmail: null, degraded: true };
   }
 
   /** 테스트/재집계용 캐시 무효화. */
   clearCache(): void {
     this.cache.clear();
     this.repoRootCache.clear();
+    this.emailCache.clear();
   }
 
   /**

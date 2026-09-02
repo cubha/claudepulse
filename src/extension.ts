@@ -31,7 +31,7 @@ import { registerHandlers } from './messaging/handlers';
 import { resolveCredentialsPath } from './utils/credentialsPath';
 import { readOneMillionModelsFromClaudeJson } from './utils/claudeJsonModels';
 import { buildSessionPickerItems } from './utils/sessionPicker';
-import type { CommitMeta, PollHistoryPoint, PollerError, RateLimitSnapshot, RetroSummary, SessionRecord, UsageSummary } from './types';
+import type { CommitMeta, CommitScopeInfo, PollHistoryPoint, PollerError, RateLimitSnapshot, RetroCommitScope, RetroSummary, SessionRecord, UsageSummary } from './types';
 
 export function activate(context: vscode.ExtensionContext): void {
   const logger = new Logger('Claude Code Gauge');
@@ -111,6 +111,12 @@ export function activate(context: vscode.ExtensionContext): void {
       .catch(() => undefined);
   }
 
+  /** 설정값 → 회고 커밋 스코프. 미지의 값은 안전한 기본('mine')으로 떨어뜨린다. */
+  function getRetroCommitScope(): RetroCommitScope {
+    const v = vscode.workspace.getConfiguration('claudeCodeGauge').get<string>('retroCommitScope');
+    return v === 'all' ? 'all' : 'mine';
+  }
+
   async function doBuildRetroSummary(): Promise<RetroSummary | null> {
     // allRecords 스냅샷 + 즉시 dirty 해제 — 빌드 중 refreshUsage(records 재할당)가 들어오면
     // 그 refresh가 dirty=true를 재설정해 다음 요청에 재빌드된다(빌드-끝 reset이 B 변경을
@@ -127,9 +133,16 @@ export function activate(context: vscode.ExtensionContext): void {
       const root = await gitLogReader.getRepoRoot(r.cwd);
       if (root) repoRoots.add(root);
     }
+    // 커밋 후보 스코프(v0.1.55). 기본 'mine' — 무필터 git log는 동료 커밋까지 후보로 만들고,
+    // 근사조인이 사용자 사용량을 남의 커밋에 귀속시킨다. 설정으로 'all' 복원 가능.
+    const requestedScope = getRetroCommitScope();
     const commits: CommitMeta[] = [];
-    for (const root of repoRoots) commits.push(...await gitLogReader.readCommits(root));
-    const summary = commitAttributor.attribute(records, commits);
+    const commitScopes: CommitScopeInfo[] = [];
+    for (const root of repoRoots) {
+      commits.push(...await gitLogReader.readCommits(root, requestedScope));
+      commitScopes.push(await gitLogReader.resolveScope(root, requestedScope));
+    }
+    const summary: RetroSummary = { ...commitAttributor.attribute(records, commits), commitScopes };
     lastRetroSummary = summary;
     // 전체 요약 영속 — first-paint + jsonl 30일 롤오프 후에도 커밋귀속 생존
     await retroStore.saveSummary(summary);
@@ -215,6 +228,17 @@ export function activate(context: vscode.ExtensionContext): void {
   function clearPinnedSession(): void {
     void setPinnedSessionId(null).then(() => refreshUsage());
   }
+
+  // 회고 스코프 설정 변경은 레코드 변경이 아니라 retroDirty가 서지 않는다. 그대로 두면 사용자가
+  // mine↔all을 바꿔도 다음 jsonl 변경까지 아무 일도 없고, 화면의 스코프 라벨은 **적용되지 않은
+  // 값**을 말한다(설정을 만들어놓고 동작은 안 하는 무성 실패).
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (!e.affectsConfiguration('claudeCodeGauge.retroCommitScope')) return;
+      retroDirty = true;
+      pushRetro();
+    })
+  );
 
   fileWatcher.on('change', () => { void refreshUsage(); });
   fileWatcher.start();

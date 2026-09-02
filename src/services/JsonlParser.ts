@@ -124,6 +124,12 @@ export class JsonlParser {
         const cc1h = cacheCreation ? Number(cacheCreation['ephemeral_1h_input_tokens'] ?? 0) : 0;
         const serviceTier = usage['service_tier'] !== undefined ? String(usage['service_tier']) : undefined;
 
+        // server_tool_use 카운트 (API usage 필드) — 웹검색은 토큰과 별개로 건당 과금되므로
+        // 비용 계산 입력이기도 하다. 그래서 journalUsage 조립보다 먼저 읽는다.
+        const serverToolUse = usage['server_tool_use'] as Record<string, unknown> | undefined;
+        const webSearchCount = Number(serverToolUse?.['web_search_requests'] ?? 0);
+        const webFetchCount = Number(serverToolUse?.['web_fetch_requests'] ?? 0);
+
         const journalUsage: JournalUsage = {
           input_tokens: Number(usage['input_tokens'] ?? 0),
           output_tokens: Number(usage['output_tokens'] ?? 0),
@@ -133,12 +139,8 @@ export class JsonlParser {
           cache_creation_1h_input_tokens: cc1h,
           cache_read_input_tokens: Number(usage['cache_read_input_tokens'] ?? 0),
           serviceTier,
+          webSearchRequests: webSearchCount,
         };
-
-        // server_tool_use 카운트 (API usage 필드)
-        const serverToolUse = usage['server_tool_use'] as Record<string, unknown> | undefined;
-        const webSearchCount = Number(serverToolUse?.['web_search_requests'] ?? 0);
-        const webFetchCount = Number(serverToolUse?.['web_fetch_requests'] ?? 0);
 
         // content 배열에서 tool_use 블록 파싱
         const content = msg['content'];

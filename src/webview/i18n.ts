@@ -73,6 +73,31 @@ const dict: Record<string, Record<Lang, string>> = {
   tool_usage:       { ko: '도구 사용 (최근 7일)', en: 'Tool Usage (Last 7 Days)', ja: 'ツール使用 (直近7日)',  zh: '工具使用（近7天）' },
   recently_edited:  { ko: '최근 편집 파일',       en: 'Recently Edited Files', ja: '最近編集したファイル',     zh: '最近编辑的文件' },
   recent_sessions:  { ko: '최근 세션',           en: 'Recent Sessions',       ja: '最近のセッション',         zh: '最近会话' },
+  // 행 상한 / 펼치기 (v0.1.55)
+  show_more:        { ko: '더보기',              en: 'Show more',             ja: 'もっと見る',               zh: '显示更多' },
+  // 회고 커밋 스코프 (v0.1.55)
+  retro_scope_mine: { ko: '내 커밋만',           en: 'my commits only',       ja: '自分のコミットのみ',       zh: '仅我的提交' },
+  retro_scope_all:  { ko: '전체 커밋',           en: 'all commits',           ja: '全コミット',               zh: '全部提交' },
+  retro_scope_degraded: {
+    ko: 'user.email이 설정되지 않은 저장소가 있어 전체 커밋으로 표시합니다 — 다른 사람의 커밋에도 비용이 귀속될 수 있습니다.',
+    en: 'Some repos have no user.email, so all commits are shown — cost may be attributed to other people\'s commits.',
+    ja: 'user.email 未設定のリポジトリがあるため全コミットを表示します — 他人のコミットに費用が帰属する場合があります。',
+    zh: '部分仓库未设置 user.email，因此显示全部提交 — 费用可能被归属到他人的提交。' },
+  show_less:        { ko: '접기',                en: 'Show less',             ja: '折りたたむ',               zh: '收起' },
+  // 가격 신호 정직성 (v0.1.55)
+  pricing_unknown:  { ko: '가격 미상',           en: 'price unknown',         ja: '価格不明',                 zh: '价格未知' },
+  pricing_estimated:{ ko: '근사',                en: 'approx.',               ja: '近似',                    zh: '近似' },
+  share_by_tokens:  { ko: '토큰 기준',           en: 'by tokens',             ja: 'トークン基準',             zh: '按令牌' },
+  pricing_unknown_note: {
+    ko: '가격표에 없는 모델이 있어 비용이 과소계상됩니다. 비율은 토큰 기준으로 표시합니다.',
+    en: 'Some models are missing from the price table, so cost is undercounted. Shares are shown by tokens.',
+    ja: '価格表にないモデルがあるためコストが過少計上されます。比率はトークン基準で表示します。',
+    zh: '价格表中缺少部分模型，费用被低估。占比按令牌显示。' },
+  cost_unknown_days: {
+    ko: '일부 과거 날짜는 당시 가격표에 없던 모델이라 비용이 $0으로 남아 있습니다(토큰 수는 정상).',
+    en: 'Some past days show $0 because their models were missing from the price table at the time (token counts are correct).',
+    ja: '一部の過去の日付は当時の価格表に無いモデルのため費用が$0のままです(トークン数は正常)。',
+    zh: '部分历史日期因当时价格表缺少相应模型而费用显示为 $0（令牌数正常）。' },
   // 대시보드 수치 라벨
   remaining_label:  { ko: '남음',               en: 'remaining',             ja: '残り',                    zh: '剩余' },
   used_label:       { ko: '사용됨',              en: 'used',                  ja: '使用済',                  zh: '已用' },
