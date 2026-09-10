@@ -14,7 +14,15 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.55
+## What's New in v0.1.56
+
+- **Fixed: Fable rendered as a black wedge in the Model Breakdown donut, and its bar didn't show at all.** Its colour was removed in v0.1.54 by a cleanup that searched for unused colours and concluded this one was unused — it wasn't; the chart looks it up by a name it assembles as it runs, which no search for that name can find. Every build check stayed green, so this shipped in both v0.1.54 and v0.1.55. The colour is back, and a new build rule now checks colours the way the code actually uses them, so a model can no longer end up without one.
+- **Fixed: changing a setting had no effect until you reloaded the window.** The poll interval and credentials path were compared against a key that could never match, so the extension never noticed you'd changed them.
+- **Fixed: usage figures could stay frozen for as long as you kept working.** The refresh waited for your logs to go quiet, but they don't go quiet while Claude Code is running — so the update arrived only after you stopped. It now refreshes immediately and then at a steady interval while you work. You can set that interval with **`claudeCodeGauge.usageRefreshIntervalMs`** (default 15 seconds), and the refresh button ignores it — that button now updates usage too, not just rate limits.
+- **Fixed: charts replayed their animation on every background refresh**, which looked like flickering rather than like data arriving.
+
+<details><summary>v0.1.55</summary>
+
 
 - **Fixed: your costs were being reported as roughly 1–2% of what you actually spent.** The price table hadn't been updated for the current model generation — `claude-opus-5` and `claude-sonnet-5` were missing outright, and the fallback that was supposed to catch new models had never once fired, so nearly every record was priced at $0 while everything else looked normal. Prices are now taken from Anthropic's own per-model figures that Claude Code records in its logs (Opus 5 at $5/$25; Sonnet 5 at **$2/$10** — cheaper than Sonnet 4.x), web search billing is counted, and a fixture keeps those numbers honest when prices change again.
 - **Fixed: the Model Breakdown pointed at the wrong model.** Because shares were computed from cost, the missing prices meant whichever older model still had one took 100% of the chart while the model doing almost all the work showed 0%. When any model's price is unknown, shares now switch to a token basis and say so, the affected row reads "price unknown" instead of `$0.00`, and the card warns you which models are involved — rather than showing a zero that looks like a measurement.
@@ -23,6 +31,8 @@ Stop switching to your browser to check Claude rate limits. See your **5-hour se
 - **Fixed: on a narrow dashboard the Usage Calendar stopped short of today, cutting today's square off the right edge.** The calendar scrolls itself to the right after every refresh so you see the most recent week — but that scroll was applied before the panel's layout had settled, so it landed 52px short and never corrected itself. Worse, the wrong position was then mistaken for "you scrolled into the past" and preserved on every later refresh. Dashboards wider than about 750px were unaffected, which is why this went unnoticed since v0.1.52. Scrolling back into history still works exactly as before.
 - **Fixed: the sidebar's mini calendar never scrolled to today at all.** On a narrow sidebar (220px and below) it showed the oldest weeks and clipped today entirely. It now behaves like the dashboard.
 - The rest of this release is internal, and mostly about why the above took three releases to notice: the test that had been catching it every day was never wired into the build. That's fixed, along with the checks that could report "all clear" while examining nothing.
+
+</details>
 
 <details><summary>v0.1.54</summary>
 

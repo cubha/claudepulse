@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.56] - 2026-09-10
+
+### Fixed
+- **Fable showed up as a black wedge in the Model Breakdown donut, and its bar didn't render at all.** The colour token `--c-fable` was deleted in v0.1.54 as part of a dead-token sweep that found no reference to it. The sweep looked in the right files — including `src/**/*.ts` — but for the wrong thing: it searched for `var(--c-fable)`, while the only consumer builds the name at runtime, as `getCssVar('--c-' + modelKind(model))`. A name that exists only once the code runs cannot be found by searching for it.
+  - With the token gone the lookup returned an empty string, which Chart.js drew with the canvas default (black) and the bar drew as `'' + 'cc'` — not a colour, so nothing appeared. The build, the type checker, the linter and all three existing design-token rules stayed green throughout. **Both v0.1.54 and v0.1.55 shipped this way**, from 2026-08-30 to today.
+  - The token is restored to its original `#E0529C`, as the design-token document had specified in advance for exactly this case.
+- **Changing a setting did nothing.** `claudeCodeGauge.pollIntervalMs` and `claudeCodeGauge.credentialsPath` were checked against `affectsConfiguration()` using a section-relative key rather than the full key. No such section exists, so the check returned false every time and the poller was never restarted — you had to reload the window for a setting to take effect. Both keys are now fully qualified, and a test locks the shape rather than the value.
+- **Usage figures could sit still for as long as you kept working.** The file watcher debounced changes, and a debounce timer resets on every event — but Claude Code appends to its logs continuously while a session is alive, so the timer never expired and the refresh only fired once you stopped. It is now a throttle: the first change after a quiet period refreshes immediately, and further changes refresh at most once per interval, which is the behaviour the debounce was meant to have. The interval is configurable via **`claudeCodeGauge.usageRefreshIntervalMs`** (default 15s, floor 3s), and the refresh button bypasses it entirely — it now also recalculates usage, where before it only refreshed rate limits.
+- **Charts re-animated on every background refresh**, which read as the dashboard flickering rather than as data changing. Charts that keep their instance now update without replaying the animation; the two whose containers are rebuilt from scratch each refresh have animation switched off.
+
+### Internal
+- **New design-token rule `D-4` in `verify.sh`: every token consumed from TypeScript must be declared.** The three existing rules only look inside `styles.css`, so any token whose only reference lives in `.ts` looks dead to them — `--c-fable` was not the only one in that position (`--c-slate`, `--c-danger` and others are reachable the same way). D-4 collects `var(--x)` and `getCssVar('--x')` literals from `src/**/*.ts` and expands the model-accent families (`--c-`/`--tint-`/`--fg-` for each kind) by **reading `MODEL_KINDS` from the source**, so adding a model without its colours fails the build instead of rendering it black. It was verified by removing the fix and confirming the rule goes red naming `--c-fable`, then restoring it.
+- A reentrancy guard for the usage refresh: with three triggers instead of one, two runs could overlap and the slower one would finish last and overwrite newer results. Requests that arrive mid-flight are queued once rather than dropped, so a manual refresh never silently does nothing. This guard lives inside `activate()` and is not directly unit-tested; the throttle, the configuration-key shape and the interval clamp are.
+- The refresh interval read from settings is clamped through a pure function rather than a bare `Math.max`. `package.json`'s `type` and `minimum` are enforced by the settings UI only, so a hand-edited `settings.json` can deliver a string — and `Math.max(3000, NaN)` is `NaN`, which makes `elapsed >= interval` false forever and leaves the throttle wide open. That is the exact symptom the clamp was added to prevent, so it is now tested against strings, `null`, `Infinity` and friends.
+
 ## [0.1.55] - 2026-09-02
 
 ### Fixed
