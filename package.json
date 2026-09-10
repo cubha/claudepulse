@@ -2,7 +2,7 @@
   "name": "claude-code-gauge",
   "displayName": "Claude Code Gauge",
   "description": "Real-time Claude Code rate limit dashboard. Track 5h/7d usage, burn rate & safe-until predictions in StatusBar, Sidebar and Dashboard.",
-  "version": "0.1.55",
+  "version": "0.1.56",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -83,6 +83,12 @@
           "type": "number",
           "default": 300000,
           "description": "How often to poll the Anthropic API for rate limit data (ms). Default: 300000 (5 min)."
+        },
+        "claudeCodeGauge.usageRefreshIntervalMs": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 3000,
+          "description": "Minimum interval between usage recalculations from ~/.claude jsonl logs (ms). The sidebar and dashboard refresh at most this often while a Claude Code session is writing. Default: 15000 (15s). The refresh button always bypasses this."
         },
         "claudeCodeGauge.utilizationWarnThreshold": {
           "type": "number",

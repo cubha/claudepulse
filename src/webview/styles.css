@@ -26,6 +26,7 @@
   --ff-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 
   /* Brand accents (model + status, never hardcoded as fg/bg) */
+  --c-fable: #E0529C;
   --c-opus: #8B5CF6;
   --c-sonnet: #3B82F6;
   --c-haiku: #14B8A6;
@@ -820,6 +821,7 @@ body[data-mode="sidebar"] #root { height: 100%; }
 .rate-bar:has(.rate-bar-fill[data-status="allowed_warning"]) { outline-color: var(--outline-warn); }
 .rate-bar:has(.rate-bar-fill[data-status="danger"])          { outline-color: var(--outline-danger); }
 .rate-bar:has(.rate-bar-fill[data-status="blocked"])         { outline-color: var(--outline-danger); }
+
 .rate-bar-fill {
   height: 100%;
   border-radius: 6px;
@@ -831,6 +833,11 @@ body[data-mode="sidebar"] #root { height: 100%; }
 .rate-bar-fill[data-status="allowed_warning"] { background: var(--c-warn); }
 .rate-bar-fill[data-status="danger"]          { background: var(--c-danger); }
 .rate-bar-fill[data-status="blocked"]         { background: var(--c-danger); }
+
+/* 사이드바 바는 리프레시마다 innerHTML이 통째로 재생성된다 — 매번 width:0에서 다시 채워지므로
+   전환이 "값의 변화"가 아니라 주기마다 반복되는 잡음이 된다. 패널 바(#fh-bar-fill·#sd-bar-fill)는
+   DOM을 유지한 채 값만 갱신하므로 전환을 그대로 둔다. */
+#sb-fh-bar, #sb-sd-bar, #sb-ov-bar, #sb-ctx-bar { transition: none; }
 
 /* Status badge color classes (inline style 대체) */
 .status-badge.allowed         { background: var(--tint-sonnet); color: var(--c-sonnet); border-color: var(--tint-sonnet-border); }

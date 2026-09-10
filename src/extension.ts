@@ -10,7 +10,9 @@ import {
   DEFAULT_POLL_INTERVAL_MS,
   DEFAULT_WARN_THRESHOLD,
   PINNED_SESSION_STATE_KEY,
-  VIEW_IDS
+  VIEW_IDS,
+  clampRefreshInterval,
+  fullConfigKey
 } from './constants';
 import { SidebarViewProvider } from './providers/SidebarViewProvider';
 import { StatusBarController } from './providers/StatusBarController';
@@ -55,7 +57,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const jsonlParser = new JsonlParser();
   const aggregator = new UsageAggregator();
   const workspaceMapper = new WorkspaceMapper();
-  const fileWatcher = new FileWatcher();
+  let fileWatcher: FileWatcher | null = null;
   const cacheStore = new CacheStore(context.globalStorageUri.fsPath);
   let allRecords: SessionRecord[] = [];
 
@@ -157,7 +159,38 @@ export function activate(context: vscode.ExtensionContext): void {
     return context.workspaceState.update(PINNED_SESSION_STATE_KEY, sessionId ?? undefined);
   }
 
-  async function refreshUsage(): Promise<void> {
+  let usageRefreshInFlight: Promise<void> | null = null;
+  let usageRefreshQueued = false;
+
+  /**
+   * doRefreshUsage 재진입 가드(v0.1.56).
+   *
+   * 트리거가 1개(파일 감시)에서 3개(감시 스로틀 · 새로고침 버튼 · refresh 커맨드)로 늘면서
+   * 두 실행이 겹칠 수 있게 됐다. doRefreshUsage는 여러 await 사이에서 allRecords와
+   * lastUsageSummary를 대입하므로, 겹치면 **먼저 시작한 느린 실행이 나중에 끝나며 최신본을
+   * 덮어쓴다**(doBuildRetroSummary의 스냅샷 주석이 걱정하던 것과 같은 형태의 race).
+   *
+   * 진행 중이면 실행하지 않되 요청을 **버리지 않고 1회 예약**한다 — 수동 새로고침이
+   * "눌렀는데 갱신 안 됨"으로 끝나면 안 되기 때문. 중복 예약은 1개로 합친다.
+   */
+  function refreshUsage(): Promise<void> {
+    if (usageRefreshInFlight) {
+      usageRefreshQueued = true;
+      return usageRefreshInFlight;
+    }
+    usageRefreshInFlight = doRefreshUsage()
+      .catch((err: unknown) => { logger.error('refreshUsage failed', err); })
+      .finally(() => {
+        usageRefreshInFlight = null;
+        if (usageRefreshQueued) {
+          usageRefreshQueued = false;
+          void refreshUsage();
+        }
+      });
+    return usageRefreshInFlight;
+  }
+
+  async function doRefreshUsage(): Promise<void> {
     const files = await workspaceMapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
     allRecords = perFile.flat();
@@ -240,9 +273,16 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
-  fileWatcher.on('change', () => { void refreshUsage(); });
-  fileWatcher.start();
-  context.subscriptions.push({ dispose: () => fileWatcher.stop() });
+  function startFileWatcher(): void {
+    // minIntervalMs가 생성자 주입이라 설정 변경 시에는 재생성해야 한다.
+    fileWatcher?.stop();
+    fileWatcher = new FileWatcher(undefined, getConfig().usageRefreshIntervalMs);
+    fileWatcher.on('change', () => { void refreshUsage(); });
+    fileWatcher.start();
+  }
+  // dispose 등록은 1회만 — 클로저가 외부 fileWatcher를 참조하므로 항상 현재 인스턴스를 정지시킨다.
+  context.subscriptions.push({ dispose: () => fileWatcher?.stop() });
+  startFileWatcher();
 
   // 시작 시 초기 집계
   void refreshUsage();
@@ -257,7 +297,7 @@ export function activate(context: vscode.ExtensionContext): void {
       pushRetro();
       return lastUsageSummary;
     },
-    () => { poller?.poll(); },
+    () => { poller?.poll(); void refreshUsage(); },   // webview 새로고침 버튼도 동일(스로틀 우회)
     () => vscode.commands.executeCommand(COMMANDS.login),
     () => { void vscode.commands.executeCommand(COMMANDS.openDashboard); },
     () => { void vscode.env.openExternal(vscode.Uri.parse('https://claude.ai/settings/usage')); },
@@ -283,7 +323,10 @@ export function activate(context: vscode.ExtensionContext): void {
       DashboardPanel.createOrShow(context.extensionUri, messenger);
     }),
     vscode.commands.registerCommand(COMMANDS.refresh, () => {
+      // 수동 새로고침은 FileWatcher 스로틀을 우회한다 — 사용자가 눌렀는데 최대 간격만큼
+      // 기다려야 하면 그건 버그다. (이전엔 rate limit만 갱신하고 사용량은 손대지 않았다.)
       poller?.poll();
+      void refreshUsage();
     }),
     vscode.commands.registerCommand(COMMANDS.login, () => {
       const terminal = vscode.window.createTerminal({ name: 'Claude Login' });
@@ -305,6 +348,11 @@ export function activate(context: vscode.ExtensionContext): void {
     return {
       credentialsPath: resolveCredentialsPath(credentialsInspect, DEFAULT_CREDENTIALS_PATH),
       pollIntervalMs: cfg.get<number>(CONFIG_KEYS.pollIntervalMs) ?? DEFAULT_POLL_INTERVAL_MS,
+      // package.json의 minimum·type은 설정 UI에서만 강제된다 — settings.json을 직접 편집하면
+      // 0/음수는 물론 문자열도 그대로 들어와 스로틀이 사실상 해제된다(고치려던 증상이 조용히 복원).
+      // Math.max로는 못 막는다: Math.max(3000, NaN)은 NaN이고, `elapsed >= NaN`은 항상 false라
+      // 매 이벤트가 즉시 통과한다. 그래서 수치인지부터 확인하고 클램프한다.
+      usageRefreshIntervalMs: clampRefreshInterval(cfg.get<unknown>(CONFIG_KEYS.usageRefreshIntervalMs)),
       warnThreshold: cfg.get<number>(CONFIG_KEYS.utilizationWarnThreshold) ?? DEFAULT_WARN_THRESHOLD,
     };
   }
@@ -373,11 +421,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(e => {
+      // affectsConfiguration은 전체 키를 요구한다 — 상대 키(CONFIG_KEYS 원값)를 넘기던 시절엔
+      // 항상 false여서 이 재시작이 한 번도 돌지 않았다(fullConfigKey 도입 이유).
       if (
-        e.affectsConfiguration(CONFIG_KEYS.credentialsPath) ||
-        e.affectsConfiguration(CONFIG_KEYS.pollIntervalMs)
+        e.affectsConfiguration(fullConfigKey(CONFIG_KEYS.credentialsPath)) ||
+        e.affectsConfiguration(fullConfigKey(CONFIG_KEYS.pollIntervalMs))
       ) {
         startPoller();
+      }
+      if (e.affectsConfiguration(fullConfigKey(CONFIG_KEYS.usageRefreshIntervalMs))) {
+        startFileWatcher();
       }
     })
   );

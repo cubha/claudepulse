@@ -2,7 +2,7 @@
 
 > **Ground Truth**: `src/webview/styles.css` — 이 문서는 그 파일의 선언을 서술한다.
 > 값이 어긋나면 **styles.css가 옳고 이 문서가 틀린 것**이다.
-> 재수립: 2026-08-28 (직전 2026-05-10판은 22토큰만 기술 — 실제의 25%였다). 현재 **75토큰 / 선언 126줄**. 선언 밖 색 리터럴 **0건**.
+> 재수립: 2026-08-28 (직전 2026-05-10판은 22토큰만 기술 — 실제의 25%였다). 현재 **76토큰 / 선언 127줄**. 선언 밖 색 리터럴 **0건**.
 > 적용 범위: VS Code Webview Panel · Sidebar Webview View · 프로토타입 HTML
 
 ## 0. 토큰 운영 원칙
@@ -71,7 +71,7 @@
 
 | Token | Hex | 용도 |
 |---|---|---|
-| _(솔리드 토큰 없음)_ | `#E0529C` | Fable 모델 식별 (rose) — 최상위 티어. `--c-fable`은 미사용이라 2026-08-28 제거했고, 현재는 파생 `--tint-fable`/`--fg-fable`로만 구현된다 (§2.2) |
+| `--c-fable` | `#E0529C` | Fable 모델 식별 (rose) — 최상위 티어. 차트 시리즈(`modelColor()`)가 소비한다. 2026-08-28 dead로 오판해 제거했다가 v0.1.56에서 복구 (§12.2) |
 | `--c-opus` | `#8B5CF6` | Opus 모델 식별 (violet) |
 | `--c-sonnet` | `#3B82F6` | Sonnet 모델 식별 (blue) — primary brand |
 | `--c-haiku` | `#14B8A6` | Haiku 모델 식별 (teal) |
@@ -329,14 +329,22 @@
 링크하므로 영향이 없다.
 
 제거 목록: `--activityBar-bg|-fg|-active` · `--tab-active-bg|-inactive-bg|-border` · `--bg-elevated-hover` ·
-`--c-tone-50` · `--c-fable` · `--fs-h1` · `--fs-mono-xl` · `--sp-5` · `--sp-10` ·
+`--c-tone-50` · ~~`--c-fable`~~(**오판 — v0.1.56 복구, 아래 참조**) · `--fs-h1` · `--fs-mono-xl` · `--sp-5` · `--sp-10` ·
 `--vscode-button-hoverBackground|-card-elevated|-charts-blue|-disabledForeground|-panel-background|-statusBar-background|-statusBar-foreground|-titleBar-activeBackground`
 
 결과: 토큰 87→**66**, 선언 108줄, dead **0**, 다크/라이트 페어 미충족 **9→0**(제거된 다크 전용 9개가 전부 dead였다).
 
-> ⚠️ **`--c-fable` 재도입 조건**: fable만 솔리드 토큰이 없는 비대칭 상태다(opus·sonnet·haiku·warn·danger·success·slate는 있다).
-> Fable에 솔리드 색이 필요해지면(차트 시리즈·`.rate-bar-fill` 등) **하드코딩하지 말고 `--c-fable: #E0529C;`를 되살린다.**
-> 이 줄이 없으면 다음 사람이 `#E0529C`를 그대로 박을 가능성이 높다 — 방금 없앤 드리프트가 그렇게 생겼다.
+> 🔴 **`--c-fable` 제거는 오판이었다 (v0.1.56에서 복구)**. 위 "`var(--x)` 참조 0건" 확인은 `src/**/*.ts`까지
+> 훑었지만 **패턴이 틀렸다** — 실사용처는 `var(--c-fable)`이 아니라 `panelView.ts`의
+> `getCssVar('--c-' + modelKind(model))`, 즉 **런타임에 조립되는 이름**이라 어떤 정규식 재고에도 안 잡힌다.
+> 결과: Fable 도넛 조각이 검정(캔버스 기본 fillStyle), 모델 바가 투명(`'' + 'cc'` = 무효 색)으로 렌더됐고
+> **v0.1.54·v0.1.55 두 릴리스가 그 상태로 출하**됐다. tsc·eslint·D-1~3 전부 초록인 무성 실패였다.
+>
+> **표준 규약(모델 액센트)**: 모델 종류 하나는 `--c-*`·`--tint-*`·`--fg-*` **3종을 모두** 갖는다.
+> 하나라도 빠지면 그 종류는 어딘가에서 색 없이 렌더된다. `verify.sh` **D-4**가 `MODEL_KINDS`를
+> 소스에서 읽어 이 3종을 전개 검사하므로, 이제 이 규약은 문서가 아니라 게이트가 강제한다.
+> (D-4는 TS의 `var(--x)`·`getCssVar('--x')` 리터럴도 함께 재고한다 — CSS에 참조가 없다는 이유로
+> dead 판정되는 부류가 `--c-fable` 하나가 아니기 때문이다: `--c-slate`·`--c-danger` 등이 같은 처지다.)
 
 ### 12.3 토큰화 시 정규화된 값 (2026-08-28)
 

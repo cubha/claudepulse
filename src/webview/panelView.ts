@@ -459,7 +459,7 @@ function updateDailyChart(): void {
   if (dailyChart) {
     dailyChart.data.labels = labels;
     dailyChart.data.datasets = datasets;
-    dailyChart.update();
+    dailyChart.update('none');   // 주기 리프레시마다 재애니메이션되지 않도록(첫 렌더만 애니메이션)
   } else {
     dailyChart = new Chart(canvas, {
       type: 'bar',
@@ -589,6 +589,10 @@ function updateModelBreakdown(): void {
     },
     options: {
       responsive: false,
+      // 컨테이너 innerHTML이 재생성되므로 이 차트는 매 리프레시마다 새로 만들어진다(인스턴스
+      // 재사용 불가 → update('none')로는 못 막는다). 애니메이션을 끄지 않으면 데이터가 그대로여도
+      // 매번 다시 그려지는 것처럼 보인다.
+      animation: false,
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -672,6 +676,8 @@ function updateCacheSection(): void {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        // modelChart와 동일 — 컨테이너 innerHTML 재생성으로 매 리프레시마다 새 인스턴스다.
+        animation: false,
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: axisColor, font: { size: 9 } }, grid: { color: gridColor } },
@@ -738,7 +744,7 @@ function updateToolChart(): void {
   if (toolChart) {
     toolChart.data.labels = labels;
     toolChart.data.datasets = datasets;
-    toolChart.update();
+    toolChart.update('none');   // 주기 리프레시마다 재애니메이션되지 않도록(첫 렌더만 애니메이션)
   } else {
     toolChart = new Chart(canvas, {
       type: 'bar',
@@ -995,7 +1001,7 @@ function updateLongTermSection(): void {
   if (longTermChart) {
     longTermChart.data.labels = labels;
     longTermChart.data.datasets = datasets;
-    longTermChart.update();
+    longTermChart.update('none');   // 주기 리프레시마다 재애니메이션되지 않도록(첫 렌더만 애니메이션)
   } else {
     longTermChart = new Chart(canvas, {
       type: 'line',
@@ -1078,7 +1084,7 @@ function updateMonthlyChart(): void {
   if (monthlyChart) {
     monthlyChart.data.labels = labels;
     monthlyChart.data.datasets = datasets;
-    monthlyChart.update();
+    monthlyChart.update('none');   // 주기 리프레시마다 재애니메이션되지 않도록(첫 렌더만 애니메이션)
   } else {
     monthlyChart = new Chart(canvas, {
       type: 'bar',
@@ -1266,7 +1272,7 @@ function updateTrendChart(): void {
       (xScale['ticks'] as Record<string, unknown>)['maxTicksLimit'] =
         chartScopeMin <= 30 ? 6 : chartScopeMin <= 120 ? 8 : 12;
     }
-    trendChart.update();
+    trendChart.update('none');   // 주기 리프레시마다 재애니메이션되지 않도록(첫 렌더만 애니메이션)
   } else {
     trendChart = new Chart(canvas, {
       type: 'line',

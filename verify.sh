@@ -293,6 +293,55 @@ if [ -f "$DESIGN_CSS" ] && [ -f docs/design/DESIGN-TOKENS.md ]; then
       echo "  ✅ [D-3] 다크/라이트 페어 미충족 ${UNPAIRED_N}개 (기준선 $PAIR_BASELINE)"
     fi
 
+    # ── D-4 TS에서만 소비되는 토큰 (fail) ──
+    #   D-1~3은 styles.css 안에서만 재고, 그래서 **CSS에 var() 참조가 없는 토큰은 전부 dead로 보인다.**
+    #   v0.1.54의 dead 토큰 21개 정리가 --c-fable을 그렇게 지웠고(실사용처는 panelView의
+    #   getCssVar('--c-'+kind) 한 곳), Fable 도넛이 검정·바가 투명으로 v0.1.54~55 두 릴리스를
+    #   나갔다. tsc·eslint·D-1~3이 전부 초록인 무성 실패였다.
+    #   그래서 소비처를 CSS 밖까지 넓혀 재고한다: TS의 var(--x) 문자열 + getCssVar('--x') 리터럴
+    #   + 모델 액센트 3종 패밀리(--c-/--tint-/--fg- × MODEL_KINDS + slate) 동적 조립분.
+    TS_SRC=$(find src -name '*.ts' -not -path '*/node_modules/*' 2>/dev/null)
+    if [ -z "$TS_SRC" ]; then
+      echo "  ❌ [D-4] 측정 실패 — src/**/*.ts 를 찾지 못했다(이 상태의 '0건'은 신뢰할 수 없다)"
+      FAIL=$((FAIL + 1))
+    else
+      # shellcheck disable=SC2086
+      { grep -hoE 'var\(--[a-zA-Z0-9-]+\)' $TS_SRC | sed -E 's/var\((--[a-zA-Z0-9-]+)\)/\1/'
+        # shellcheck disable=SC2086
+        grep -hoE "getCssVar\('--[a-zA-Z0-9-]+'" $TS_SRC | sed -E "s/getCssVar\('(--[a-zA-Z0-9-]+)'/\1/"
+      } | sort -u > "$DT/ts_used"
+
+      #   패밀리는 MODEL_KINDS를 **소스에서 읽어** 전개한다 — 여기에 목록을 복사해두면 6번째 모델을
+      #   토큰 없이 추가했을 때 게이트가 그 사실을 모른다(막으려는 사고를 그대로 재현).
+      #   'slate'는 modelKind()='other'의 중립 폴백(§3#6 7+1 cap의 +1).
+      #   '=' 앞은 잘라낸다 — 타입 주석 Exclude<ModelKind,'other'>의 'other'까지 종류로 읽혀
+      #   --c-other/--tint-other/--fg-other 오탐이 난다('other'는 slate로 폴백되는 이름 없는 종류다).
+      KINDS=$(grep -oE "MODEL_KINDS[^=]*=[[:space:]]*\[[^]]*\]" src/webview/webviewShared.ts \
+        | sed -E 's/.*=[[:space:]]*\[//' | grep -oE "'[a-z]+'" | tr -d "'")
+      KINDS_N=$(printf '%s' "$KINDS" | grep -c . || true)
+      if [ "$KINDS_N" -lt 1 ]; then
+        echo "  ❌ [D-4] 측정 실패 — MODEL_KINDS 추출 0건(webviewShared.ts 형식 변경?)"
+        FAIL=$((FAIL + 1))
+      else
+        for k in $KINDS slate; do
+          printf -- '--c-%s\n--tint-%s\n--fg-%s\n' "$k" "$k" "$k"
+        done >> "$DT/ts_used"
+        sort -u -o "$DT/ts_used" "$DT/ts_used"
+
+        #   --vscode-* 는 VS Code가 주입한다 — styles.css에 선언이 없는 게 정상이라 대상 밖.
+        grep -v '^--vscode-' "$DT/ts_used" > "$DT/ts_used_f" || true
+        TS_UNDEF=$(comm -23 "$DT/ts_used_f" "$DT/decl") || TS_UNDEF=""
+        if [ -n "$TS_UNDEF" ]; then
+          echo "  ❌ [D-4] TS가 쓰는데 styles.css에 선언이 없는 토큰 — 무성 실패(검정·투명 렌더):"
+          echo "$TS_UNDEF" | sed 's/^/       /'
+          FAIL=$((FAIL + 1))
+        else
+          TS_N=$(grep -c . "$DT/ts_used_f" || true)
+          echo "  ✅ [D-4] TS 소비 토큰 ${TS_N}개 전부 선언됨 (모델 액센트 ${KINDS_N}+1종 패밀리 포함)"
+        fi
+      fi
+    fi
+
     rm -rf "$DT"
     PASS=$((PASS + 1))
   fi

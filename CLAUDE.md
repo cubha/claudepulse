@@ -100,7 +100,7 @@ ccusage(★14k CLI)의 데이터 정확성 + Claudemeter의 실시간성 - 비�
 |---|---|
 | **Ground Truth** | `src/webview/styles.css` — 토큰 선언과 스타일시트를 **겸한다** |
 | **문서(서술)** | `docs/design/DESIGN-TOKENS.md` — 코드가 우선, 문서가 따라간다 |
-| 토큰 실체 | CSS 커스텀 프로퍼티 **75개** (`:root` 24 · `.theme-dark` 51 · `.theme-light` 51). dead 0 · 미정의 0 · 페어 미충족 0 |
+| 토큰 실체 | CSS 커스텀 프로퍼티 **76개** (`:root` 25 · `.theme-dark` 51 · `.theme-light` 51). dead 0 · 미정의 0 · 페어 미충족 0 |
 | 네임스페이스 | `--sp-*` `--fs-*` `--r-*` `--ff-*` (불변) · `--c-*` `--fg-on-accent` (액센트, `:root`) · `--vscode-*` `--heat-*` `--tooltip-*` `--tint-*` `--fg-*` `--outline-*` (테마별) |
 | 소비 형태 | CSS `var(--x)` 단일. `.ts`는 색을 갖지 않는다(실측 hex 2건 = HTML 엔티티 `&#9888;`) |
 | 예외 표기 | 같은 줄 `design-lint-ignore` 주석 |
