@@ -1,8 +1,8 @@
-# 리서치 보고서: Codex 사용량 계측 통합 + 익스텐션 범용화 (v0.1.4)
+# 리서치 보고서: Codex 사용량 계측 통합 + 익스텐션 범용화 (v0.2.0)
 
 > 생성일: 2026-06-15
 > 프로젝트: Claudepulse (claude-code-gauge)
-> 목적: 익스텐션을 Claude Code 전용 → 범용(Claude Code + Codex)으로 확장 가능한지 타당성 검증 + v0.1.4 구현계획 근거
+> 목적: 익스텐션을 Claude Code 전용 → 범용(Claude Code + Codex)으로 확장 가능한지 타당성 검증 + v0.2.0 구현계획 근거
 > 근거: 병렬 tech-researcher 2건 (Codex 로컬 데이터 구조 / 가격·과금) + 현 코드베이스 결합 지점 분석
 
 ---

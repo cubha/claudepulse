@@ -25,13 +25,13 @@
   --ff-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Text", system-ui, sans-serif;
   --ff-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 
-  /* Brand accents (model + status, never hardcoded as fg/bg) */
+  /* Brand accents (model + status, never hardcoded as fg/bg). --c-sonnet/--c-warn/--c-danger는
+     v0.2.0(ST9)부터 프로바이더별로 값이 달라져(PLAN §5 B안) .theme-dark/.theme-light + 그
+     compound인 .provider-codex.theme-dark/.provider-codex.theme-light에서 선언한다(D-3/D-5
+     페어 게이트 대상) — 여기 :root에는 provider 무관 모델 액센트만 남긴다. */
   --c-fable: #E0529C;
   --c-opus: #8B5CF6;
-  --c-sonnet: #3B82F6;
   --c-haiku: #14B8A6;
-  --c-warn: #F59E0B;
-  --c-danger: #F43F5E;
   --c-slate: #64748B;
   --c-success: #22C55E;
 
@@ -66,31 +66,39 @@
   --tooltip-bg: #2A2A2D;
   --tooltip-border: #3A3A3D;
 
+  /* 프로바이더 팔레트(PLAN §5 B안, Claude=기본) — 정상/경고/위험 슬롯 + 정체성 크롬 1색.
+     .provider-codex.theme-dark가 이 5개 토큰(+파생)을 재정의한다(§5 결정1 — 새 이름 신설 금지). */
+  --c-sonnet: #6A9BCC;
+  --c-warn: #E0B341;
+  --c-danger: #B3304A;
+  /* 정체성 크롬(footer 등 신규 브랜드 표기 전용) — 7+1 액센트 cap 밖(모델/상태 아님). */
+  --identity-accent: #D97757;
+
   /* 액센트 파생 — 배지·칩 배경(14%) */
   --tint-fable:  rgba(224,82,156,0.14);
   --tint-opus:   rgba(139,92,246,0.14);
-  --tint-sonnet: rgba(59,130,246,0.14);
+  --tint-sonnet: rgba(106,155,204,0.14);
   --tint-haiku:  rgba(20,184,166,0.14);
   --tint-slate:  rgba(100,116,139,0.14);
-  --tint-warn:   rgba(245,158,11,0.14);
-  --tint-danger: rgba(244,63,94,0.14);
+  --tint-warn:   rgba(224,179,65,0.14);
+  --tint-danger: rgba(179,48,74,0.14);
   /* 중립 칩 표면 (브랜치·클릭 칩) — 액센트 아님 */
   --tint-neutral: rgba(100,116,139,0.12);
   /* 상태 배지 보더(27%) */
-  --tint-sonnet-border: rgba(59,130,246,0.27);
-  --tint-warn-border:   rgba(245,158,11,0.27);
-  --tint-danger-border: rgba(244,63,94,0.27);
+  --tint-sonnet-border: rgba(106,155,204,0.27);
+  --tint-warn-border:   rgba(224,179,65,0.27);
+  --tint-danger-border: rgba(179,48,74,0.27);
   /* rate-bar outline (55%/65%) */
-  --outline-sonnet: rgba(59,130,246,0.55);
-  --outline-warn:   rgba(245,158,11,0.65);
-  --outline-danger: rgba(244,63,94,0.65);
+  --outline-sonnet: rgba(106,155,204,0.55);
+  --outline-warn:   rgba(224,179,65,0.65);
+  --outline-danger: rgba(179,48,74,0.65);
   /* 액센트 파생 — 배지·칩 전경(tint-300) */
   --fg-fable:  #F9A8D4;
   --fg-opus:   #C4B5FD;
-  --fg-sonnet: #93C5FD;
+  --fg-sonnet: #A3CEF9;
   --fg-haiku:  #5EEAD4;
   --fg-slate:  #94A3B8;
-  --fg-warn:   #FCD34D;
+  --fg-warn:   #F7DA90;
 
   /* 크롬 — 그림자·트랙·3D 버튼 표면 (D-EFFECT-02: shadow는 var(--shadow-*) 참조) */
   --shadow-tooltip: 0 4px 16px rgba(0,0,0,0.35);
@@ -129,29 +137,35 @@
   --tooltip-bg: #FFFFFF;
   --tooltip-border: #D4D4D4;
 
+  /* 프로바이더 팔레트(PLAN §5 B안, Claude=기본) — 다크값 기준 명도 조정(§5 "라이트 파생"). */
+  --c-sonnet: #3E7AB6;
+  --c-warn: #BF921F;
+  --c-danger: #812335;
+  --identity-accent: #C2512C;
+
   /* 액센트 파생 — 배지·칩 배경(10%) */
   --tint-fable:  rgba(224,82,156,0.10);
   --tint-opus:   rgba(139,92,246,0.10);
-  --tint-sonnet: rgba(59,130,246,0.10);
+  --tint-sonnet: rgba(62,122,182,0.10);
   --tint-haiku:  rgba(20,184,166,0.10);
   --tint-slate:  rgba(100,116,139,0.10);
-  --tint-warn:   rgba(245,158,11,0.10);
-  --tint-danger: rgba(244,63,94,0.10);
+  --tint-warn:   rgba(191,146,31,0.10);
+  --tint-danger: rgba(129,35,53,0.10);
   --tint-neutral: rgba(100,116,139,0.08);
   /* 상태 배지 보더 — 양 테마 동일(라이트 전용 값 선례 없음) */
-  --tint-sonnet-border: rgba(59,130,246,0.27);
-  --tint-warn-border:   rgba(245,158,11,0.27);
-  --tint-danger-border: rgba(244,63,94,0.27);
-  --outline-sonnet: rgba(59,130,246,0.55);
-  --outline-warn:   rgba(245,158,11,0.65);
-  --outline-danger: rgba(244,63,94,0.65);
-  /* 액센트 파생 — 배지·칩 전경(shade-700) */
+  --tint-sonnet-border: rgba(62,122,182,0.27);
+  --tint-warn-border:   rgba(191,146,31,0.27);
+  --tint-danger-border: rgba(129,35,53,0.27);
+  --outline-sonnet: rgba(62,122,182,0.55);
+  --outline-warn:   rgba(191,146,31,0.65);
+  --outline-danger: rgba(129,35,53,0.65);
+  /* 액센트 파생 — 배지·칩 전경(shade-700, 라이트 base와 동일값 재사용 — 둘 다 '밝은 배경 위 가독' 목적) */
   --fg-fable:  #BE185D;
   --fg-opus:   #6D28D9;
-  --fg-sonnet: #1D4ED8;
+  --fg-sonnet: #3E7AB6;
   --fg-haiku:  #0F766E;
   --fg-slate:  #475569;
-  --fg-warn:   #B45309;
+  --fg-warn:   #BF921F;
 
   /* 크롬 — 다크와 같은 역할, 라이트 값 */
   --shadow-tooltip: 0 4px 16px rgba(0,0,0,0.10);
@@ -164,6 +178,50 @@
   --shadow-btn:        0 1px 0 rgba(255,255,255,0.9) inset, 0 1px 3px rgba(0,0,0,0.10);
   --shadow-btn-hover:  0 1px 0 rgba(255,255,255,0.9) inset, 0 2px 4px rgba(0,0,0,0.12);
   --shadow-btn-active: 0 0 0 transparent inset, 0 1px 2px rgba(0,0,0,0.15);
+}
+
+/* Codex 프로바이더 팔레트(PLAN §5 B안) — .theme-dark/.theme-light의 정상/경고/위험 슬롯 +
+   정체성 크롬을 재정의한다(§5 결정1: 새 토큰 이름 신설 금지, 기존 이름 재정의만). sonnet/warn/danger
+   패밀리 전체(base+tint+border+outline+fg)를 같이 바꾼다 — base만 바꾸면 "파란 틴트 위 초록 글씨"가
+   된다(advisor 지적). fable/opus/haiku/slate/success는 그대로 둔다 — Codex 모델은 modelKind()가
+   전부 'other'→slate 폴백이라(PLAN §5 결정5) 이 슬롯들의 실제 소비자가 없다(재정의해도 무효과).
+   D-3은 이 compound 셀렉터(`.provider-codex.theme-dark {`)를 보지 않으므로 페어 검증은 D-5가 한다. */
+.provider-codex.theme-dark {
+  --c-sonnet: #10A37F;
+  --c-warn: #D9982F;
+  --c-danger: #D6455B;
+  /* 모노크롬 크롬(PLAN §5 표 "0F0F0F/FAFAFA") — 다크 배경 위에서 보이려면 밝은 쪽이어야 한다.
+     표는 값만 나열했지 테마별 배정을 정하지 않았다 — 대비 원칙(밝은 크롬 on 어두운 배경)으로 배정. */
+  --identity-accent: #FAFAFA;
+  --tint-sonnet: rgba(16,163,127,0.14);
+  --tint-warn:   rgba(217,152,47,0.14);
+  --tint-danger: rgba(214,69,91,0.14);
+  --tint-sonnet-border: rgba(16,163,127,0.27);
+  --tint-warn-border:   rgba(217,152,47,0.27);
+  --tint-danger-border: rgba(214,69,91,0.27);
+  --outline-sonnet: rgba(16,163,127,0.55);
+  --outline-warn:   rgba(217,152,47,0.65);
+  --outline-danger: rgba(214,69,91,0.65);
+  --fg-sonnet: #29F0BF;
+  --fg-warn:   #F6C678;
+}
+
+.provider-codex.theme-light {
+  --c-sonnet: #0F9574;
+  --c-warn: #A7731F;
+  --c-danger: #B2273C;
+  --identity-accent: #0F0F0F;
+  --tint-sonnet: rgba(15,149,116,0.10);
+  --tint-warn:   rgba(167,115,31,0.10);
+  --tint-danger: rgba(178,39,60,0.10);
+  --tint-sonnet-border: rgba(15,149,116,0.27);
+  --tint-warn-border:   rgba(167,115,31,0.27);
+  --tint-danger-border: rgba(178,39,60,0.27);
+  --outline-sonnet: rgba(15,149,116,0.55);
+  --outline-warn:   rgba(167,115,31,0.65);
+  --outline-danger: rgba(178,39,60,0.65);
+  --fg-sonnet: #0F9574;
+  --fg-warn:   #A7731F;
 }
 
 /* App-wide resets inside a theme container. */
@@ -542,6 +600,40 @@ body[data-mode="sidebar"] #root { height: 100%; }
 .sb-header-spacer {
   flex: 1;
 }
+/* 프로바이더 스위처(v0.2.0 ST7) — 헤더 고정높이(35px) 안에 들어가야 하므로 배지 크기(18px)에 맞춘다. */
+.sb-provider-switch {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+.sb-provider-btn {
+  background: transparent;
+  border: none;
+  color: var(--vscode-descriptionForeground);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 8px;
+  height: 100%;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sb-provider-btn.is-active {
+  background: var(--tint-sonnet);
+  color: var(--c-sonnet);
+}
+.sb-provider-btn:not(.is-active):hover {
+  background: var(--vscode-list-hoverBackground);
+  color: var(--vscode-foreground);
+}
+/* Case C(미감지 — verify-impl B-V12 보완): 설치됐지만 세션 0건인 프로바이더는 흐리게, 클릭은 유지 */
+.sb-provider-btn.is-unavailable:not(.is-active) {
+  opacity: 0.55;
+}
 .sb-icon-btn {
   background: transparent;
   border: none;
@@ -629,6 +721,13 @@ body[data-mode="sidebar"] #root { height: 100%; }
 }
 .sb-section-sep {
   color: var(--vscode-panel-border);
+}
+/* Codex 버킷 window_minutes 메타(verify-impl B-V7 보완) — Side-Codex.dc.html "window 300" 의도 */
+.sb-section-meta {
+  font-family: var(--ff-mono);
+  font-size: 9px;
+  color: var(--vscode-descriptionForeground);
+  opacity: 0.7;
 }
 
 /* KPI 2x2 그리드 */
@@ -767,7 +866,22 @@ body[data-mode="sidebar"] #root { height: 100%; }
   align-items: center;
   gap: var(--sp-1);
   flex-shrink: 0;
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
 }
+.sb-footer-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--identity-accent);
+  flex-shrink: 0;
+}
+.sb-footer-provider {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.sb-footer-sep { opacity: 0.5; }
+.sb-footer-time { margin-left: auto; }
 .sb-refresh-btn {
   flex: 1;
   justify-content: center;
@@ -904,6 +1018,12 @@ body[data-mode="sidebar"] #root { height: 100%; }
   border-radius: 0;
   flex-shrink: 0;
 }
+.sb-hero-value {
+  font-size: var(--fs-mono-lg);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--sp-1);
+}
 /* bottleneck: 좌측 accent 바 */
 .sb-rate-card.is-bottleneck {
   border-left: 2px solid var(--c-warn) !important;
@@ -952,6 +1072,19 @@ body[data-mode="sidebar"] #root { height: 100%; }
   font-size: var(--fs-label);
   color: var(--vscode-descriptionForeground);
   text-align: center;
+}
+/* 미설치 상태(v0.2.0 ST8)의 설치 명령 — 로그인 버튼 대신 노출(눌러도 못 고치는 버튼을 주지 않는다). */
+.sb-install-cmd {
+  display: block;
+  margin-top: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--vscode-textCodeBlock-background, var(--track-neutral));
+  border-radius: var(--r-sm);
+  font-size: var(--fs-label);
+  color: var(--vscode-foreground);
+  width: 100%;
+  box-sizing: border-box;
+  word-break: break-all;
 }
 
 /* 사이드바 미니 Usage Calendar(v0.1.45) — 최근 3개월(90일) 축소뷰. calendar-* 클래스는 대시보드와 공유. */
@@ -1007,10 +1140,10 @@ body[data-mode="sidebar"] #root { height: 100%; }
   padding: var(--sp-2) var(--sp-4);
 }
 
-/* 4-카드 메트릭 그리드 */
+/* 4-카드 메트릭 그리드 — 1행 4열(세로 구분선만으로 위계 표현, D1-Dash-After 보드) */
 .panel-metric-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--sp-3);
   padding: 0 var(--sp-4) var(--sp-3);
 }
@@ -1029,12 +1162,21 @@ body[data-mode="sidebar"] #root { height: 100%; }
 }
 .panel-metric-value {
   font-family: var(--ff-mono);
-  font-size: var(--fs-mono-md);
+  font-size: var(--fs-mono-lg);
   font-weight: 700;
   color: var(--vscode-foreground);
   letter-spacing: -0.02em;
   font-feature-settings: 'tnum', 'zero';
   margin-top: var(--sp-1);
+}
+.panel-metric-value { white-space: nowrap; }
+/* hero 숫자 옆 단위 라벨 — 22px 본문과 같은 크기로 두면 CJK에서 줄바꿈된다(한국어 실캡처) */
+.panel-metric-unit {
+  font-size: var(--fs-label);
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+  margin-left: var(--sp-1);
+  letter-spacing: 0;
 }
 .panel-metric-bar .rate-bar {
   margin: var(--sp-1) 0 0;
@@ -1045,6 +1187,16 @@ body[data-mode="sidebar"] #root { height: 100%; }
   font-family: var(--ff-mono);
   margin-top: var(--sp-1);
 }
+/* ── M2: 지표 밴드 — 테두리 대신 그리드 내부 구분선(1행 4열) ── */
+.panel-metric-card:not(:last-child) {
+  border-right: 1px solid var(--vscode-panel-border);
+}
+/* ── M2: 차트 3·목록 4 — 카드 테두리 대신 위쪽 구분선 ── */
+.panel-flush {
+  border-top: 1px solid var(--vscode-panel-border);
+  padding-top: var(--sp-4);
+}
+
 
 .panel-gauge-grid {
   display: grid;
@@ -1091,16 +1243,83 @@ body[data-mode="sidebar"] #root { height: 100%; }
   padding: var(--sp-4);
 }
 .panel-chart-header {
-  font-size: var(--fs-body);
+  font-size: var(--fs-h2);
   font-weight: 600;
   color: var(--vscode-foreground);
   margin-bottom: var(--sp-3);
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
 }
+.panel-chart-readout {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-body);
+  font-weight: 500;
+  color: var(--vscode-descriptionForeground);
+}
+/* ── 게이지 밖 ③ 비용 이상 감지 — 오늘 · 평소(30일 중앙값) · 편차 3단 비교(C3 보드) ── */
+.cost-anomaly-badge {
+  font-family: var(--ff-mono);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--vscode-descriptionForeground);
+}
+.cost-anomaly-badge.elevated { color: var(--c-warn); }
+.cost-anomaly-row {
+  display: flex;
+  gap: var(--sp-6);
+  align-items: flex-end;
+  margin-bottom: var(--sp-3);
+}
+.cost-anomaly-row:empty { display: none; }
+.cost-anomaly-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cost-anomaly-label {
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+}
+.cost-anomaly-value {
+  font-size: var(--fs-mono-lg);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--vscode-foreground);
+}
+.cost-anomaly-value.muted { color: var(--vscode-descriptionForeground); font-weight: 600; }
+.cost-anomaly-delta {
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  color: var(--vscode-descriptionForeground);
+}
+.cost-anomaly-delta.elevated { color: var(--c-warn); }
+.cost-median-legend {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+}
+.cost-median-legend:empty { display: none; }
 .panel-trend-wrap {
   position: relative;
   height: 200px;
 }
 .panel-trend-wrap canvas { width: 100% !important; height: 100% !important; }
+
+/* ── 게이지 밖 ④ 페이스 라인 — Utilization Trend 하단 캡션(창 시작·리셋·소진 예상) ── */
+.pace-caption {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  font-family: var(--ff-mono);
+}
+.pace-caption .pace-exhaust { color: var(--c-warn); font-weight: 600; }
+/* 판정 문장 — 점선(기준 페이스) 대비 실제선 위치가 곧 "리셋 전에 막히는가"의 답(C4 보드) */
+.pace-caption .pace-verdict {
+  flex-basis: 100%;
+  font-family: var(--ff-sans);
+  color: var(--vscode-descriptionForeground);
+}
+.pace-caption .pace-verdict.warn { color: var(--c-warn); }
 .panel-empty {
   display: flex;
   align-items: center;
@@ -1331,6 +1550,13 @@ body[data-mode="sidebar"] #root { height: 100%; }
   color: var(--fg-warn);
   cursor: default;
 }
+/* ── 게이지 밖 ③ 비용 이상 감지 — 사이드탭 유일 항목(P1-Placement: "$ 오늘" 옆 칩 하나뿐) ── */
+.sb-chip--anomaly {
+  background: var(--tint-warn);
+  color: var(--fg-warn);
+  cursor: default;
+  font-family: var(--ff-mono);
+}
 
 /* 도구 칩 (v0.0.70) */
 .sb-chip--tool {
@@ -1450,12 +1676,29 @@ body[data-mode="sidebar"] #root { height: 100%; }
   color: var(--vscode-descriptionForeground);
 }
 .cache-kpi-value {
-  font-size: var(--fs-mono-md);
+  font-size: var(--fs-mono-lg);
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--vscode-foreground);
 }
 .cache-spark-wrap { margin-top: var(--sp-2); }
+
+/* ── 게이지 밖 ① 캐시 정상범위 밴드 — 히트율 KPI 옆 상태 라벨(60/90 참조선은 차트 내부에서 그림) ── */
+.cache-band-status {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  margin-left: var(--sp-1);
+}
+.cache-band-status.normal { color: var(--c-success); }
+.cache-band-status.drop   { color: var(--c-danger); }
+/* 상태 설명 문장 — C1 보드가 "없는 건 이 수치가 뭘 뜻하는지다"라며 요구한 본문(툴팁 아님) */
+.cache-band-msg {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.5;
+}
+.cache-band-msg.drop { color: var(--c-danger); }
 
 /* ── P0: 대시보드 섹션 Y축 정렬 통일 ──
    panel-root에 sp-4 패딩이 있고, panel-metric-grid는 추가 sp-4 좌우 패딩으로 총 32px.
@@ -1631,6 +1874,40 @@ body[data-mode="sidebar"] #root { height: 100%; }
   margin: var(--sp-3) 0 var(--sp-1);
   padding-top: var(--sp-2);
   border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* Codex 신규패널 컨테이너(verify-impl B-V2 보완) — .card 클래스를 재사용하지 않는다(M2
+   "class=card 17→6" 회귀잠금, test/unit/panelDesign.invariants.test.ts가 리터럴 개수를 센다).
+   시각 결과는 .card와 동일하도록 속성을 직접 복제. */
+.panel-codex-extra-card {
+  background: var(--vscode-card-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: var(--r-lg);
+  margin: 0 var(--sp-4) var(--sp-4);
+  padding: var(--sp-3);
+}
+
+/* Codex 신규패널 key-value 행(verify-impl B-V2 보완, v0.2.0) — panel-mcp-list 하위 재사용,
+   branch-row(5열 grid)는 이 용도엔 과하다. */
+.panel-mcp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-1) 0;
+  font-size: var(--fs-label);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.panel-mcp-row:last-child { border-bottom: none; }
+
+/* Codex 가변 버킷 안내 배너(verify-impl B-V1 보완) — Main.dc.html/Gauge-Plans.dc.html 의도 */
+.panel-codex-band-note {
+  margin: 0 var(--sp-4);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--tint-warn-border);
+  background: var(--tint-warn);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-label);
+  color: var(--vscode-descriptionForeground);
 }
 
 /* usage×git 회고 — 커밋별 비용 귀속 (v0.1.37) */

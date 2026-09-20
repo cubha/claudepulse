@@ -1,6 +1,7 @@
 import * as path from 'node:path';
-import { findPricing, resolvePricing } from '../utils/pricing';
-import type { PricingSource } from '../utils/pricing';
+import { resolvePricing } from '../utils/pricing';
+import type { ModelPrice, PricingSource } from '../utils/pricing';
+import { findCodexPricing } from '../sources/codex/codexPricing';
 import { calcContextUsageRatio, findContextWindow } from '../utils/contextWindow';
 import { cwdMatchesWorkspace } from '../utils/workspaceMatch';
 import { emptyToolCounts } from './JsonlParser';
@@ -9,31 +10,52 @@ import type { AttributionScope, BranchUsage, CacheStats, ContextSessionSummary, 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * 레코드의 provider에 맞는 가격표를 고른다(v0.2.0). `resolvePricing`(Claude 전용 PRICING map)을
+ * Codex 레코드에 무조건 쓰면 `gpt-5-codex`처럼 **가격이 있는** 모델도 'none'으로 오판되어
+ * unpricedModels·거짓 modelShareBasis 강등을 유발한다(advisor 지적, 2026-09-19 — v0.1.55
+ * 거짓초록의 반대 방향인 거짓 unpriced). `r.provider`는 이 분기를 위해 존재하는 필드다.
+ */
+function resolvePriceFor(r: SessionRecord): { price: ModelPrice | undefined; source: PricingSource } {
+  if (r.provider === 'codex') {
+    const price = findCodexPricing(r.model);
+    return { price, source: price ? 'exact' : 'none' };
+  }
+  return resolvePricing(r.model);
+}
+
+/**
  * 스킬·서브에이전트·MCP attribution 계산 — 24h/7d/전체 스코프에 동일 로직 재사용.
  * share 분모는 항상 grand-total(스킬 Σ + 미귀속 버킷 / MCP는 스코프 내 총 호출수), 이중계산 없음.
  */
 function computeAttribution(records: SessionRecord[]): AttributionScope {
-  const bySkill = new Map<string, { costUsd: number; totalTokens: number }>();
-  const skillUnattributed = { costUsd: 0, totalTokens: 0 };
+  const bySkill = new Map<string, { costUsd: number; totalTokens: number; hasUnpricedRecords: boolean }>();
+  const skillUnattributed = { costUsd: 0, totalTokens: 0, hasUnpricedRecords: false };
   let mainCostUsd = 0;
   let subagentCostUsd = 0;
+  let mainHasUnpriced = false;
+  let subagentHasUnpriced = false;
   const subagentIds = new Set<string>();
   const byMcpServer = new Map<string, number>();
 
   for (const r of records) {
     const tokens = r.usage.input_tokens + r.usage.output_tokens
       + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
+    // defer #9와 동일 목적 — skillBreakdown/subagentStats는 전체·24h·7d 스코프라 today 기준
+    // unpricedModels로 대체 불가(advisor 지적, UsageAggregator 상단 resolvePriceFor 참조).
+    const recUnpriced = tokens > 0 && resolvePriceFor(r).source === 'none';
 
     // 스킬별 집계 (#7) — 메인체인만(!isSidechain). 사이드체인은 subagentStats로 별도(이중계산 금지)
     if (!r.isSidechain) {
       if (r.attributionSkill) {
-        const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0 };
+        const sk = bySkill.get(r.attributionSkill) ?? { costUsd: 0, totalTokens: 0, hasUnpricedRecords: false };
         sk.costUsd += r.costUsd;
         sk.totalTokens += tokens;
+        if (recUnpriced) sk.hasUnpricedRecords = true;
         bySkill.set(r.attributionSkill, sk);
       } else {
         skillUnattributed.costUsd += r.costUsd;
         skillUnattributed.totalTokens += tokens;
+        if (recUnpriced) skillUnattributed.hasUnpricedRecords = true;
       }
     }
 
@@ -41,8 +63,10 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
     if (r.isSidechain) {
       subagentCostUsd += r.costUsd;
       if (r.agentId) subagentIds.add(r.agentId);
+      if (recUnpriced) subagentHasUnpriced = true;
     } else {
       mainCostUsd += r.costUsd;
+      if (recUnpriced) mainHasUnpriced = true;
     }
 
     // MCP 서버별 호출수 (v0.1.48) — 메인/서브 구분 없이 전부 집계(도구 사용은 체인 유형과 무관)
@@ -61,6 +85,7 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
       costUsd: v.costUsd,
       totalTokens: v.totalTokens,
       share: skillGrandTotal > 0 ? v.costUsd / skillGrandTotal : 0,
+      hasUnpricedRecords: v.hasUnpricedRecords,
     }))
     .sort((a, b) => b.costUsd - a.costUsd);
 
@@ -70,6 +95,8 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
     subagentCostUsd,
     subagentShare: totalAttributedCost > 0 ? subagentCostUsd / totalAttributedCost : 0,
     subagentCount: subagentIds.size,
+    mainHasUnpriced,
+    subagentHasUnpriced,
   };
 
   const mcpTotalCalls = [...byMcpServer.values()].reduce((sum, v) => sum + v, 0);
@@ -109,6 +136,7 @@ export class UsageAggregator {
     let todayCacheCreation = 0;
     let todayInput = 0;
     let todaySavedUsd = 0;
+    let todayReasoningTokens = 0;
     const todayTools: ToolUseCounts = emptyToolCounts();
 
     // 편집 파일 최근순 수집 (파일 경로 → 최근 timestamp)
@@ -116,6 +144,12 @@ export class UsageAggregator {
 
     for (const r of records) {
       const day = r.timestamp.slice(0, 10);
+      // 세션·브랜치 단위 "가격 미상 기여 있었음" 플래그(defer #9) — today 스코프인 unpricedModels로는
+      // recentSessions(최근 20개, 날짜 무관)·branchBreakdown(전체 기간)을 판별할 수 없어(advisor
+      // 지적) 레코드 전체를 OR로 누적한다. tokens=0인 합성 레코드는 가격 판정에 영향 주지 않는다.
+      const recTokensForPricing = r.usage.input_tokens + r.usage.output_tokens
+        + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
+      const recUnpriced = recTokensForPricing > 0 && resolvePriceFor(r).source === 'none';
 
       // 일별 집계
       if (!byDay.has(day)) {
@@ -155,6 +189,7 @@ export class UsageAggregator {
           model: r.model,
           contextTokens: resolveContextTokens(r),
           branch: r.gitBranch,
+          hasUnpricedRecords: false,
         });
       }
       const s = bySession.get(r.sessionId)!;
@@ -172,6 +207,7 @@ export class UsageAggregator {
         + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
       s.costUsd += r.costUsd;
       s.messageCount += 1;
+      if (recUnpriced) s.hasUnpricedRecords = true;
 
       // 브랜치별 집계
       if (r.gitBranch) {
@@ -181,11 +217,13 @@ export class UsageAggregator {
           totalTokens: 0,
           sessionCount: 0,
           lastActive: r.timestamp,
+          hasUnpricedRecords: false,
         };
         b.costUsd += r.costUsd;
         b.totalTokens += r.usage.input_tokens + r.usage.output_tokens
           + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
         if (r.timestamp > b.lastActive) b.lastActive = r.timestamp;
+        if (recUnpriced) b.hasUnpricedRecords = true;
         byBranch.set(r.gitBranch, b);
 
         // 브랜치별 고유 세션 수집 (메인 루프 통합 — 별도 재순회 제거)
@@ -205,7 +243,7 @@ export class UsageAggregator {
       // 오늘 전용 집계
       if (day === todayKey) {
         // 모델별 집계
-        const existing = byModel.get(r.model) ?? { tokens: 0, costUsd: 0, pricingSource: resolvePricing(r.model).source };
+        const existing = byModel.get(r.model) ?? { tokens: 0, costUsd: 0, pricingSource: resolvePriceFor(r).source };
         existing.tokens += r.usage.input_tokens + r.usage.output_tokens
           + r.usage.cache_creation_input_tokens + r.usage.cache_read_input_tokens;
         existing.costUsd += r.costUsd;
@@ -215,9 +253,10 @@ export class UsageAggregator {
         todayCacheRead += r.usage.cache_read_input_tokens;
         todayCacheCreation += r.usage.cache_creation_input_tokens;
         todayInput += r.usage.input_tokens;
+        todayReasoningTokens += r.reasoningTokens ?? 0;
 
-        // 캐시 절약 비용
-        const pricing = findPricing(r.model);
+        // 캐시 절약 비용 (provider별 가격표 — Codex를 Claude 표로 조회하면 항상 미상 취급된다)
+        const { price: pricing } = resolvePriceFor(r);
         if (pricing && r.usage.cache_read_input_tokens > 0) {
           todaySavedUsd += r.usage.cache_read_input_tokens
             * (pricing.input - pricing.cache_read) / 1_000_000;
@@ -324,10 +363,14 @@ export class UsageAggregator {
     const workspaceRootList = workspaceRoots === undefined
       ? undefined
       : (Array.isArray(workspaceRoots) ? workspaceRoots : [workspaceRoots]);
+    // provider 필터(v0.2.0): 컨텍스트 점유율 계측(contextTokens/findContextWindow)은 Claude jsonl
+    // iterations 구조 전제라 Codex 모델명을 넣으면 무의미한 근사가 나온다 — 이번 범위에서 Codex는
+    // 계측 밖으로 명시 제외한다(PLAN §7 결정, mock-data-codex.js sessionContext:null과 동일 계약).
+    // undefined(기존 픽스처·JsonlParser 산출물)는 Claude로 취급 — §3 CRITICAL 무행위변경.
     const contextCandidates = (workspaceRootList
       ? records.filter(r => workspaceRootList.some(root => cwdMatchesWorkspace(r.cwd, root)))
       : records
-    ).filter(r => !r.isSidechain);
+    ).filter(r => !r.isSidechain && (r.provider === undefined || r.provider === 'claude'));
 
     // 분모 3단 계단(S1) 공용 계산 — ①관측증명: records 전체(워크스페이스 스코프 무관, isSidechain
     // 무관 — 이 모델이 어디서든 200K를 넘긴 적 있다는 사실 자체가 1M 활성의 물리적 증거)에서 어느
@@ -363,6 +406,10 @@ export class UsageAggregator {
           model: r.model,
           contextTokens: resolveContextTokens(r),
           branch: r.gitBranch,
+          // contextSessions는 세션 선택기 컨텍스트 게이지 전용이라 비용을 렌더하지 않는다(항상
+          // Claude 스코프로 필터된 candidates — provider 필터 위 주석 참조) — 플래그는 타입 계약
+          // 충족용으로 false 고정, UI 소비 없음.
+          hasUnpricedRecords: false,
         });
       }
       const cs = contextSessionMap.get(r.sessionId)!;
@@ -441,6 +488,7 @@ export class UsageAggregator {
       modelBreakdown,
       unpricedModels,
       modelShareBasis,
+      todayReasoningTokens,
       cacheStats,
       todayToolCounts: todayTools,
       last7DaysTools,

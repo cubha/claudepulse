@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-20
+
+### Added
+- **Codex usage tracking.** A new Claude/Codex switcher in the sidebar header lets you track
+  either agent — the same 5h/7d-style gauges, today's cost, model/cache breakdown, tool usage,
+  Git branch ROI and usage calendar now read `~/.codex/sessions/*.jsonl` for Codex the same way
+  they already read `~/.claude/projects/*.jsonl` for Claude Code.
+  - **Rate-limit buckets are read from the data, not assumed.** Codex's plan-dependent buckets
+    (a single 30-day window on Free, 5-hour + 7-day on paid plans) are generated at runtime from
+    each session's `window_minutes`, not hardcoded — a bucket shape the extension has never seen
+    still renders with the right count and reset time.
+  - **What Codex genuinely can't provide is left out, not guessed.** Per-skill cost attribution,
+    subagent cost breakdown and MCP server attribution depend on fields (`attributionSkill`,
+    `isSidechain`, `agentId`) that only exist in Claude Code's logs — those sections don't render
+    for Codex rather than showing an invented value. In their place: today's reasoning-token
+    total, the model's real context-window size, and a plan badge, none of which Claude exposes.
+  - **Three distinct empty states, not one generic "please log in."** Codex CLI not installed,
+    installed but not logged in, and logged in with no sessions yet are three different screens
+    with different guidance (an install command, a login command, or just "run a session") —
+    the same distinction Claude Code's sidebar already made is now applied to both agents.
+  - Pricing, dedup and token accounting for Codex follow its own log format exactly: only
+    `usage` (the per-response increment) is summed, never the turn/thread running totals (those
+    are snapshots, not increments, and summing them overcounts by several times over); replayed
+    log lines are recognized by comparing cumulative counters, not by timestamp.
+- **A visual overhaul of the dashboard and sidebar** — clearer type hierarchy, the card count
+  trimmed from 17 to 6 by merging related metrics, readouts and end-of-line markers added to
+  every chart, and a bigger 5-hour gauge as the sidebar's opening view.
+
+### Changed
+- **Renamed to AgentVitals** (previously “Claude Code Gauge”). The marketplace listing, the
+  activity-bar title, the command palette entries and the dashboard heading all use the new name.
+  - **Nothing about the installation changes.** The extension id stays `cubha.claude-code-gauge`,
+    so this arrives as an ordinary update rather than a new extension, and existing installs,
+    ratings and reviews carry over. The setting namespace stays `claudeCodeGauge.*` and the
+    command ids stay `claudeCodeGauge.*`, so configured settings and any keybindings or tasks
+    referring to them keep working untouched.
+  - The old name is kept in the marketplace keywords, because marketplace search does not appear
+    to rank on the extension id slug — searching for the old name would otherwise stop finding it.
+  - The name changed because this release starts reading Codex usage too, and a name built around
+    a single tool would have stopped being accurate.
+
 ## [0.1.56] - 2026-09-10
 
 ### Fixed

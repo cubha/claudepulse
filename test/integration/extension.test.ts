@@ -9,7 +9,7 @@ import * as vscode from 'vscode';
 
 suite('Extension activation smoke', () => {
   test('extension activates and StatusBar item is created', async () => {
-    const extension = vscode.extensions.getExtension('cubha.claudepulse');
+    const extension = vscode.extensions.getExtension('cubha.claude-code-gauge');
     assert.ok(extension, 'Extension not found in Extension Host');
 
     if (!extension.isActive) {

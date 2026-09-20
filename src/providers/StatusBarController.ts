@@ -74,7 +74,7 @@ export class StatusBarController {
     const sd = snapshot.sevenDay;
     const costLine = todayCostUsd != null ? `\n\nToday: **$${todayCostUsd.toFixed(2)}**` : '';
     return new vscode.MarkdownString(
-      `**Claude Code Gauge**\n\n` +
+      `**AgentVitals**\n\n` +
       `Session (5h): **${this.fmtPct(fh.utilization)}** · resets in ${this.fmtReset(fh.msUntilReset)}\n\n` +
       `Weekly (7d): **${this.fmtPct(sd.utilization)}** · resets in ${this.fmtReset(sd.msUntilReset)}` +
       costLine + `\n\n_Click to open dashboard_`

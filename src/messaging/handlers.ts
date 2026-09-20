@@ -1,7 +1,7 @@
 import { Messenger } from 'vscode-messenger';
 import { BROADCAST } from 'vscode-messenger-common';
-import type { PollHistoryPoint, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
-import { GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, RequestClearPinnedSession, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard, RequestOpenSessionPicker, RequestRefresh, RequestSetLang } from './contracts';
+import type { AgentProvider, CodexRateLimitSnapshot, PollHistoryPoint, ProviderAvailability, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
+import { GetActiveProvider, GetCodexRateLimit, GetLang, GetPollHistory, GetProviderAvailability, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, RequestClearPinnedSession, RequestLogin, RequestLoginCodex, RequestOpenBillingSettings, RequestOpenDashboard, RequestOpenSessionPicker, RequestRefresh, RequestSetLang, RequestSetProvider } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
@@ -10,13 +10,18 @@ export function registerHandlers(
   getUsageSummary: () => UsageSummary | null,
   onRefresh: () => void,
   onLogin: () => void,
+  onLoginCodex: () => void,
   onOpenDashboard: () => void,
   onOpenBillingSettings: () => void,
   getLang: () => string,
   setLang: (lang: string) => void,
   getRetroSummary: () => Promise<RetroSummary | null>,
   onOpenSessionPicker: () => void,
-  onClearPinnedSession: () => void
+  onClearPinnedSession: () => void,
+  getActiveProvider: () => AgentProvider,
+  onSetProvider: (provider: AgentProvider) => void,
+  getProviderAvailability: () => ProviderAvailability,
+  getCodexRateLimit: () => CodexRateLimitSnapshot | null
 ): void {
   messenger.onRequest(GetPollHistory, () => getPollHistory());
   messenger.onRequest(GetRateLimit, () => {
@@ -24,15 +29,24 @@ export function registerHandlers(
     if (!snap) throw new Error('not_ready');
     return snap;
   });
+  messenger.onRequest(GetCodexRateLimit, () => getCodexRateLimit());
   messenger.onRequest(GetUsageSummary, () => getUsageSummary());
   messenger.onRequest(GetRetroSummary, () => getRetroSummary());
   messenger.onRequest(GetLang, () => getLang());
+  messenger.onRequest(GetActiveProvider, () => getActiveProvider());
+  messenger.onRequest(GetProviderAvailability, () => getProviderAvailability());
   messenger.onNotification(RequestRefresh, () => { void onRefresh(); });
   messenger.onNotification(RequestLogin, () => { onLogin(); });
+  messenger.onNotification(RequestLoginCodex, () => { onLoginCodex(); });
   messenger.onNotification(RequestOpenDashboard, () => { onOpenDashboard(); });
   messenger.onNotification(RequestOpenBillingSettings, () => { onOpenBillingSettings(); });
   messenger.onNotification(RequestOpenSessionPicker, () => { onOpenSessionPicker(); });
   messenger.onNotification(RequestClearPinnedSession, () => { onClearPinnedSession(); });
+  const ALLOWED_PROVIDERS = new Set(['claude', 'codex']);
+  messenger.onNotification(RequestSetProvider, (provider) => {
+    if (!ALLOWED_PROVIDERS.has(provider)) return;
+    onSetProvider(provider);
+  });
   const ALLOWED_LANGS = new Set(['ko', 'en', 'ja', 'zh', 'auto']);
   messenger.onNotification(RequestSetLang, (lang) => {
     if (!ALLOWED_LANGS.has(lang)) return;

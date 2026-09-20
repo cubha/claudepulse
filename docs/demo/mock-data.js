@@ -67,6 +67,8 @@ window.MOCK_USAGE = {
     { model: 'claude-opus-4-5-20251022',   tokens: 4730,  costUsd: 0.24, share: 0.112 },
     { model: 'claude-haiku-4-5-20251001',  tokens: 2364,  costUsd: 0.07, share: 0.033 },
   ],
+  unpricedModels: [],
+  modelShareBasis: 'cost',
   cacheStats: { hitRate: 0.68, savedUsd: 0.89 },
   todayToolCounts: { edit: 31, write: 12, bash: 156, read: 248, grep: 14, webSearch: 3, webFetch: 9, mcp: 41, other: 7 },
   // share 분모 = grand-total(Σskill + 스킬 외 버킷). 버킷이 최대(실측 커버리지 ~33% → 외부 ~67%)
@@ -122,6 +124,11 @@ window.MOCK_USAGE = {
   ]
 };
 
+// v0.2.0 P2 — Codex 미설치 상태(프로바이더 스위처 숨김 경로 커버, mock-data-codex.js가 반대쪽 경로).
+window.MOCK_ACTIVE_PROVIDER = 'claude';
+window.MOCK_PROVIDER_AVAILABILITY = { claude: 'ready', codex: 'not_installed' };
+window.MOCK_CODEX_RATE_LIMIT = null;
+
 // Mock acquireVsCodeApi — intercepts messenger requests, responds with static data
 window.acquireVsCodeApi = function() {
   return {
@@ -131,6 +138,9 @@ window.acquireVsCodeApi = function() {
       if      (msg.method === 'getRateLimit')    result = window.MOCK_RATE_LIMIT;
       else if (msg.method === 'getUsageSummary') result = window.MOCK_USAGE;
       else if (msg.method === 'getLang')         result = 'en';
+      else if (msg.method === 'getActiveProvider')      result = window.MOCK_ACTIVE_PROVIDER;
+      else if (msg.method === 'getProviderAvailability') result = window.MOCK_PROVIDER_AVAILABILITY;
+      else if (msg.method === 'getCodexRateLimit')       result = window.MOCK_CODEX_RATE_LIMIT;
       else return;
       const resp = { id: msg.id, receiver: msg.sender, result };
       setTimeout(() => window.dispatchEvent(new MessageEvent('message', { data: resp })), 40);
@@ -148,6 +158,9 @@ function pushMockData() {
     }));
   dispatch('pushRateLimit',    window.MOCK_RATE_LIMIT);
   dispatch('pushUsageSummary', window.MOCK_USAGE);
+  dispatch('pushActiveProvider',      window.MOCK_ACTIVE_PROVIDER);
+  dispatch('pushProviderAvailability', window.MOCK_PROVIDER_AVAILABILITY);
+  dispatch('pushCodexRateLimit',      window.MOCK_CODEX_RATE_LIMIT);
 }
 // Push once immediately after scripts load, then again after a short delay
 document.addEventListener('DOMContentLoaded', () => {

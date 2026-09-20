@@ -1,8 +1,8 @@
 {
-  "capturedAt": "2026-09-02T08:05:31.016Z",
-  "reason": "v0.1.55 — 월별 비용 카드에 '비용 미상 일자' note 슬롯(#monthly-cost-note) 추가. 장기 트렌드와 hasData 판정 기준을 일치시키는 변경의 일부이며, childElementCount 2→3은 그 빈 div다.",
+  "capturedAt": "2026-09-20T07:16:51.887Z",
+  "reason": "verify-impl B-V1/B-V2/B-V6 보완: panelView.ts가 GetCodexRateLimit/PushCodexRateLimit를 이제 구독해 panel-plan-badge를 Codex planType으로 채운다(기존엔 blank 방치, 축B가 지적한 배선 누락). 신규 panel-codex-band-grid/panel-codex-band-note/panel-codex-extra-card는 하네스 추적 selector 밖이라 diff에 안 잡힘 — 실제 렌더는 headless 스크린샷으로 별도 확인(panel-codex-v2.png/plus.png, sidebar-codex-v2.png/plus.png).",
   "digests": {
-    "panel@700px@ko": {
+    "panel@700px@ko@claude": {
       "bySelector": {
         "panel-plan-badge": {
           "tag": "span",
@@ -26,7 +26,7 @@
         },
         "fh-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "fh-bar-fill": {
@@ -46,7 +46,7 @@
         },
         "sd-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "sd-bar-fill": {
@@ -81,7 +81,7 @@
         },
         "panel-daily-card": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-daily": {
@@ -241,12 +241,12 @@
         }
       },
       "counts": {
-        "totalElements": 678,
+        "totalElements": 705,
         "canvases": 7,
-        "heatCells": 379
+        "heatCells": 376
       }
     },
-    "panel@700px@en": {
+    "panel@700px@en@claude": {
       "bySelector": {
         "panel-plan-badge": {
           "tag": "span",
@@ -270,7 +270,7 @@
         },
         "fh-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "fh-bar-fill": {
@@ -290,7 +290,7 @@
         },
         "sd-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "sd-bar-fill": {
@@ -325,7 +325,7 @@
         },
         "panel-daily-card": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-daily": {
@@ -485,12 +485,12 @@
         }
       },
       "counts": {
-        "totalElements": 678,
+        "totalElements": 705,
         "canvases": 7,
-        "heatCells": 379
+        "heatCells": 376
       }
     },
-    "panel@1600px@ko": {
+    "panel@1600px@ko@claude": {
       "bySelector": {
         "panel-plan-badge": {
           "tag": "span",
@@ -514,7 +514,7 @@
         },
         "fh-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "fh-bar-fill": {
@@ -534,7 +534,7 @@
         },
         "sd-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "sd-bar-fill": {
@@ -569,7 +569,7 @@
         },
         "panel-daily-card": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-daily": {
@@ -729,12 +729,12 @@
         }
       },
       "counts": {
-        "totalElements": 678,
+        "totalElements": 705,
         "canvases": 7,
-        "heatCells": 379
+        "heatCells": 376
       }
     },
-    "panel@1600px@en": {
+    "panel@1600px@en@claude": {
       "bySelector": {
         "panel-plan-badge": {
           "tag": "span",
@@ -758,7 +758,7 @@
         },
         "fh-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "fh-bar-fill": {
@@ -778,7 +778,7 @@
         },
         "sd-remaining": {
           "tag": "div",
-          "childElementCount": 0,
+          "childElementCount": 1,
           "hasText": true
         },
         "sd-bar-fill": {
@@ -813,7 +813,7 @@
         },
         "panel-daily-card": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-daily": {
@@ -973,12 +973,12 @@
         }
       },
       "counts": {
-        "totalElements": 678,
+        "totalElements": 705,
         "canvases": 7,
-        "heatCells": 379
+        "heatCells": 376
       }
     },
-    "sidebar@700px@ko": {
+    "sidebar@700px@ko@claude": {
       "bySelector": {
         "sb-ov-bar": {
           "tag": "div",
@@ -1002,12 +1002,12 @@
         }
       },
       "counts": {
-        "totalElements": 217,
+        "totalElements": 219,
         "canvases": 0,
-        "heatCells": 94
+        "heatCells": 91
       }
     },
-    "sidebar@700px@en": {
+    "sidebar@700px@en@claude": {
       "bySelector": {
         "sb-ov-bar": {
           "tag": "div",
@@ -1031,12 +1031,12 @@
         }
       },
       "counts": {
-        "totalElements": 217,
+        "totalElements": 219,
         "canvases": 0,
-        "heatCells": 94
+        "heatCells": 91
       }
     },
-    "sidebar@1600px@ko": {
+    "sidebar@1600px@ko@claude": {
       "bySelector": {
         "sb-ov-bar": {
           "tag": "div",
@@ -1060,12 +1060,12 @@
         }
       },
       "counts": {
-        "totalElements": 217,
+        "totalElements": 219,
         "canvases": 0,
-        "heatCells": 94
+        "heatCells": 91
       }
     },
-    "sidebar@1600px@en": {
+    "sidebar@1600px@en@claude": {
       "bySelector": {
         "sb-ov-bar": {
           "tag": "div",
@@ -1089,9 +1089,1037 @@
         }
       },
       "counts": {
-        "totalElements": 217,
+        "totalElements": 219,
         "canvases": 0,
-        "heatCells": 94
+        "heatCells": 91
+      }
+    },
+    "panel@700px@ko@codex": {
+      "bySelector": {
+        "panel-plan-badge": {
+          "tag": "span",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-status": {
+          "tag": "span",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fallback-banner": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fh-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "fh-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "fh-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "fh-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-sd-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "sd-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "sd-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "sd-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-hr": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-proj": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-daily-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-daily": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "daily-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-calendar-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-calendar-body": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-model-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-model-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-cache-spark": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-tool-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-tools": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "tools-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-files-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-files-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-session-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-session-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-branch-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-branch-list": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-skill-card": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-longterm-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-longterm": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "longterm-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-monthly-card": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "chart-monthly": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "monthly-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "chart-trend": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "trend-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        }
+      },
+      "counts": {
+        "totalElements": 633,
+        "canvases": 7,
+        "heatCells": 376
+      }
+    },
+    "panel@700px@en@codex": {
+      "bySelector": {
+        "panel-plan-badge": {
+          "tag": "span",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-status": {
+          "tag": "span",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fallback-banner": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fh-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "fh-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "fh-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "fh-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-sd-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "sd-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "sd-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "sd-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-hr": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-proj": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-daily-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-daily": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "daily-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-calendar-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-calendar-body": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-model-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-model-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-cache-spark": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-tool-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-tools": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "tools-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-files-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-files-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-session-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-session-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-branch-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-branch-list": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-skill-card": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-longterm-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-longterm": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "longterm-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-monthly-card": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "chart-monthly": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "monthly-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "chart-trend": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "trend-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        }
+      },
+      "counts": {
+        "totalElements": 633,
+        "canvases": 7,
+        "heatCells": 376
+      }
+    },
+    "panel@1600px@ko@codex": {
+      "bySelector": {
+        "panel-plan-badge": {
+          "tag": "span",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-status": {
+          "tag": "span",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fallback-banner": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fh-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "fh-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "fh-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "fh-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-sd-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "sd-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "sd-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "sd-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-hr": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-proj": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-daily-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-daily": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "daily-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-calendar-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-calendar-body": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-model-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-model-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-cache-spark": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-tool-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-tools": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "tools-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-files-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-files-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-session-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-session-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-branch-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-branch-list": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-skill-card": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-longterm-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-longterm": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "longterm-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-monthly-card": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "chart-monthly": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "monthly-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "chart-trend": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "trend-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        }
+      },
+      "counts": {
+        "totalElements": 633,
+        "canvases": 7,
+        "heatCells": 376
+      }
+    },
+    "panel@1600px@en@codex": {
+      "bySelector": {
+        "panel-plan-badge": {
+          "tag": "span",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-status": {
+          "tag": "span",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fallback-banner": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-fh-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "fh-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "fh-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "fh-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-sd-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "sd-remaining": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "sd-bar-fill": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "sd-reset": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "burn-rate-hr": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-val": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "safe-until-proj": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-daily-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-daily": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "daily-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-calendar-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-calendar-body": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-model-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-model-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-cache-body": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-cache-spark": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-tool-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "chart-tools": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "tools-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-files-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-files-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-session-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-session-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-branch-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-branch-list": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-retro-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-skill-card": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-longterm-card": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "chart-longterm": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "longterm-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "panel-monthly-card": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "chart-monthly": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "monthly-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        },
+        "chart-trend": {
+          "tag": "canvas",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "trend-empty": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": true
+        }
+      },
+      "counts": {
+        "totalElements": 633,
+        "canvases": 7,
+        "heatCells": 376
+      }
+    },
+    "sidebar@700px@ko@codex": {
+      "bySelector": {
+        "sb-ov-bar": null,
+        "sb-fh-bar": null,
+        "sb-sd-bar": null,
+        "sb-ctx-bar": null
+      },
+      "counts": {
+        "totalElements": 174,
+        "canvases": 0,
+        "heatCells": 91
+      }
+    },
+    "sidebar@700px@en@codex": {
+      "bySelector": {
+        "sb-ov-bar": null,
+        "sb-fh-bar": null,
+        "sb-sd-bar": null,
+        "sb-ctx-bar": null
+      },
+      "counts": {
+        "totalElements": 174,
+        "canvases": 0,
+        "heatCells": 91
+      }
+    },
+    "sidebar@1600px@ko@codex": {
+      "bySelector": {
+        "sb-ov-bar": null,
+        "sb-fh-bar": null,
+        "sb-sd-bar": null,
+        "sb-ctx-bar": null
+      },
+      "counts": {
+        "totalElements": 174,
+        "canvases": 0,
+        "heatCells": 91
+      }
+    },
+    "sidebar@1600px@en@codex": {
+      "bySelector": {
+        "sb-ov-bar": null,
+        "sb-fh-bar": null,
+        "sb-sd-bar": null,
+        "sb-ctx-bar": null
+      },
+      "counts": {
+        "totalElements": 174,
+        "canvases": 0,
+        "heatCells": 91
       }
     }
   }

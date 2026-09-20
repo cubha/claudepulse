@@ -1,5 +1,5 @@
 import { NotificationType, RequestType } from 'vscode-messenger-common';
-import type { PollHistoryPoint, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
+import type { AgentProvider, CodexRateLimitSnapshot, PollHistoryPoint, ProviderAvailability, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
 
 /** Request: webview → extension. 현재 Rate Limit 스냅샷 요청. */
 export const GetRateLimit: RequestType<void, RateLimitSnapshot> = {
@@ -21,9 +21,14 @@ export const PushPollerError: NotificationType<import('../types').PollerError> =
   method: 'pushPollerError'
 };
 
-/** Notification: webview → extension. 로그인 터미널 열기 요청. */
+/** Notification: webview → extension. 로그인 터미널 열기 요청(Claude — `claude auth login`). */
 export const RequestLogin: NotificationType<void> = {
   method: 'requestLogin'
+};
+
+/** Notification: webview → extension. 로그인 터미널 열기 요청(Codex — `codex login`, v0.2.0 ST7). */
+export const RequestLoginCodex: NotificationType<void> = {
+  method: 'requestLoginCodex'
 };
 
 /** Notification: webview → extension. 대시보드 패널 열기 요청. */
@@ -104,6 +109,48 @@ export const RequestClearPinnedSession: NotificationType<void> = {
 };
 
 /**
+ * Notification: webview → extension. 사이드바 프로바이더 스위처 전환 요청(ST7).
+ * extension이 activeProvider를 바꾸고 즉시 캐시된 요약(재계산 없이)을 재푸시한다.
+ */
+export const RequestSetProvider: NotificationType<AgentProvider> = {
+  method: 'requestSetProvider'
+};
+
+/** Request: webview → extension. 현재 활성 프로바이더 조회(초기 로드). */
+export const GetActiveProvider: RequestType<void, AgentProvider> = {
+  method: 'getActiveProvider'
+};
+
+/** Notification: extension → webview. 활성 프로바이더 변경 브로드캐스트. */
+export const PushActiveProvider: NotificationType<AgentProvider> = {
+  method: 'pushActiveProvider'
+};
+
+/** Request: webview → extension. 양 프로바이더 3단 빈 상태 판정 조회(초기 로드). */
+export const GetProviderAvailability: RequestType<void, ProviderAvailability> = {
+  method: 'getProviderAvailability'
+};
+
+/** Notification: extension → webview. 양 프로바이더 판정 브로드캐스트(설치·로그인 상태 변화 시). */
+export const PushProviderAvailability: NotificationType<ProviderAvailability> = {
+  method: 'pushProviderAvailability'
+};
+
+/** Request: webview → extension. 현재 Codex 한도 스냅샷 조회(초기 로드, GetRateLimit의 Codex 대응). */
+export const GetCodexRateLimit: RequestType<void, CodexRateLimitSnapshot | null> = {
+  method: 'getCodexRateLimit'
+};
+
+/**
+ * Notification: extension → webview. Codex 한도 스냅샷 푸시(ST5/ST7).
+ * `PushRateLimit`(Claude 전용)과 별도 채널 — activeProvider==='codex'일 때만 의미 있는 값이 온다.
+ * null = rate_limits 자체가 세션에 없음(free 플랜 일부·API key 모드, D9) → 게이지 섹션 숨김 신호.
+ */
+export const PushCodexRateLimit: NotificationType<CodexRateLimitSnapshot | null> = {
+  method: 'pushCodexRateLimit'
+};
+
+/**
  * webview(사이드바·패널)가 BROADCAST로 수신해야 하는 알림 method 목록.
  *
  * ⚠️ vscode-messenger 계약: registerWebviewView/Panel의 broadcastMethods에 등재된
@@ -119,4 +166,7 @@ export const WEBVIEW_BROADCAST_METHODS: string[] = [
   PushLang.method,
   PushUsageSummary.method,
   PushRetroSummary.method,
+  PushActiveProvider.method,
+  PushProviderAvailability.method,
+  PushCodexRateLimit.method,
 ];

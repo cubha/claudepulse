@@ -1,16 +1,20 @@
 // 대시보드 패널(WebviewPanel) 전용 렌더링 (v0.1.54 ST5 — main.ts에서 기계적 추출).
-import { Chart, registerables } from 'chart.js';
+import { Chart, registerables, type ChartDataset } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
-  GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang,
-  PushRateLimit, PushRetroSummary, PushUsageSummary, RequestRefresh,
+  GetActiveProvider, GetCodexRateLimit, GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary,
+  PushActiveProvider, PushCodexRateLimit, PushLang, PushRateLimit, PushRetroSummary, PushUsageSummary, RequestRefresh,
 } from '../messaging/contracts';
-import type { RateLimitSnapshot, SessionSummary, UsageSummary } from '../types';
+import type { AgentProvider, CodexRateLimitSnapshot, RateLimitSnapshot, SessionSummary, UsageSummary } from '../types';
 import { setLang, t } from './i18n';
 import { escapeHtml, fmtCost, formatErrorHtml } from './format';
 import { renderRetro } from './retroView';
 import { calcSafeUntil, calcProjAtReset, deriveBurnState, burnStateLabelKey, type PollPoint } from './burnRate';
+import {
+  median, THRESHOLD_LOW, THRESHOLD_HIGH, classifyCacheHitRate,
+  filterQualifyingCostDays, calcCostAnomalyPct, calcPaceBaseline,
+} from './metricCalc';
 import { vsApi } from './webviewApi';
 import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
@@ -45,10 +49,31 @@ let longTermScopeDays = 30;
 let attrScope: 'all' | '24h' | '7d' = 'all';
 let panelUsage: UsageSummary | null = null;
 let lastPanelSnapshot: RateLimitSnapshot | null = null;
+// 프로바이더 인지(ST6 부분, v0.2.0) — panelView.ts는 Codex 전용 게이지 위젯이 없다(burn
+// rate·trend 차트가 5h/7d 고정 의미론에 깊이 결합돼 있어 이번 범위에서 재작업하지 않기로
+// 결정, PLAN §7 ST6 항목 참조). 대신 Claude 전용 카드를 Codex 활성 시 숨긴다 — 잘못된
+// 라벨(예: Codex 버킷을 "5H"로 표시)로 반쯤 맞는 화면을 보여주는 것보다 정직한 gap이 낫다.
+let activePanelProvider: AgentProvider = 'claude';
+// Codex 한도 스냅샷(verify-impl B-V1/B-V2 보완, v0.2.0) — sidebarView.ts와 동일 별도 채널
+// (PushCodexRateLimit). panelView.ts는 이 메시지를 지금까지 구독하지 않고 있었다(축B가 지적한
+// "지표밴드 통째 누락"의 배선 원인 — 코드 자체가 없던 게 아니라 요청조차 안 했다).
+let panelCodexSnapshot: CodexRateLimitSnapshot | null = null;
 // 회고 섹션은 extension에 lazy 요청(GetRetroSummary)하므로 messenger 참조 보관
 let panelMessenger: InstanceType<typeof Messenger> | null = null;
 /** Usage Calendar 가로 스크롤 계약 상태 — 이 모듈이 단독 소유한다(v0.1.55 결함 A). */
 const panelCalendarScroll = createCalendarScrollState();
+
+/**
+ * costUsd===0이 "실측 0"인지 "가격표에 없어 계산 불가"인지 fmtCost는 구분 못한다(defer #9,
+ * v0.1.55 거짓초록과 동일 부류). 세션/브랜치/스킬/서브에이전트 목록의 비용 셀에서 공용으로 쓴다
+ * — 캐시절약액(updateCacheSection)·오늘비용(sidebarView.ts)은 각자의 today 스코프 판정을
+ * 그대로 쓰므로 이 헬퍼를 쓰지 않는다(스코프가 다름, hasUnpricedRecords 문서 참조).
+ */
+function costCellHtml(costUsd: number, hasUnpriced: boolean, className: string): string {
+  return hasUnpriced && costUsd === 0
+    ? `<span class="${className}" title="${escapeHtml(t('pricing_unknown_note'))}">${t('pricing_unknown')}</span>`
+    : `<span class="${className}">${fmtCost(costUsd)}</span>`;
+}
 
 function destroyCharts(): void {
   if (trendChart) { trendChart.destroy(); trendChart = null; }
@@ -151,6 +176,16 @@ export function initPanel(): void {
     updateUsageSection();
   });
 
+  messenger.onNotification(PushActiveProvider, (provider) => {
+    activePanelProvider = provider;
+    applyProviderVisibility();
+  });
+
+  messenger.onNotification(PushCodexRateLimit, (snapshot) => {
+    panelCodexSnapshot = snapshot;
+    updateCodexBandSection();
+  });
+
   // 회고 push 수신(주 경로). pull(updateRetroSection)은 first-paint fallback로 유지 —
   // 락다운 환경에서 요청 라운드트립 불발해도 push로 "수집 중" 고착을 푼다.
   messenger.onNotification(PushRetroSummary, (retro) => {
@@ -189,6 +224,14 @@ export function initPanel(): void {
     })
     .catch(() => undefined);
 
+  void messenger.sendRequest(GetActiveProvider, HOST_EXTENSION, undefined)
+    .then((provider) => { activePanelProvider = provider; applyProviderVisibility(); })
+    .catch(() => undefined);
+
+  void messenger.sendRequest(GetCodexRateLimit, HOST_EXTENSION, undefined)
+    .then((snapshot) => { panelCodexSnapshot = snapshot; updateCodexBandSection(); })
+    .catch(() => undefined);
+
   void messenger.sendRequest(GetPollHistory, HOST_EXTENSION, undefined)
     .then((history) => {
       history.forEach(p => {
@@ -212,6 +255,105 @@ export function initPanel(): void {
   wirePanelButtons(messenger);
 }
 
+/**
+ * Claude 전용 카드를 Codex 활성 시 숨긴다(ST6 부분). 대상 6개는 전부 `RateLimitSnapshot`
+ * 고정 fiveHour/sevenDay 의미론이나 회고(git)처럼 Codex가 이번 범위에서 못 채우는 데이터다 —
+ * 나머지(daily/calendar/model/cache/tools/files/sessions/branch)는 UsageSummary 기반이라
+ * provider 무관하게 이미 정상 동작한다(P2 codex axis 골든 캡처로 확인됨).
+ */
+const CLAUDE_ONLY_PANEL_IDS = [
+  'panel-fh-card', 'panel-sd-card', 'panel-burn-card', 'panel-safe-card',
+  'panel-util-trend-card', 'panel-skill-card', 'panel-retro-card',
+] as const;
+
+/** Codex 활성 시에만 보이는 대체 컨테이너(verify-impl B-V1/B-V2 보완) — 위 배열의 역방향. */
+const CODEX_ONLY_PANEL_IDS = [
+  'panel-codex-band-grid', 'panel-codex-band-note', 'panel-codex-extra-card',
+] as const;
+
+function applyProviderVisibility(): void {
+  const isCodex = activePanelProvider === 'codex';
+  // .provider-codex.theme-dark/.theme-light(styles.css ST9) 활성화 스위치 — sidebarView.ts와
+  // 동일 이유(클래스 안 붙으면 팔레트 CSS가 죽은 채 게이트만 그린).
+  document.body.classList.toggle('provider-codex', isCodex);
+  for (const id of CLAUDE_ONLY_PANEL_IDS) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isCodex ? 'none' : '';
+  }
+  for (const id of CODEX_ONLY_PANEL_IDS) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isCodex ? '' : 'none';
+  }
+  // plan 배지는 fmtPlanTier(Claude subscriptionType/rateLimitTier 형식) 전용 포맷터라
+  // Codex plan_type 문자열을 넣으면 형식이 안 맞는다 — Codex 전용 배지는 별건(ST9).
+  const planBadgeEl = document.getElementById('panel-plan-badge');
+  if (planBadgeEl && isCodex) planBadgeEl.innerHTML = '';
+  updateCodexBandSection();
+}
+
+/**
+ * Codex 전용 지표밴드+신규패널 렌더(verify-impl B-V1/B-V2 보완, v0.2.0). panel-fh-card류와
+ * 달리 버킷 개수가 가변(window_minutes 기반, free=1개/유료=2개)이라 정적 마크업이 아니라
+ * 여기서 매번 다시 그린다 — sidebarView.ts의 bucketCards 루프와 동일 라벨링 원칙 재사용
+ * (KNOWN_WINDOWS 매핑값을 그대로 쓰고 새 하드코딩을 만들지 않는다).
+ */
+function updateCodexBandSection(): void {
+  if (activePanelProvider !== 'codex') return;
+
+  const snapshot = panelCodexSnapshot;
+  const buckets = snapshot?.buckets ?? [];
+
+  const gridEl = document.getElementById('panel-codex-band-grid');
+  if (gridEl) {
+    gridEl.innerHTML = buckets.map((b) => {
+      const status: 'allowed' | 'allowed_warning' | 'danger' =
+        b.usedPercent >= 90 ? 'danger' : b.usedPercent >= 70 ? 'allowed_warning' : 'allowed';
+      const color = status === 'danger' ? 'var(--c-danger)' : status === 'allowed_warning' ? 'var(--c-warn)' : 'var(--c-sonnet)';
+      const label = b.labelKey ? t(b.labelKey) : `${b.windowMinutes}min`;
+      const resetMs = Math.max(0, b.resetsAt * 1000 - Date.now());
+      return `
+        <div class="panel-metric-card">
+          <div class="panel-metric-label">${escapeHtml(label)}</div>
+          <div class="panel-metric-value" style="color:${color};">${b.usedPercent.toFixed(0)}%</div>
+          <div class="panel-metric-bar">
+            <div class="rate-bar"><div class="rate-bar-fill" data-status="${status}" style="width:${barFillWidth(b.usedPercent / 100)};"></div></div>
+          </div>
+          <div class="panel-metric-sub">${t('resets_in')} ${fmtReset(resetMs)}</div>
+        </div>`;
+    }).join('');
+  }
+
+  // "지표 밴드도 가변" 안내(Main/Gauge-Plans.dc.html 의도) — 버킷이 실제로 있을 때만 의미가
+  // 있다(스냅샷 자체가 없으면 §6 no_records 분기가 이미 화면 전체를 대체한다).
+  const noteEl = document.getElementById('panel-codex-band-note');
+  if (noteEl) noteEl.textContent = buckets.length > 0 ? t('codex_variable_bucket_note') : '';
+
+  // 신규 패널 3행 — 빈 값과 0 값을 같게 그리지 않는다: 컨텍스트창은 null이면 행 자체를 숨기고,
+  // 추론 토큰은 오늘 활동이 있으면 0이어도 측정값으로 보여준다(panelUsage 유무로 "오늘 활동
+  // 있음"을 판정 — sidebarView.ts의 codexReasoningRow와 동일 게이트).
+  const extraListEl = document.getElementById('panel-codex-extra-list');
+  if (extraListEl) {
+    const rows: string[] = [];
+    if (panelUsage && (panelUsage.today.totalTokens > 0 || panelUsage.today.costUsd > 0)) {
+      rows.push(`<div class="panel-mcp-row"><span>${t('reasoning_tokens')}</span><span class="mono">${panelUsage.todayReasoningTokens.toLocaleString()}</span></div>`);
+    }
+    if (snapshot?.modelContextWindow != null) {
+      rows.push(`<div class="panel-mcp-row"><span>${t('codex_context_window')}</span><span class="mono">${snapshot.modelContextWindow.toLocaleString()}</span></div>`);
+    }
+    if (snapshot?.planType) {
+      rows.push(`<div class="panel-mcp-row"><span>${t('plan_label')}</span><span class="mono">${escapeHtml(snapshot.planType.toUpperCase())}</span></div>`);
+    }
+    extraListEl.innerHTML = rows.length > 0 ? rows.join('') : `<div class="panel-loading">${t('collecting_data')}</div>`;
+  }
+
+  // 헤더 플랜 배지(Claude의 fmtPlanTier 배지와 동일 위치/클래스 — planType 원본 문자열만
+  // 대문자화, 값별 분기 없음).
+  const planBadgeEl = document.getElementById('panel-plan-badge');
+  if (planBadgeEl && snapshot?.planType) {
+    planBadgeEl.innerHTML = `<span class="plan-badge">${escapeHtml(snapshot.planType.toUpperCase())}</span>`;
+  }
+}
+
 function recordHistory(snapshot: RateLimitSnapshot): void {
   const t = new Date(snapshot.generatedAt);
   fhHistory.push({ t, v: snapshot.fiveHour.utilization });
@@ -224,7 +366,7 @@ function buildPanelShell(): string {
   return `
     <div class="panel-root">
       <div class="panel-header">
-        <span class="panel-title">Claude Code Gauge</span>
+        <span class="panel-title">AgentVitals</span>
         <span id="panel-plan-badge"></span>
         <span class="status-badge" id="panel-status"></span>
         <div class="panel-header-spacer"></div>
@@ -234,7 +376,7 @@ function buildPanelShell(): string {
 
       <!-- 4-카드 메트릭 그리드 -->
       <div class="panel-metric-grid">
-        <div class="card panel-metric-card" id="panel-fh-card">
+        <div class="panel-metric-card" id="panel-fh-card">
           <div class="panel-metric-label">${t('session_5h')}</div>
           <div class="panel-metric-value" id="fh-remaining">—</div>
           <div class="panel-metric-bar">
@@ -244,7 +386,7 @@ function buildPanelShell(): string {
           </div>
           <div class="panel-metric-sub" id="fh-reset">—</div>
         </div>
-        <div class="card panel-metric-card" id="panel-sd-card">
+        <div class="panel-metric-card" id="panel-sd-card">
           <div class="panel-metric-label">${t('weekly_7d')}</div>
           <div class="panel-metric-value" id="sd-remaining">—</div>
           <div class="panel-metric-bar">
@@ -254,21 +396,27 @@ function buildPanelShell(): string {
           </div>
           <div class="panel-metric-sub" id="sd-reset">—</div>
         </div>
-        <div class="card panel-metric-card">
+        <div class="panel-metric-card" id="panel-burn-card">
           <div class="panel-metric-label">${t('burn_rate')}</div>
           <div class="panel-metric-value" id="burn-rate-val">—</div>
           <div class="panel-metric-sub" id="burn-rate-hr">${t('collecting_data')}</div>
         </div>
-        <div class="card panel-metric-card">
+        <div class="panel-metric-card" id="panel-safe-card">
           <div class="panel-metric-label">${t('safe_until_label')}</div>
           <div class="panel-metric-value" id="safe-until-val">—</div>
           <div class="panel-metric-sub" id="safe-until-proj">${t('collecting_data')}</div>
         </div>
       </div>
 
+      <!-- Codex 전용 가변 버킷 지표밴드(verify-impl B-V1 보완, v0.2.0) — window_minutes 개수만큼
+           JS가 채운다(updateCodexBandSection). burn-rate/trend 차트 같은 이력 의존 위젯이 아니라
+           panel-fh-card류와 동형인 값+bar+sub 카드라 ST6이 보류한 범위(§7) 밖이다. -->
+      <div class="panel-metric-grid" id="panel-codex-band-grid" style="display:none;"></div>
+      <div class="panel-codex-band-note" id="panel-codex-band-note" style="display:none;"></div>
+
       <!-- 추세 차트 -->
-      <div class="card panel-trend-card">
-        <div class="panel-chart-header">${t('util_trend')}</div>
+      <div class="panel-trend-card panel-flush" id="panel-util-trend-card">
+        <div class="panel-chart-header">${t('util_trend')}<span class="panel-chart-readout" id="trend-readout"></span></div>
         <div class="chart-scope-row">
           <span class="chart-scope-label">${t('scope_label')}:</span>
           <button class="scope-btn" data-scope="30">30m</button>
@@ -279,15 +427,20 @@ function buildPanelShell(): string {
           <canvas id="chart-trend"></canvas>
           <div class="panel-empty" id="trend-empty" style="display:none">${t('collecting_data')}</div>
         </div>
+        <div class="pace-caption" id="pace-caption"></div>
       </div>
 
       <!-- 7일 사용량 바 차트 -->
       <div class="card panel-trend-card" id="panel-daily-card">
-        <div class="panel-chart-header">${t('daily_cost')}</div>
+        <div class="panel-chart-header">${t('daily_cost')}<span class="panel-chart-readout" id="daily-readout"></span></div>
+        <!-- 게이지 밖 ③ — 오늘 · 평소(30일 중앙값) · 편차를 나란히(C3-CostAnomaly 보드). 비교 기준을
+             안 보여주면 "+N%"가 무엇 대비인지 화면에서 알 수 없다. -->
+        <div class="cost-anomaly-row" id="daily-anomaly-row"></div>
         <div class="panel-trend-wrap">
           <canvas id="chart-daily" style="display:none"></canvas>
           <div class="panel-loading" id="daily-empty">${t('collecting_data')}</div>
         </div>
+        <div class="cost-median-legend" id="daily-median-legend"></div>
       </div>
 
       <!-- Usage Calendar 히트맵 (v0.1.43) — 고정 1년(53주) 뷰, 토글 없음(GitHub 관례) -->
@@ -322,25 +475,25 @@ function buildPanelShell(): string {
       </div>
 
       <!-- 최근 편집 파일 -->
-      <div class="card panel-files-card" id="panel-files-card">
+      <div class="panel-files-card panel-flush" id="panel-files-card">
         <div class="panel-chart-header">${t('recently_edited')}</div>
         <div id="panel-files-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
       <!-- 세션 목록 -->
-      <div class="card panel-session-card" id="panel-session-card">
+      <div class="panel-session-card panel-flush" id="panel-session-card">
         <div class="panel-chart-header">${t('recent_sessions')}</div>
         <div id="panel-session-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
       <!-- Git ROI — 브랜치별 비용 -->
-      <div class="card panel-branch-card" id="panel-branch-card">
+      <div class="panel-branch-card panel-flush" id="panel-branch-card">
         <div class="panel-chart-header">${t('git_roi')}</div>
         <div id="panel-branch-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
       <!-- usage×git 회고 — 커밋별 비용 귀속 (근사치·미귀속 버킷 1급) -->
-      <div class="card panel-retro-card" id="panel-retro-card">
+      <div class="panel-retro-card panel-flush" id="panel-retro-card">
         <div class="panel-chart-header">
           <span>${t('usage_git_retro')}</span>
           <span class="retro-approx-badge" title="${t('retro_disclaimer')}">${t('retro_approx_badge')}</span>
@@ -365,9 +518,17 @@ function buildPanelShell(): string {
         <div id="panel-mcp-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
+      <!-- Codex 대체 패널(verify-impl B-V2 보완, v0.2.0) — panel-skill-card가 숨겨지는 자리에
+           들어간다(CLAUDE_ONLY_PANEL_IDS). 추론토큰·컨텍스트창실측·플랜배지 3행, 추정 없이
+           실측치만(빈 값은 행 자체를 숨김, updateCodexBandSection). -->
+      <div class="panel-codex-extra-card" id="panel-codex-extra-card" style="display:none;">
+        <div class="panel-chart-header"><span>${t('codex_extra_panel_title')}</span></div>
+        <div id="panel-codex-extra-list"></div>
+      </div>
+
       <!-- 장기 비용 트렌드 -->
-      <div class="card panel-trend-card" id="panel-longterm-card">
-        <div class="panel-chart-header">${t('long_term_trend')}</div>
+      <div class="panel-trend-card panel-flush" id="panel-longterm-card">
+        <div class="panel-chart-header">${t('long_term_trend')}<span class="panel-chart-readout" id="longterm-readout"></span></div>
         <div class="chart-scope-row">
           <span class="chart-scope-label">${t('scope_label')}:</span>
           <button class="lt-scope-btn active" data-scope="30">${t('scope_30d')}</button>
@@ -382,8 +543,8 @@ function buildPanelShell(): string {
       </div>
 
       <!-- 월별 비용 -->
-      <div class="card panel-trend-card" id="panel-monthly-card">
-        <div class="panel-chart-header">${t('monthly_cost')}</div>
+      <div class="panel-trend-card panel-flush" id="panel-monthly-card">
+        <div class="panel-chart-header">${t('monthly_cost')}<span class="panel-chart-readout" id="monthly-readout"></span></div>
         <div class="panel-trend-wrap">
           <canvas id="chart-monthly" style="display:none"></canvas>
           <div class="panel-loading" id="monthly-empty">${t('collecting_data')}</div>
@@ -394,7 +555,75 @@ function buildPanelShell(): string {
 }
 
 function getCssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  // document.documentElement(<html>)이 아니라 document.body에서 읽는다 — .theme-dark/.theme-light와
+  // ST9의 .provider-codex는 전부 <body>에 붙는 클래스(DashboardPanel.ts HTML shell + applyProviderVisibility
+  // 토글)라, --c-sonnet/--c-warn/--c-danger처럼 그 블록 "안"에서만 선언된 토큰은 <html> 기준으로는
+  // 안 보인다(커스텀 프로퍼티는 조상 방향으로만 상속 — <html>은 <body>의 조상이라 자식 선언이 안 보임).
+  // v0.2.0 전에는 이 토큰들이 :root(<html>)에 직접 있어서 우연히 맞았다 — 프로바이더별로 값이
+  // 갈라지면서(ST9) 이 우연이 깨져 차트가 검정으로 렌더되는 무성 실패가 났다(실측: 헤드리스 스크린샷).
+  return getComputedStyle(document.body).getPropertyValue(name).trim();
+}
+
+/**
+ * 막대 위에 값 라벨을 그리는 공용 Chart.js 플러그인 팩토리(신규 의존성 없음, canvas 직접 draw).
+ * 눈금만으로는 정확한 값을 읽기 위해 축과 막대를 오가야 한다 — 라벨을 막대에 직접 붙이면
+ * 그 동작이 없어진다. 색은 항상 getCssVar 경유(§3#5 — .ts 파일에 색 리터럴 금지).
+ */
+function barValueLabelPlugin(formatValue: (v: number) => string) {
+  return {
+    id: 'barValueLabel',
+    afterDatasetsDraw(chart: Chart) {
+      const { ctx } = chart;
+      const meta = chart.getDatasetMeta(0);
+      const data = chart.data.datasets[0]?.data as (number | null)[] | undefined;
+      if (!data) return;
+      const textColor = getCssVar('--vscode-descriptionForeground');
+      const monoFont = getCssVar('--ff-mono') || 'monospace';
+      ctx.save();
+      ctx.fillStyle = textColor;
+      ctx.font = `10px ${monoFont}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      meta.data.forEach((bar, i) => {
+        const v = data[i];
+        if (v === null || v === undefined || v <= 0) return;
+        const pos = bar.tooltipPosition(true);
+        if (pos.x === null || pos.y === null) return;
+        ctx.fillText(formatValue(v), pos.x, pos.y - 4);
+      });
+      ctx.restore();
+    },
+  };
+}
+
+/**
+ * 게이지 밖 ③ 비용 이상 감지 — "가는 선 = 평소 수준"(C3-CostAnomaly 보드). 값을 dataset이 아니라
+ * chart.options.plugins.medianLine.value로 읽어, 기존 인스턴스 재사용 시(update('none'))에도
+ * 매 리프레시마다 mixed dataset 타입 없이 갱신 가능하게 한다.
+ */
+function medianLinePlugin() {
+  return {
+    id: 'medianLine',
+    afterDatasetsDraw(chart: Chart) {
+      const opts = (chart.options.plugins as Record<string, { value?: number | null }> | undefined)?.['medianLine'];
+      const value = opts?.value;
+      if (value === null || value === undefined) return;
+      const yScale = chart.scales['y'];
+      const xScale = chart.scales['x'];
+      if (!yScale || !xScale) return;
+      const y = yScale.getPixelForValue(value);
+      const { ctx } = chart;
+      ctx.save();
+      ctx.strokeStyle = getCssVar('--vscode-descriptionForeground') + '77';
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(xScale.left, y);
+      ctx.lineTo(xScale.right, y);
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
 }
 
 function updateUsageSection(): void {
@@ -410,6 +639,7 @@ function updateUsageSection(): void {
   updateRetroSection();
   updateLongTermSection();
   updateMonthlyChart();
+  updateCodexBandSection();
 }
 
 /**
@@ -441,6 +671,43 @@ function updateDailyChart(): void {
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
+  const readoutEl = document.getElementById('daily-readout');
+  if (readoutEl) readoutEl.textContent = fmtCost(days[days.length - 1].costUsd);
+
+  // 게이지 밖 ③ 비용 이상 감지 — 30일 중앙값 대비 오늘(C3-CostAnomaly 보드). 표본<7이면 비교 블록 숨김.
+  const anomalyRowEl = document.getElementById('daily-anomaly-row');
+  const medianLegendEl = document.getElementById('daily-median-legend');
+  const todayCost = panelUsage?.today.costUsd ?? 0;
+  const todayDateKey = panelUsage?.today.date ?? '';
+  const qualifyingDays = filterQualifyingCostDays(panelUsage?.historicalDays ?? [], todayDateKey);
+  const qualifyingCosts = qualifyingDays.map(d => d.costUsd);
+  const anomalyPct = calcCostAnomalyPct(todayCost, qualifyingCosts);
+  const medianCost = anomalyPct !== null ? median(qualifyingCosts) : null;
+  if (anomalyRowEl) {
+    if (anomalyPct === null || medianCost === null) {
+      anomalyRowEl.innerHTML = '';
+    } else {
+      const sign = anomalyPct >= 0 ? '+' : '';
+      const elevated = anomalyPct > 0.15;
+      anomalyRowEl.innerHTML = `
+        <div class="cost-anomaly-item">
+          <div class="cost-anomaly-label">${t('cost_today_label')}</div>
+          <div class="cost-anomaly-value mono">${fmtCost(todayCost)}</div>
+        </div>
+        <div class="cost-anomaly-item">
+          <div class="cost-anomaly-label">${escapeHtml(t('cost_usual_label'))}</div>
+          <div class="cost-anomaly-value mono muted">${fmtCost(medianCost)}</div>
+        </div>
+        <div class="cost-anomaly-item">
+          <div class="cost-anomaly-label">${t('cost_anomaly_vs_median')}</div>
+          <div class="cost-anomaly-delta mono${elevated ? ' elevated' : ''}" title="${escapeHtml(t('cost_anomaly_hint'))}">${sign}${(anomalyPct * 100).toFixed(0)}%</div>
+        </div>`;
+    }
+  }
+  if (medianLegendEl) {
+    medianLegendEl.textContent = medianCost === null ? '' : t('cost_median_line_legend');
+  }
+
   const labels = days.map(d => d.date.slice(5)); // MM-DD
   const data = days.map(d => Number(d.costUsd.toFixed(4)));
   const barColor = getCssVar('--c-sonnet');
@@ -459,15 +726,19 @@ function updateDailyChart(): void {
   if (dailyChart) {
     dailyChart.data.labels = labels;
     dailyChart.data.datasets = datasets;
+    const plugins = dailyChart.options.plugins as Record<string, { value?: number | null }> | undefined;
+    if (plugins?.['medianLine']) plugins['medianLine'].value = medianCost;
     dailyChart.update('none');   // 주기 리프레시마다 재애니메이션되지 않도록(첫 렌더만 애니메이션)
   } else {
     dailyChart = new Chart(canvas, {
       type: 'bar',
       data: { labels, datasets },
+      plugins: [barValueLabelPlugin((v) => `$${v.toFixed(2)}`), medianLinePlugin()],
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        layout: { padding: { top: 14 } },
+        plugins: { legend: { display: false }, medianLine: { value: medianCost } },
         scales: {
           x: { ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
           y: {
@@ -475,7 +746,7 @@ function updateDailyChart(): void {
             grid: { color: gridColor },
           },
         },
-      },
+      } as ConstructorParameters<typeof Chart>[1]['options'],
     });
   }
 }
@@ -626,8 +897,22 @@ function updateCacheSection(): void {
     return;
   }
 
-  const hitPct = (cache.hitRate * 100).toFixed(1);
-  const savedStr = fmtCost(cache.savedUsd);
+  const hitPctNum = cache.hitRate * 100;
+  const hitPct = hitPctNum.toFixed(1);
+  // savedUsd===0이 "절약 측정값 0"인지 "가격표에 없어 계산 불가"인지 fmtCost는 구분 못한다
+  // (sidebarView.ts의 오늘비용과 동일 부류 버그, Codex 미등재 모델로 실사용 캡처 중 재확인).
+  const savedStr = (cache.savedUsd === 0 && (panelUsage?.unpricedModels.length ?? 0) > 0)
+    ? t('pricing_unknown')
+    : fmtCost(cache.savedUsd);
+
+  // 게이지 밖 ① 캐시 정상범위 밴드 — C1-Cache 보드(60/90 밴드, 78.4%=정상·31.2%=급락).
+  // 보드의 주장은 "스파크라인은 이미 있다, 없는 건 이 수치가 뭘 뜻하는지다" — 설명 문장을
+  // 툴팁이 아니라 본문에 노출한다(툴팁은 화면에서 안 보이므로 보드 요구를 충족하지 못한다).
+  const bandKind = classifyCacheHitRate(hitPctNum);
+  const bandLabelKey = bandKind === 'normal' ? 'cache_band_normal' : 'cache_band_drop';
+  const bandMsgKey = bandKind === 'normal' ? 'cache_band_msg_normal' : 'cache_band_msg_drop';
+  const bandBadgeHtml = `<span class="cache-band-status ${bandKind}" title="${escapeHtml(t('cache_band_note'))}">${t(bandLabelKey)}</span>`;
+  const bandMsgHtml = `<div class="cache-band-msg ${bandKind}">${escapeHtml(t(bandMsgKey))}</div>`;
 
   // 일별 캐시 히트율 스파크라인 데이터
   const sparkLabels = last7.map(d => d.date.slice(5));
@@ -638,7 +923,7 @@ function updateCacheSection(): void {
     <div class="cache-kpi-row">
       <div class="cache-kpi-item">
         <div class="cache-kpi-label">${t('hit_rate_today')}</div>
-        <div class="cache-kpi-value mono">${hitPct}%</div>
+        <div class="cache-kpi-value mono">${hitPct}%${bandBadgeHtml}</div>
       </div>
       <div class="cache-kpi-item">
         <div class="cache-kpi-label">${t('saved_today')}</div>
@@ -648,10 +933,11 @@ function updateCacheSection(): void {
     ${hasSparkData ? `
     <div class="cache-spark-wrap">
       <div class="panel-chart-header" style="font-size:var(--fs-label);margin-bottom:var(--sp-1);">${t('seven_day_rate')}</div>
-      <div style="height:60px;position:relative;">
+      <div style="height:76px;position:relative;">
         <canvas id="chart-cache-spark"></canvas>
       </div>
-    </div>` : ''}`;
+      ${bandMsgHtml}
+    </div>` : bandMsgHtml}`;
 
   if (hasSparkData) {
     const canvas = document.getElementById('chart-cache-spark') as HTMLCanvasElement | null;
@@ -659,19 +945,40 @@ function updateCacheSection(): void {
     const axisColor = getCssVar('--vscode-descriptionForeground');
     const gridColor = getCssVar('--vscode-panel-border');
     const lineColor = getCssVar('--c-warn');
+    const bandColor = getCssVar('--vscode-descriptionForeground');
+    // 게이지 밖 ① 정상범위 참조선(60%·90%) — 값이 아니라 밴드 자체를 보여줌(C1-Cache 보드)
+    const bandLine = (v: number) => sparkLabels.map(() => v);
     cacheSparkChart = new Chart(canvas, {
       type: 'line',
       data: {
         labels: sparkLabels,
-        datasets: [{
-          data: sparkData,
-          borderColor: lineColor,
-          backgroundColor: lineColor + '22',
-          borderWidth: 1.5,
-          fill: true,
-          tension: 0.3,
-          pointRadius: 2,
-        }],
+        datasets: [
+          {
+            data: sparkData,
+            borderColor: lineColor,
+            backgroundColor: lineColor + '22',
+            borderWidth: 1.5,
+            fill: true,
+            tension: 0.3,
+            pointRadius: 2,
+          },
+          {
+            data: bandLine(THRESHOLD_HIGH),
+            borderColor: bandColor + '55',
+            borderWidth: 1,
+            borderDash: [3, 3],
+            pointRadius: 0,
+            fill: false,
+          },
+          {
+            data: bandLine(THRESHOLD_LOW),
+            borderColor: bandColor + '55',
+            borderWidth: 1,
+            borderDash: [3, 3],
+            pointRadius: 0,
+            fill: false,
+          },
+        ],
       },
       options: {
         responsive: true,
@@ -684,11 +991,16 @@ function updateCacheSection(): void {
           y: {
             min: 0,
             max: 100,
-            ticks: { color: axisColor, font: { size: 9 }, callback: (v) => `${v}%` },
+            // 눈금은 밴드 경계(60·90) 둘만 — 보드가 그 둘만 라벨링한다. 0·100까지 넣으면
+            // 60px대 스파크라인 높이에서 90과 100 라벨이 겹쳐 오히려 못 읽는다(실캡처로 확인).
+            afterBuildTicks: (axis: { ticks: { value: number }[] }) => {
+              axis.ticks = [{ value: THRESHOLD_LOW }, { value: THRESHOLD_HIGH }];
+            },
+            ticks: { color: axisColor, font: { size: 9 }, callback: (v) => `${v}%`, autoSkip: false },
             grid: { color: gridColor },
           },
         },
-      },
+      } as ConstructorParameters<typeof Chart>[1]['options'],
     });
   }
 }
@@ -866,7 +1178,7 @@ function updateBranchSection(): void {
     const lastStr = lastDate.toISOString().slice(0, 10);
     return `<div class="branch-row">
       <span class="branch-name" title="${escapeHtml(b.branch)}">⎇ ${escapeHtml(b.branch)}</span>
-      <span class="branch-cost mono">${fmtCost(b.costUsd)}</span>
+      ${costCellHtml(b.costUsd, b.hasUnpricedRecords, 'branch-cost mono')}
       <span class="branch-tokens mono">${fmtTokens(b.totalTokens)}</span>
       <span class="branch-sessions mono">${b.sessionCount}</span>
       <span class="branch-last mono">${escapeHtml(lastStr)}</span>
@@ -906,18 +1218,20 @@ function updateSkillSection(): void {
     }
   }
 
-  // 서브에이전트 소비 요약 라인 (#8)
+  // 서브에이전트 소비 요약 라인 (#8) — 비용이 미상(unpriced)이라 0으로 찍혀도 서브에이전트가
+  // 실제로 쓰였다면(subagentCount>0) 숨기지 않는다(defer #9, PLAN §8 불변식5 — 0값과 빈값 혼동 금지).
   let subLine = '';
-  if (sub && sub.subagentCostUsd > 0) {
+  if (sub && (sub.subagentCostUsd > 0 || (sub.subagentHasUnpriced && sub.subagentCount > 0))) {
     const pct = (sub.subagentShare * 100).toFixed(0);
     subLine = `<div class="skill-subagent-line">
       <span>${t('subagent_consumption')}</span>
-      <span class="mono">${pct}% · ${fmtCost(sub.subagentCostUsd)} · ${sub.subagentCount} ${t('agents_label')}</span>
+      <span class="mono">${pct}% · ${costCellHtml(sub.subagentCostUsd, sub.subagentHasUnpriced, 'mono')} · ${sub.subagentCount} ${t('agents_label')}</span>
     </div>`;
   }
 
-  // 스킬 외 작업 버킷 (1급) — !isSidechain && !attributionSkill
-  const hasBucket = !!unattr && unattr.costUsd > 0;
+  // 스킬 외 작업 버킷 (1급) — !isSidechain && !attributionSkill. 미가격이라 0으로 찍혀도
+  // 토큰 소비가 있었으면 숨기지 않는다(위 서브에이전트 라인과 동일 원칙).
+  const hasBucket = !!unattr && (unattr.costUsd > 0 || (unattr.hasUnpricedRecords && unattr.totalTokens > 0));
   if (skills.length === 0 && !hasBucket) {
     listEl.innerHTML = subLine || `<div class="panel-empty">${t('no_skill_data')}</div>`;
     return;
@@ -935,7 +1249,7 @@ function updateSkillSection(): void {
     return `<div class="skill-row" title="${escapeHtml(s.skill)} · ${(s.share * 100).toFixed(1)}%">
       <span class="skill-name">${escapeHtml(s.skill)}</span>
       <span class="skill-bar-wrap"><span class="skill-bar" style="width:${w}%"></span></span>
-      <span class="skill-cost mono">${fmtCost(s.costUsd)}</span>
+      ${costCellHtml(s.costUsd, s.hasUnpricedRecords, 'skill-cost mono')}
     </div>`;
   }).join('');
 
@@ -943,7 +1257,7 @@ function updateSkillSection(): void {
   const bucketRow = hasBucket ? `<div class="skill-row skill-row-other" title="${t('skill_unattributed_tip')} · ${(bucketShare * 100).toFixed(1)}%">
       <span class="skill-name">${t('skill_unattributed')}</span>
       <span class="skill-bar-wrap"><span class="skill-bar skill-bar-other" style="width:${Math.max(2, (bucketShare / maxShare) * 100)}%"></span></span>
-      <span class="skill-cost mono">${fmtCost(unattr!.costUsd)}</span>
+      ${costCellHtml(unattr!.costUsd, unattr!.hasUnpricedRecords, 'skill-cost mono')}
     </div>` : '';
 
   listEl.innerHTML = subLine + rows + bucketRow;
@@ -981,6 +1295,9 @@ function updateLongTermSection(): void {
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
+  const readoutEl = document.getElementById('longterm-readout');
+  if (readoutEl) readoutEl.textContent = fmtCost(filtered[filtered.length - 1].costUsd);
+
   const labels = filtered.map(d => d.date.slice(5));
   const data = filtered.map(d => Number(d.costUsd.toFixed(4)));
   const lineColor = getCssVar('--c-sonnet');
@@ -995,7 +1312,10 @@ function updateLongTermSection(): void {
     borderWidth: 1.5,
     fill: true,
     tension: 0.2,
-    pointRadius: filtered.length <= 30 ? 2 : 0,
+    pointRadius: filtered.length <= 30
+      ? 2
+      : (ctx: { dataIndex: number }) => (ctx.dataIndex === filtered.length - 1 ? 4 : 0),
+    pointBackgroundColor: lineColor,
   }];
 
   if (longTermChart) {
@@ -1066,6 +1386,9 @@ function updateMonthlyChart(): void {
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
+  const readoutEl = document.getElementById('monthly-readout');
+  if (readoutEl) readoutEl.textContent = fmtCost(sortedMonths[sortedMonths.length - 1][1]);
+
   const labels = sortedMonths.map(([k]) => k);
   const data = sortedMonths.map(([, v]) => Number(v.toFixed(4)));
   const barColor = getCssVar('--c-opus');
@@ -1089,9 +1412,11 @@ function updateMonthlyChart(): void {
     monthlyChart = new Chart(canvas, {
       type: 'bar',
       data: { labels, datasets },
+      plugins: [barValueLabelPlugin((v) => `$${v.toFixed(0)}`)],
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: { padding: { top: 14 } },
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: axisColor, font: { size: 10 } }, grid: { color: gridColor } },
@@ -1114,7 +1439,7 @@ function buildSessionRow(s: SessionSummary): string {
     <span class="session-cwd" title="${escapeHtml(s.cwd)}">${escapeHtml(cwdShort)}</span>
     <span class="session-time mono">${escapeHtml(dateStr)} ${escapeHtml(timeStr)}</span>
     <span class="session-tokens mono">${fmtTokens(s.totalTokens)}</span>
-    <span class="session-cost mono">${fmtCost(s.costUsd)}</span>
+    ${costCellHtml(s.costUsd, s.hasUnpricedRecords, 'session-cost mono')}
   </div>`;
 }
 
@@ -1150,12 +1475,14 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   const fhRemEl = document.getElementById('fh-remaining');
   const fhBarFill = document.getElementById('fh-bar-fill') as HTMLElement | null;
   const fhResetEl = document.getElementById('fh-reset');
-  if (fhRemEl) fhRemEl.textContent = `${fmtPct(1 - fh.utilization)} ${t('remaining_label')}`;
+  // 숫자와 단위 라벨을 분리한다 — 한 덩어리로 두면 CJK에서 "64% 사용"/"됨"으로 2줄 깨진다
+  // (한국어 실캡처로 발견. en "64% used"는 1줄이라 영어만 보면 안 드러난다).
+  if (fhRemEl) fhRemEl.innerHTML = `${fmtPct(fh.utilization)}<span class="panel-metric-unit">${escapeHtml(t('used_label'))}</span>`;
   if (fhBarFill) {
     fhBarFill.style.cssText = barFillWidth(fh.utilization);
     fhBarFill.dataset.status = fh.status;
   }
-  if (fhResetEl) fhResetEl.textContent = `${t('resets_in')} ${fmtReset(fh.msUntilReset)} · ${t('used_label')} ${fmtPct(fh.utilization)}`;
+  if (fhResetEl) fhResetEl.textContent = `${t('resets_in')} ${fmtReset(fh.msUntilReset)} · ${fmtPct(1 - fh.utilization)} ${t('remaining_label')}`;
 
   // WEEKLY (7d) 카드 — 병목 하이라이트 + 임계값 배지
   const sdCard = document.getElementById('panel-sd-card');
@@ -1164,7 +1491,7 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
   const sdRemEl = document.getElementById('sd-remaining');
   const sdBarFill = document.getElementById('sd-bar-fill') as HTMLElement | null;
   const sdResetEl = document.getElementById('sd-reset');
-  if (sdRemEl) sdRemEl.textContent = `${fmtPct(1 - sd.utilization)} ${t('remaining_label')}`;
+  if (sdRemEl) sdRemEl.innerHTML = `${fmtPct(sd.utilization)}<span class="panel-metric-unit">${escapeHtml(t('used_label'))}</span>`;
   if (sdBarFill) {
     sdBarFill.style.cssText = barFillWidth(sd.utilization);
     sdBarFill.dataset.status = sd.status;
@@ -1173,7 +1500,7 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
     const thBadge = snapshot.sevenDaySurpassedThreshold !== undefined
       ? ` <span class="threshold-badge">&gt;${Math.round(snapshot.sevenDaySurpassedThreshold * 100)}%</span>`
       : '';
-    sdResetEl.innerHTML = `${t('resets_in')} ${fmtReset(sd.msUntilReset)} · ${t('used_label')} ${fmtPct(sd.utilization)}${thBadge}`;
+    sdResetEl.innerHTML = `${t('resets_in')} ${fmtReset(sd.msUntilReset)} · ${fmtPct(1 - sd.utilization)} ${t('remaining_label')}${thBadge}`;
   }
 
   // BURN RATE 카드 — deriveBurnState()로 idle/window_reset을 "수집 중" 고착과 구분
@@ -1230,6 +1557,13 @@ function updateTrendChart(): void {
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
+  const trendReadoutEl = document.getElementById('trend-readout');
+  if (trendReadoutEl) {
+    const fhNow = fmtPct(fhSlice[fhSlice.length - 1].v);
+    const sdNow = fmtPct(sdSlice[sdSlice.length - 1]?.v ?? fhSlice[fhSlice.length - 1].v);
+    trendReadoutEl.textContent = `5H ${fhNow} · 7D ${sdNow}`;
+  }
+
   const labels = fhSlice.map(p => {
     const d = new Date(p.t);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
@@ -1239,8 +1573,9 @@ function updateTrendChart(): void {
   const sdColor = getCssVar('--c-opus');
   const axisColor = getCssVar('--vscode-descriptionForeground');
   const gridColor = getCssVar('--vscode-panel-border');
+  const paceColor = getCssVar('--vscode-descriptionForeground');
 
-  const datasets = [
+  const datasets: ChartDataset<'line'>[] = [
     {
       label: 'Session (5h)',
       data: fhSlice.map(p => p.v * 100),
@@ -1249,7 +1584,10 @@ function updateTrendChart(): void {
       borderWidth: 2,
       fill: true,
       tension: 0.3,
-      pointRadius: fhSlice.length <= 10 ? 3 : 0,
+      pointRadius: fhSlice.length <= 10
+        ? 3
+        : (ctx: { dataIndex: number }) => (ctx.dataIndex === fhSlice.length - 1 ? 4 : 0),
+      pointBackgroundColor: fhColor,
     },
     {
       label: 'Weekly (7d)',
@@ -1259,9 +1597,58 @@ function updateTrendChart(): void {
       borderWidth: 2,
       fill: true,
       tension: 0.3,
-      pointRadius: sdSlice.length <= 10 ? 3 : 0,
+      pointRadius: sdSlice.length <= 10
+        ? 3
+        : (ctx: { dataIndex: number }) => (ctx.dataIndex === sdSlice.length - 1 ? 4 : 0),
+      pointBackgroundColor: sdColor,
     },
   ];
+
+  // 게이지 밖 ④ 페이스 라인 — "기준 페이스"(창 시작→리셋 선형) vs 실제(위 fhSlice) 오버레이(C4-PaceLine 보드).
+  // lastPanelSnapshot이 있을 때만(첫 렌더 전 가드). 현재 5h 윈도 밖 포인트는 null로 스킵해
+  // 24h 스코프처럼 여러 리셋을 가로지르는 구간에서 단조 기준선이 100%에 눌어붙는 걸 막는다.
+  const paceCaptionEl = document.getElementById('pace-caption');
+  const fh = lastPanelSnapshot?.fiveHour;
+  if (fh) {
+    const nowMs = Date.now();
+    const resetAtMs = nowMs + fh.msUntilReset;
+    const windowStartMs = resetAtMs - FH_WINDOW_MS;
+    const baselineData = fhSlice.map(p => {
+      const t = p.t.getTime();
+      return t < windowStartMs ? null : calcPaceBaseline(t, windowStartMs, resetAtMs);
+    });
+    datasets.push({
+      label: t('pace_baseline_label'),
+      data: baselineData,
+      borderColor: paceColor + '77',
+      borderWidth: 1.5,
+      borderDash: [4, 4],
+      pointRadius: 0,
+      fill: false,
+      tension: 0,
+      spanGaps: false,
+    });
+
+    if (paceCaptionEl) {
+      const burnState = deriveBurnState(fhHistory, fh.utilization, fh.msUntilReset, FH_WINDOW_MS);
+      const resetAt = new Date(resetAtMs);
+      const windowStart = new Date(windowStartMs);
+      const safeUntil = burnState.rate !== null ? calcSafeUntil(fh.utilization, burnState.rate, resetAt) : null;
+      const exhaustText = safeUntil
+        ? `<span class="pace-exhaust">${t('pace_exhaust_projected')} ${fmtTime(safeUntil)}</span>`
+        : `<span>${t('pace_safe_no_exhaust')}</span>`;
+      // C4 보드의 판정 문장 — 점선(기준) 대비 실제선 위치가 곧 "리셋 전에 막히는가"의 답이다.
+      // 현재 시점 기준선과 실제 사용률을 직접 비교한다(차트 끝점 = 지금).
+      const baselineNow = calcPaceBaseline(nowMs, windowStartMs, resetAtMs);
+      const aboveBaseline = fh.utilization * 100 > baselineNow;
+      const verdictHtml = `<span class="pace-verdict${aboveBaseline ? ' warn' : ''}">`
+        + `${escapeHtml(t(aboveBaseline ? 'pace_above_baseline' : 'pace_below_baseline'))}</span>`;
+      paceCaptionEl.innerHTML = `<span>${t('pace_window_start')} ${fmtTime(windowStart)}</span>` +
+        `<span>${t('pace_window_reset')} ${fmtTime(resetAt)}</span>${exhaustText}${verdictHtml}`;
+    }
+  } else if (paceCaptionEl) {
+    paceCaptionEl.innerHTML = '';
+  }
 
   if (trendChart) {
     trendChart.data.labels = labels;

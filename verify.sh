@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify.sh — Claudepulse 통합 검증 스크립트
+# verify.sh — AgentVitals 통합 검증 스크립트
 # 호출: bash verify.sh [--ts-only|--no-build|--full]
 
 set -e
@@ -339,6 +339,36 @@ if [ -f "$DESIGN_CSS" ] && [ -f docs/design/DESIGN-TOKENS.md ]; then
           TS_N=$(grep -c . "$DT/ts_used_f" || true)
           echo "  ✅ [D-4] TS 소비 토큰 ${TS_N}개 전부 선언됨 (모델 액센트 ${KINDS_N}+1종 패밀리 포함)"
         fi
+      fi
+    fi
+
+    # ── D-5 provider 팔레트 다크/라이트 페어 (warn, 측정 무결성 floor 포함) ──
+    #   D-3은 `.theme-dark`/`.theme-light` 두 블록만 본다(awk `/^\.theme-dark[[:space:]]*\{/`) —
+    #   `.provider-codex.theme-dark` 같은 compound 셀렉터는 그 패턴에 안 걸려 사각지대다(PLAN §5
+    #   결정4: 팔레트가 4벌인데 D-3은 2벌만 본다). 이 게이트 없이는 Codex 쪽 다크/라이트 페어가
+    #   깨져도 아무도 모른다.
+    #   D-0과 같은 이유로 먼저 '측정이 살아있는가'부터 본다 — awk 셀렉터 문자열이 CSS 실제 표기와
+    #   바이트 단위로 안 맞으면 매칭 0건 → unpaired 0건 → 거짓 ✅가 된다(advisor 지적, 붕괴가
+    #   '개선'으로 읽히는 D-0과 동일 함정).
+    PROVIDER_DECL_MIN=5
+    awk '/^\.provider-codex\.theme-dark[[:space:]]*\{/{f=1;next} f&&/^\}/{f=0} f' "$DESIGN_CSS" \
+      | grep -oE '^[[:space:]]*--[a-zA-Z0-9-]+' | tr -d ' \t' | sort -u > "$DT/pv-dark"
+    awk '/^\.provider-codex\.theme-light[[:space:]]*\{/{f=1;next} f&&/^\}/{f=0} f' "$DESIGN_CSS" \
+      | grep -oE '^[[:space:]]*--[a-zA-Z0-9-]+' | tr -d ' \t' | sort -u > "$DT/pv-light"
+    PV_DARK_N=$(grep -c . "$DT/pv-dark" || true)
+    PV_LIGHT_N=$(grep -c . "$DT/pv-light" || true)
+    if [ "$PV_DARK_N" -lt "$PROVIDER_DECL_MIN" ] || [ "$PV_LIGHT_N" -lt "$PROVIDER_DECL_MIN" ]; then
+      echo "  ❌ [D-5] 측정 실패 — .provider-codex.theme-dark ${PV_DARK_N}개 / .theme-light ${PV_LIGHT_N}개 선언(최소 $PROVIDER_DECL_MIN 기대)"
+      echo "       셀렉터 표기가 바뀌었거나 블록이 삭제됐다. 이 상태의 페어 '통과'는 신뢰할 수 없다."
+      FAIL=$((FAIL + 1))
+    else
+      PV_UNPAIRED=$(comm -3 "$DT/pv-dark" "$DT/pv-light" | tr -d '\t' | sort -u) || PV_UNPAIRED=""
+      PV_UNPAIRED_N=$(printf '%s' "$PV_UNPAIRED" | grep -c . || true)
+      if [ "$PV_UNPAIRED_N" -gt 0 ]; then
+        echo "  ⚠️  [D-5] provider 팔레트 다크/라이트 페어 미충족 ${PV_UNPAIRED_N}개:"
+        echo "$PV_UNPAIRED" | sed 's/^/       /'
+      else
+        echo "  ✅ [D-5] provider 팔레트 다크/라이트 페어 미충족 0개 (.provider-codex 다크 ${PV_DARK_N}개/라이트 ${PV_LIGHT_N}개)"
       fi
     fi
 

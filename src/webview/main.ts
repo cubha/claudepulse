@@ -17,10 +17,10 @@ try {
   }
 } catch (err) {
   const msg = formatErrorHtml(err);
-  console.error('[Claude Code Gauge] webview init failed:', err);
+  console.error('[AgentVitals] webview init failed:', err);
   if (root) {
     root.innerHTML = `<div style="padding:12px;color:var(--vscode-errorForeground);font-size:12px;font-family:monospace;">
-      Claude Code Gauge webview error:<br>${msg}<br><br>
+      AgentVitals webview error:<br>${msg}<br><br>
       Open DevTools (Help → Toggle Developer Tools) for details.
     </div>`;
   }

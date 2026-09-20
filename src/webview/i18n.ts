@@ -9,10 +9,21 @@ const dict: Record<string, Record<Lang, string>> = {
   session_expired:  { ko: '세션 만료',          en: 'Session Expired',       ja: 'セッション期限切れ',       zh: '会话过期' },
   network_error:    { ko: '네트워크 오류',      en: 'Network Error',         ja: 'ネットワークエラー',       zh: '网络错误' },
   connecting:       { ko: '연결 중…',           en: 'Connecting…',           ja: '接続中…',                 zh: '连接中…' },
-  login_sub_missing:{ ko: 'Claude Code CLI가 설치되어 있지 않거나<br>로그인되지 않았습니다.',
-                      en: 'Claude Code CLI is not installed or<br>you are not logged in.',
-                      ja: 'Claude Code CLIがインストールされていないか<br>ログインされていません。',
-                      zh: 'Claude Code CLI 未安装或<br>您尚未登录。' },
+  // v0.2.0 ST8: login_sub_missing을 설치축/인증축 2키로 분할(PLAN §6) — not_installed는
+  // 별도 login_sub_not_installed로 분기하므로 이 키는 "설치는 됐지만 인증 안 됨" 전용으로 좁힌다.
+  login_sub_missing:{ ko: '로그인되지 않았습니다.',
+                      en: 'You are not logged in.',
+                      ja: 'ログインされていません。',
+                      zh: '您尚未登录。' },
+  not_installed_title:{ ko: 'CLI 미설치', en: 'CLI Not Installed', ja: 'CLI 未インストール', zh: '未安装 CLI' },
+  login_sub_not_installed:{ ko: 'Claude Code CLI가 설치되어 있지 않습니다.<br>설치 후 로그인하세요.',
+                      en: 'Claude Code CLI is not installed.<br>Install it, then log in.',
+                      ja: 'Claude Code CLIがインストールされていません。<br>インストール後にログインしてください。',
+                      zh: '未安装 Claude Code CLI。<br>请安装后登录。' },
+  install_claude_cmd:{ ko: 'npm install -g @anthropic-ai/claude-code',
+                      en: 'npm install -g @anthropic-ai/claude-code',
+                      ja: 'npm install -g @anthropic-ai/claude-code',
+                      zh: 'npm install -g @anthropic-ai/claude-code' },
   login_sub_expired:{ ko: 'OAuth 토큰이 만료됐습니다.<br>다시 로그인해 주세요.',
                       en: 'OAuth token has expired.<br>Please log in again.',
                       ja: 'OAuthトークンが期限切れです。<br>再ログインしてください。',
@@ -36,6 +47,49 @@ const dict: Record<string, Record<Lang, string>> = {
                       ja: 'ログイン後、↻を押して更新してください',
                       zh: '登录后，按 ↻ 刷新' },
   retry:            { ko: '↻ 다시 시도',        en: '↻ Retry',               ja: '↻ 再試行',                zh: '↻ 重试' },
+
+  // Codex 프로바이더(v0.2.0 ST7/ST8) — 스위처 라벨 + Codex 전용 3단 빈 상태.
+  // 로그인 버튼 없음(설치 명령만) vs 있음(CLI 명령만)의 구분은 Claude와 동일 원칙(§6).
+  provider_claude:  { ko: 'Claude',              en: 'Claude',                ja: 'Claude',                  zh: 'Claude' },
+  provider_codex:   { ko: 'Codex',               en: 'Codex',                 ja: 'Codex',                   zh: 'Codex' },
+  // 사이드바 footer(ST9 신설) — plan_type 문자열은 원본 그대로 대문자화만 하고 분기 금지(PLAN §8
+  // 불변식3, serde(other) 폴백 존재). null일 때만 이 키로 대체한다.
+  plan_unknown:     { ko: '플랜 미상',            en: 'Plan unknown',          ja: 'プラン不明',               zh: '套餐未知' },
+  // Codex 대시보드/사이드바 신규 패널(verify-impl B-V1/B-V2/B-V6 보완, v0.2.0) — 추론 토큰·
+  // 컨텍스트 창 실측·가변 버킷 안내. 사용률(%)이 아니라 크기 실측치라 "사용률" 표현을 피한다.
+  reasoning_tokens: { ko: '추론 토큰',            en: 'Reasoning tokens',      ja: '推論トークン',              zh: '推理令牌' },
+  codex_context_window: { ko: '컨텍스트 창',      en: 'Context window',        ja: 'コンテキストウィンドウ',      zh: '上下文窗口' },
+  codex_context_window_note: { ko: 'CLI가 보고한 모델 컨텍스트 창 크기(실측). 사용률이 아닙니다.',
+    en: 'Model context window size as reported by the CLI (measured). Not a usage percentage.',
+    ja: 'CLIが報告したモデルのコンテキストウィンドウサイズ(実測)。使用率ではありません。',
+    zh: 'CLI 报告的模型上下文窗口大小(实测)。不是使用率。' },
+  codex_variable_bucket_note: { ko: '지표 밴드도 가변입니다 — Free 플랜은 "주간" 대신 "30일" 한 칸만, rate_limits가 없으면 소모율·안전 시간만 남습니다.',
+    en: 'The metric band is variable too — Free plans show a single "30 days" slot instead of "Weekly", and without rate_limits only burn rate and safe time remain.',
+    ja: '指標バンドも可変です — Freeプランは「週間」の代わりに「30日」の1枠のみ、rate_limitsがない場合は消費率と安全時間のみ残ります。',
+    zh: '指标带也是可变的 — Free 套餐只显示"30天"一格而非"每周",没有 rate_limits 时只保留消耗率和安全时间。' },
+  codex_extra_panel_title: { ko: '대신 새로 생기는 것', en: 'New in its place', ja: '代わりに新設される項目', zh: '取而代之的新内容' },
+  plan_label:       { ko: '플랜',                 en: 'Plan',                  ja: 'プラン',                    zh: '套餐' },
+  codex_not_installed_title:{ ko: 'Codex CLI 미설치', en: 'Codex CLI Not Installed', ja: 'Codex CLI 未インストール', zh: '未安装 Codex CLI' },
+  codex_not_installed_sub:{ ko: '아래 명령으로 설치 후 로그인하세요.<br>설치돼 있지 않으면 로그인해도 소용없습니다.',
+                      en: 'Install with the command below, then log in.<br>Logging in won’t help until it’s installed.',
+                      ja: '下のコマンドでインストール後、ログインしてください。<br>未インストールの間はログインしても無意味です。',
+                      zh: '请先用以下命令安装，然后登录。<br>未安装前登录无效。' },
+  install_codex_cmd:{ ko: 'npm install -g @openai/codex', en: 'npm install -g @openai/codex', ja: 'npm install -g @openai/codex', zh: 'npm install -g @openai/codex' },
+  codex_not_authenticated_title:{ ko: '로그인 필요', en: 'Login Required', ja: 'ログイン必要', zh: '需要登录' },
+  codex_not_authenticated_sub:{ ko: 'Codex CLI에 로그인되어 있지 않습니다.',
+                      en: 'You are not logged in to the Codex CLI.',
+                      ja: 'Codex CLIにログインされていません。',
+                      zh: '您尚未登录 Codex CLI。' },
+  login_cmd_codex:  { ko: 'codex login',         en: 'codex login',          ja: 'codex login',             zh: 'codex login' },
+  codex_no_records_sub:{ ko: '아직 Codex 세션 기록이 없습니다.',
+                      en: 'No Codex session history yet.',
+                      ja: 'まだCodexセッション履歴がありません。',
+                      zh: '暂无 Codex 会话记录。' },
+  // window_minutes 런타임 생성 라벨(codexRollout.ts extractRateLimitBuckets 계약) — 5h/7d/30d 하드코딩 금지 그 자체는
+  // 로직에서 지키고, 여기는 그 3종이 실제로 나왔을 때 쓸 표시 문구만 제공한다.
+  codex_bucket_5h:  { ko: '5시간',                en: '5-Hour',                ja: '5時間',                   zh: '5小时' },
+  codex_bucket_7d:  { ko: '주간(7일)',            en: 'Weekly (7d)',           ja: '週間(7日)',                zh: '每周(7天)' },
+  codex_bucket_30d: { ko: '월간(30일)',           en: 'Monthly (30d)',         ja: '月間(30日)',               zh: '每月(30天)' },
   // 사용량
   no_usage_today:   { ko: '오늘 사용량 없음',   en: 'No usage today',        ja: '本日の使用量なし',         zh: '今日无使用记录' },
   tokens:           { ko: '토큰',               en: 'tokens',                ja: 'トークン',                 zh: '令牌' },
@@ -210,6 +264,57 @@ const dict: Record<string, Record<Lang, string>> = {
   retro_records:    { ko: '레코드',               en: 'records',               ja: 'レコード',                 zh: '记录' },
   no_retro_data:    { ko: '회고 데이터 없음 (git repo 아님 또는 커밋 없음)…', en: 'No retro data (not a git repo or no commits)…', ja: '会顧データなし (gitリポジトリでないかコミットなし)…', zh: '暂无回顾数据（非git仓库或无提交）…' },
   waiting_poll:     { ko: '첫 폴링 대기 중… (≈5분) 또는 ↻ 클릭', en: 'Waiting for first poll… (≈5 min) or click ↻', ja: '初回ポーリング待機中… (約5分) または ↻ をクリック', zh: '等待首次轮询…（约5分钟）或点击 ↻' },
+
+  // ── 게이지 밖 ① 캐시 정상범위 밴드 ──
+  cache_band_normal: { ko: '정상',                 en: 'Normal',                ja: '正常',                    zh: '正常' },
+  cache_band_drop:   { ko: '급락',                 en: 'Drop',                  ja: '急落',                    zh: '骤降' },
+  cache_band_note:   {
+    ko: '정상 범위(60~90%)를 벗어나면 세션이 잘게 끊기거나 프롬프트 앞부분이 매번 바뀌고 있다는 신호입니다.',
+    en: 'Outside the normal range (60–90%) usually means sessions are fragmented or the prompt prefix keeps changing.',
+    ja: '正常範囲(60~90%)を外れると、セッションが細切れになっているかプロンプト冒頭が毎回変わっている可能性があります。',
+    zh: '超出正常范围（60~90%）通常意味着会话被拆得过碎，或提示词前缀每次都在变化。' },
+  // C1 보드의 핵심 주장 — "스파크라인은 이미 있다, 없는 건 이 수치가 뭘 뜻하는지다". 툴팁이 아니라 본문에 노출한다.
+  cache_band_msg_normal: {
+    ko: '최근 7일 · 프롬프트 재사용이 잘 되고 있다',
+    en: 'Last 7 days · prompt reuse is working well',
+    ja: '直近7日 · プロンプト再利用がうまく機能している',
+    zh: '最近 7 天 · 提示词复用运作良好' },
+  cache_band_msg_drop: {
+    ko: '범위를 벗어났다 — 세션이 잘게 끊기거나 프롬프트 앞부분이 매번 바뀌고 있다',
+    en: 'Out of range — sessions are fragmented, or the prompt prefix keeps changing',
+    ja: '範囲外 — セッションが細切れか、プロンプト冒頭が毎回変わっている',
+    zh: '超出范围 — 会话被拆得过碎，或提示词前缀每次都在变化' },
+
+  // ── 게이지 밖 ③ 비용 이상 감지 ──
+  cost_anomaly_vs_median:  { ko: '평소 대비',            en: 'vs. usual',             ja: '平常時比',                 zh: '相较平常' },
+  cost_anomaly_median_note:{ ko: '30일 중앙값',           en: '30-day median',         ja: '30日間中央値',             zh: '30天中位数' },
+  cost_today_label:        { ko: '오늘',                 en: 'Today',                 ja: '今日',                    zh: '今天' },
+  cost_usual_label:        { ko: '평소 (30일 중앙값)',     en: 'Usual (30-day median)', ja: '平常 (30日間中央値)',       zh: '平常（30天中位数）' },
+  cost_median_line_legend: { ko: '가는 선 = 평소 수준',     en: 'Thin line = usual level', ja: '細い線 = 平常水準',        zh: '细线 = 平常水平' },
+  cost_anomaly_hint:       {
+    ko: '예산 기능이 아니다 — 자기 자신의 평소와 비교할 뿐이라 목표치 설정이 필요 없다.',
+    en: 'Not a budget feature — it only compares against your own usual level, so no target to configure.',
+    ja: '予算機能ではない — 自分自身の平常時と比較するだけなので目標値の設定は不要。',
+    zh: '这不是预算功能 — 仅与你自己的平常水平比较，无需设置目标值。' },
+
+  // ── 게이지 밖 ④ 페이스 라인 ──
+  pace_baseline_label:     { ko: '기준 페이스',           en: 'Baseline Pace',         ja: '基準ペース',               zh: '基准节奏' },
+  pace_actual_label:       { ko: '실제',                 en: 'Actual',                ja: '実際',                    zh: '实际' },
+  pace_window_start:       { ko: '창 시작',               en: 'Window start',          ja: 'ウィンドウ開始',           zh: '窗口开始' },
+  pace_window_reset:       { ko: '리셋',                 en: 'Reset',                 ja: 'リセット',                 zh: '重置' },
+  pace_exhaust_projected:  { ko: '소진 예상',             en: 'Est. exhaustion',       ja: '消耗予測',                 zh: '预计耗尽' },
+  pace_safe_no_exhaust:    { ko: '리셋 전 소진 없음',       en: 'No exhaustion before reset', ja: 'リセット前の消耗なし',    zh: '重置前不会耗尽' },
+  // C4 보드의 판정 문장 — 점선(기준 페이스) 대비 실제선 위치가 곧 "리셋 전에 막히는가"의 답이다.
+  pace_above_baseline:     {
+    ko: '실제선이 기준 페이스 위 — 이 속도면 리셋 전에 막힌다',
+    en: 'Above baseline pace — at this rate you hit the limit before reset',
+    ja: '実際線が基準ペースの上 — このペースならリセット前に止まる',
+    zh: '实际线高于基准节奏 — 按此速度将在重置前触顶' },
+  pace_below_baseline:     {
+    ko: '실제선이 기준 페이스 아래 — 이 속도면 리셋까지 여유가 있다',
+    en: 'Below baseline pace — at this rate you have room until reset',
+    ja: '実際線が基準ペースの下 — このペースならリセットまで余裕がある',
+    zh: '实际线低于基准节奏 — 按此速度到重置前仍有余量' },
 };
 
 function detectLang(): Lang {

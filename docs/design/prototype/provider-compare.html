@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Provider 표시형식 비교 — Claude Code / Codex / Cursor</title>
+<style>
+/* 프로토타입 한정: DESIGN-TOKENS.md Dark 컬럼을 :root에 매핑(실제 styles.css는 var(--vscode-*) 주입). */
+:root{
+  --bg:#1E1E1E; --card:#1F1F1F; --card-el:#232325; --sidebar:#181818;
+  --border:#2D2D30; --grid:#2A2A2D; --fg:#CCCCCC; --muted:#9D9D9D; --disabled:#6B6B6B;
+  --input:#2A2A2C;
+  --c-opus:#8B5CF6; --c-sonnet:#3B82F6; --c-haiku:#14B8A6; --c-warn:#F59E0B;
+  --c-danger:#F43F5E; --c-slate:#64748B; --c-fable:#E0529C;
+  --ff:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  --sp2:8px; --sp3:12px; --sp4:16px; --r-md:6px; --r-lg:8px; --r-sm:4px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--ff);font-size:13px;padding:24px 28px;line-height:1.45}
+h1{font-size:18px;font-weight:600;letter-spacing:-.01em;margin-bottom:4px}
+.sub{color:var(--muted);font-size:12px;margin-bottom:6px}
+.legend{display:flex;gap:18px;font-size:11px;color:var(--muted);margin-bottom:20px;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.dot.ok{background:linear-gradient(90deg,var(--c-sonnet),var(--c-opus))}
+.dot.alt{background:var(--c-warn)}
+.dot.off{background:var(--disabled)}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;align-items:start}
+.col{display:flex;flex-direction:column;gap:14px}
+.phead{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:var(--r-md);border:1px solid var(--border);background:var(--card-el)}
+.phead .name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px}
+.phead .tag{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);padding:2px 8px;border:1px solid var(--border);border-radius:999px}
+.pdot{width:9px;height:9px;border-radius:999px}
+.p-cc{background:var(--c-opus)} .p-cx{background:var(--c-haiku)} .p-cu{background:var(--c-sonnet)}
+
+.zone-label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:2px 0 -4px 2px}
+
+/* SideTab 좁은 패널 */
+.sidetab{background:var(--sidebar);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px;display:flex;flex-direction:column;gap:10px}
+.gauge-row{display:flex;align-items:center;gap:8px;font-size:11px}
+.gauge-row .lbl{width:54px;color:var(--muted);font-family:var(--mono)}
+.bar{flex:1;height:6px;border-radius:999px;background:var(--grid);overflow:hidden}
+.bar > i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--c-sonnet),var(--c-opus))}
+.bar.warn > i{background:var(--c-warn)}
+.gauge-row .pct{font-family:var(--mono);font-size:11px;width:34px;text-align:right}
+.sep{height:1px;background:var(--border);margin:2px 0}
+.kpi{font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.01em}
+.kpi small{font-size:10px;color:var(--muted);font-weight:400}
+.line{font-size:11px;color:var(--muted)}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{font-family:var(--mono);font-size:10px;padding:2px 7px;border:1px solid var(--border);border-radius:999px;color:var(--fg)}
+
+/* N/A 배너 */
+.na{border:1px dashed var(--disabled);border-radius:var(--r-md);padding:8px 10px;color:var(--disabled);font-size:10.5px;background:repeating-linear-gradient(45deg,transparent,transparent 6px,rgba(107,107,107,.05) 6px,rgba(107,107,107,.05) 12px)}
+.na b{color:var(--muted);font-weight:600}
+.alt-tag{color:var(--c-warn)}
+
+/* Dashboard 카드 그리드 */
+.dash{display:flex;flex-direction:column;gap:8px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r-lg);padding:9px 11px}
+.card.off{opacity:.5;border-style:dashed}
+.card.alt{border-color:rgba(245,158,11,.45)}
+.ctitle{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.ctitle .st{font-size:9px;padding:1px 6px;border-radius:999px}
+.st.ok{color:#93C5FD;background:rgba(59,130,246,.14)}
+.st.alt{color:#FCD34D;background:rgba(245,158,11,.16)}
+.st.off{color:var(--disabled);background:transparent;border:1px solid var(--border)}
+.minibars{display:flex;align-items:flex-end;gap:3px;height:26px}
+.minibars i{flex:1;background:linear-gradient(180deg,var(--c-sonnet),var(--c-opus));border-radius:2px 2px 0 0;opacity:.85}
+.minibars.amber i{background:var(--c-warn)}
+.minibars.slate i{background:var(--c-slate)}
+.rows{display:flex;flex-direction:column;gap:4px}
+.rline{display:flex;align-items:center;gap:6px;font-size:10.5px}
+.rline .rn{flex:1;color:var(--fg);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.rline .rb{width:46px;height:5px;border-radius:999px;background:var(--grid);overflow:hidden}
+.rline .rb>i{display:block;height:100%;background:var(--c-slate)}
+.rline .rv{font-family:var(--mono);font-size:10px;color:var(--muted);width:42px;text-align:right}
+.hidden-note{font-size:10px;color:var(--disabled);font-style:italic}
+.gz{display:flex;flex-direction:column;gap:7px}
+</style>
+</head>
+<body class="theme-dark">
+  <h1>Claude Code Gauge — Provider 표시형식 비교</h1>
+  <div class="sub">동일 위젯이 데이터 가용성에 따라 어떻게 강등(degrade)되는지. 동작 없음 · 레이아웃 비교용 정적 목업.</div>
+  <div class="legend">
+    <span><i class="dot ok"></i> 풀 표시 (로컬+헤더 소스 충족)</span>
+    <span><i class="dot alt"></i> 대체/제한 표시 (게이지→예측, USD→토큰, 요청수)</span>
+    <span><i class="dot off"></i> 숨김 / N/A 사유 (데이터 없음 — 빈 0 표시 금지)</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- ============ CLAUDE CODE ============ -->
+    <div class="col">
+      <div class="phead"><span class="name"><i class="pdot p-cc"></i>Claude Code</span><span class="tag">full</span></div>
+
+      <div class="zone-label">◧ SideTab</div>
+      <div class="sidetab">
+        <div class="gauge-row"><span class="lbl">5h</span><span class="bar"><i style="width:78%"></i></span><span class="pct">78%</span></div>
+        <div class="gauge-row"><span class="lbl">7d</span><span class="bar"><i style="width:31%"></i></span><span class="pct">31%</span></div>
+        <div class="gauge-row"><span class="lbl">overage</span><span class="bar warn"><i style="width:4%"></i></span><span class="pct">0%</span></div>
+        <div class="sep"></div>
+        <div class="kpi">$4.21 <small>· 1.2M tok · today</small></div>
+        <div class="line">Burn 0.8%/h · safe until ~3h</div>
+        <div class="chips"><span class="chip">Edit 12</span><span class="chip">Bash 8</span><span class="chip">Read 20</span><span class="chip">🌐 3</span></div>
+      </div>
+
+      <div class="zone-label">▦ Dashboard</div>
+      <div class="dash">
+        <div class="card"><div class="ctitle">5h / 7d 게이지 <span class="st ok">API</span></div>
+          <div class="gz"><div class="gauge-row"><span class="lbl">5h</span><span class="bar"><i style="width:78%"></i></span><span class="pct">78%</span></div>
+          <div class="gauge-row"><span class="lbl">7d</span><span class="bar"><i style="width:31%"></i></span><span class="pct">31%</span></div></div></div>
+        <div class="card"><div class="ctitle">일별 / 월별 비용 <span class="st ok">$</span></div>
+          <div class="minibars"><i style="height:40%"></i><i style="height:65%"></i><i style="height:50%"></i><i style="height:80%"></i><i style="height:35%"></i><i style="height:70%"></i><i style="height:90%"></i></div></div>
+        <div class="card"><div class="ctitle">모델별 분석 <span class="st ok">✓</span></div>
+          <div class="rows"><div class="rline"><span class="rn">Opus 4.8</span><span class="rb"><i style="width:70%"></i></span><span class="rv">$2.9</span></div>
+          <div class="rline"><span class="rn">Sonnet 4.6</span><span class="rb"><i style="width:30%"></i></span><span class="rv">$1.3</span></div></div></div>
+        <div class="card"><div class="ctitle">도구 사용 <span class="st ok">✓</span></div>
+          <div class="minibars slate"><i style="height:60%"></i><i style="height:90%"></i><i style="height:40%"></i><i style="height:75%"></i><i style="height:50%"></i></div></div>
+        <div class="card"><div class="ctitle">캐시 히트율 / 절약 <span class="st ok">✓</span></div><div class="line">히트율 82% · 절약 $11.4 (today)</div></div>
+        <div class="card"><div class="ctitle">Cost by Commit (Git ROI) <span class="st ok">$</span></div>
+          <div class="rows"><div class="rline"><span class="rn">bf8a80d feat: …</span><span class="rb"><i style="width:80%"></i></span><span class="rv">$120</span></div>
+          <div class="rline"><span class="rn">◌ 미커밋</span><span class="rb"><i style="width:45%"></i></span><span class="rv">$64</span></div></div></div>
+        <div class="card"><div class="ctitle">Cost by Skill <span class="st ok">✓</span></div>
+          <div class="rows"><div class="rline"><span class="rn">sh-dev-loop</span><span class="rb"><i style="width:55%"></i></span><span class="rv">$8.1</span></div>
+          <div class="rline"><span class="rn">◌ 스킬 외</span><span class="rb"><i style="width:40%"></i></span><span class="rv">$5.9</span></div></div></div>
+        <div class="card"><div class="ctitle">장기 비용 보관 <span class="st ok">✓</span></div><div class="line">30일 롤링 + globalStorage 영속</div></div>
+      </div>
+    </div>
+
+    <!-- ============ CODEX ============ -->
+    <div class="col">
+      <div class="phead"><span class="name"><i class="pdot p-cx"></i>Codex</span><span class="tag">게이지 강등</span></div>
+
+      <div class="zone-label">◧ SideTab</div>
+      <div class="sidetab">
+        <div class="na"><b>5h / 7d 게이지 N/A</b><br>rate-limit 헤더 소스 없음</div>
+        <div class="sep"></div>
+        <div class="kpi">$3.10<span class="alt-tag">*</span> <small>· 890K tok · today</small></div>
+        <div class="line"><span class="alt-tag">*</span> API key 모드만 · 구독 시 <b style="color:var(--fg)">890K tok</b>만</div>
+        <div class="line">Burn 1.1%/h <span class="alt-tag">(로컬 차분 예측)</span></div>
+        <div class="chips"><span class="chip">fn_call 5</span><span class="chip">tool 3</span></div>
+      </div>
+
+      <div class="zone-label">▦ Dashboard</div>
+      <div class="dash">
+        <div class="card off"><div class="ctitle">5h / 7d 게이지 <span class="st off">N/A</span></div><div class="hidden-note">rate-limit 소스 없음 → burn-rate 예측으로 대체</div></div>
+        <div class="card alt"><div class="ctitle">일별 / 월별 비용 <span class="st alt">$키 / tok</span></div>
+          <div class="minibars amber"><i style="height:40%"></i><i style="height:65%"></i><i style="height:50%"></i><i style="height:80%"></i><i style="height:35%"></i><i style="height:70%"></i><i style="height:90%"></i></div></div>
+        <div class="card"><div class="ctitle">모델별 분석 <span class="st ok">✓</span></div>
+          <div class="rows"><div class="rline"><span class="rn">gpt-5.5</span><span class="rb"><i style="width:65%"></i></span><span class="rv">540K</span></div>
+          <div class="rline"><span class="rn">gpt-5.4-mini</span><span class="rb"><i style="width:35%"></i></span><span class="rv">350K</span></div></div></div>
+        <div class="card alt"><div class="ctitle">도구 사용 <span class="st alt">fn_call</span></div>
+          <div class="minibars amber"><i style="height:60%"></i><i style="height:40%"></i><i style="height:75%"></i></div></div>
+        <div class="card alt"><div class="ctitle">캐시 히트율 <span class="st alt">부분</span></div><div class="line">cached_input 기반 · 절약 USD는 키 모드만</div></div>
+        <div class="card"><div class="ctitle">Cost by Commit (Git ROI) <span class="st ok">$</span></div>
+          <div class="rows"><div class="rline"><span class="rn">a91f3c2 fix: …</span><span class="rb"><i style="width:70%"></i></span><span class="rv">$2.1</span></div>
+          <div class="rline"><span class="rn">◌ 미커밋</span><span class="rb"><i style="width:40%"></i></span><span class="rv">$0.9</span></div></div></div>
+        <div class="card off"><div class="ctitle">Cost by Skill <span class="st off">숨김</span></div><div class="hidden-note">Codex에 스킬 귀속 개념 없음</div></div>
+        <div class="card alt"><div class="ctitle">장기 비용 보관 <span class="st alt">키 모드</span></div><div class="line">USD는 API key만 · 구독은 토큰 추이</div></div>
+      </div>
+    </div>
+
+    <!-- ============ CURSOR ============ -->
+    <div class="col">
+      <div class="phead"><span class="name"><i class="pdot p-cu"></i>Cursor</span><span class="tag">활동만 · 보류</span></div>
+
+      <div class="zone-label">◧ SideTab</div>
+      <div class="sidetab">
+        <div class="na"><b>게이지 N/A</b><br>rate-limit 소스 없음</div>
+        <div class="na"><b>비용 · 토큰 계측 불가</b><br>로컬 tokenCount 상시 0 (공식 공인)</div>
+        <div class="sep"></div>
+        <div class="kpi">≈14 <small>· 요청 · today</small></div>
+        <div class="line">모델: Sonnet4 9 · GPT 5 <span class="alt-tag">(요청수 기반)</span></div>
+        <div class="line" style="color:var(--disabled)">✕ Burn / 비용 표시 안 함</div>
+      </div>
+
+      <div class="zone-label">▦ Dashboard</div>
+      <div class="dash">
+        <div class="card off"><div class="ctitle">5h / 7d 게이지 <span class="st off">N/A</span></div><div class="hidden-note">소스 없음</div></div>
+        <div class="card off"><div class="ctitle">일별 / 월별 비용 <span class="st off">숨김</span></div><div class="hidden-note">비용 데이터 로컬에 없음 (토큰=0)</div></div>
+        <div class="card alt"><div class="ctitle">모델별 분석 <span class="st alt">요청수</span></div>
+          <div class="minibars slate"><i style="height:70%"></i><i style="height:45%"></i></div>
+          <div class="line" style="margin-top:5px">Sonnet4 9 · GPT5 5 (req)</div></div>
+        <div class="card off"><div class="ctitle">도구 사용 <span class="st off">숨김</span></div><div class="hidden-note">로컬 미기록</div></div>
+        <div class="card off"><div class="ctitle">캐시 히트율 <span class="st off">숨김</span></div><div class="hidden-note">토큰 없음 → 환산 불가</div></div>
+        <div class="card alt"><div class="ctitle">Cost by Commit <span class="st alt">요청수</span></div>
+          <div class="rows"><div class="rline"><span class="rn">c4d2e1 wip: …</span><span class="rb"><i style="width:60%"></i></span><span class="rv">8 req</span></div>
+          <div class="rline"><span class="rn">◌ 미커밋</span><span class="rb"><i style="width:30%"></i></span><span class="rv">6 req</span></div></div></div>
+        <div class="card off"><div class="ctitle">Cost by Skill <span class="st off">숨김</span></div><div class="hidden-note">해당 없음</div></div>
+        <div class="card off"><div class="ctitle">장기 비용 보관 <span class="st off">숨김</span></div><div class="hidden-note">비용 축 전체 소거</div></div>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

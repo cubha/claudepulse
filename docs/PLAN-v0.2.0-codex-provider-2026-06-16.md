@@ -1,9 +1,30 @@
-# v0.1.4 구현 페이즈 가이드 — Codex 통합 + 익스텐션 범용화
+# v0.2.0 구현 페이즈 가이드 — Codex 통합 + 익스텐션 범용화
 
-> 작성일: 2026-06-16
-> 근거: `docs/research/RESEARCH-codex-통합-범용화-2026-06-15.md` + 기능 3분류(동일 14 / Claude-only 11 / Codex-only 3)
-> 검증: advisor 1회(아키텍처) — 피드백 4건 반영. UX 스위처 결정 = 사용자 확정(2026-06-16)
+> **버전 승격**: 구 v0.1.4 → **v0.2.0** (2026-06-24). 범용화+프로바이더 추상화+멀티 IDE(Codex·Cursor) 라인이라 마이너 격상.
+
+> 작성일: 2026-06-16 (델타 갱신 2026-06-23)
+> 근거: `docs/research/RESEARCH-codex-통합-범용화-2026-06-15.md`(기술) + `docs/research/RESEARCH-codex-신규유저-시장수요-2026-06-23.md`(시장·수요) + 기능 3분류(동일 14 / Claude-only 11 / Codex-only 3)
+> 검증: advisor 1회(아키텍처, 2026-06-16) + advisor 1회(게이지 경첩, 2026-06-23). UX 스위처 = 사용자 확정(2026-06-16)
 > 상태: 🔜 계획 확정. 구현 미착수. **배포는 ship 게이트(명시 명령 대기)**
+
+---
+
+## ⭐ 2026-06-23 리서치 델타 (시장·수요 — 본 PLAN 수정분)
+
+신규유저 확보 타당성 리서치 결과, 아키텍처 골격은 유지하되 **2개 설계 결정 추가 + 포지셔닝 전환**:
+
+1. **게이지 전제 부분 반전** — "Codex 게이지 절대 불가"는 분모(할당량 %)에 한해 옳음. **5h 사용량 분자는 로컬 jsonl로 무료·합법 산출 가능**. → `supportsRateLimit`(=분모 있는 %-게이지)는 Claude 전용 유지하되, **소스-무관 burn-rate 예측(5h 롤링+페이스+소진예상)을 UsageAggregator 공통 계산**해 Codex 게이지 대체로 노출. ※ 정확 %-게이지를 `codex app-server` RPC로 구현하면 호출당 토큰 소비(ccusage #874) → v1 제외, 옵트인/v2 보류.
+2. **🔴 서브에이전트 91× 과다계산(ccusage #950)** — Codex 서브에이전트 rollout이 부모 이력 재타임스탬프 포함 → ST3 dedup "누적 교차검증"만으로 불충분. **`session_meta.source.subagent.thread_spawn` 탐지 + (timestamp,input,output) 3중키 dedup 필수**(누락 시 billing 91배 오류 = §3 dedup의 Codex판).
+3. **포지셔닝 전환** — "이탈자 회수"❌ → **"dual-use(양쪽 구독) 통합 대시보드 + 언제 막힐지 예측"**⭐. 경쟁 Codex 도구(8.9k/7.9k 설치)는 상태바카운터/히스토리뷰어 수준 — 우리 차별축(Git ROI·스킬귀속·워크스페이스매핑·burn예측) 부재. late entrant 약점을 심도로 상쇄.
+
+### 델타 SubTask 매핑
+| SubTask | 변경 | 내용 |
+|---|---|---|
+| ST1 | 수정 | `supportsRateLimit` 의미 정정(분모 있는 %-게이지=Claude전용). burn-rate는 source-agnostic이라 flag 불필요 |
+| ST3 | 수정 | dedup에 `thread_spawn` 탐지 + 3중키 dedup 추가(91× 차단) |
+| **ST6.5** | **신규 [TDD]** | burn-rate 계산 — `UsageAggregator` 5h 롤링+페이스+소진예상. 소스-무관(토큰소비 0) |
+| ST6 | 수정 | Codex 게이지 "완전숨김" → "burn-rate 예측 패널" 대체(% 없는 변형) |
+| ST8 | 수정 | dual-use 포지셔닝·"언제 막힐지 예측" 카피 문서화 |
 
 ---
 

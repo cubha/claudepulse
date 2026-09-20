@@ -10,21 +10,34 @@ export class FileWatcher extends EventEmitter {
   private watcher: chokidar.FSWatcher | null = null;
   private readonly watchPath: string;
   private readonly minIntervalMs: number;
+  private readonly depth: number;
   private throttleTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingPath: string | null = null;
   private lastEmitAt = 0;
 
-  constructor(claudeDir?: string, minIntervalMs = DEFAULT_USAGE_REFRESH_INTERVAL_MS) {
+  /**
+   * `subdir`/`depth`는 v0.2.0(ST5)에서 추가 — Codex는 `~/.codex/sessions/YYYY/MM/DD`(깊이3)를
+   * 감시해야 한다(PLAN §3 "경로"). 기존 호출부(Claude, `new FileWatcher(dir, interval)`)는
+   * 두 인자를 생략하므로 `subdir='projects'`·`depth=2`로 떨어져 **동작이 바뀌지 않는다**
+   * (§3 CRITICAL 무행위변경 — 기존 FileWatcher.throttle.test.ts 무수정으로 검증됨).
+   */
+  constructor(
+    baseDir?: string,
+    minIntervalMs = DEFAULT_USAGE_REFRESH_INTERVAL_MS,
+    subdir = 'projects',
+    depth = 2,
+  ) {
     super();
-    this.watchPath = path.join(claudeDir ?? path.join(os.homedir(), '.claude'), 'projects');
+    this.watchPath = path.join(baseDir ?? path.join(os.homedir(), '.claude'), subdir);
     this.minIntervalMs = minIntervalMs;
+    this.depth = depth;
   }
 
   start(): void {
     if (this.watcher) return;
 
     this.watcher = chokidar.watch(this.watchPath, {
-      depth: 2,
+      depth: this.depth,
       usePolling: true,   // WSL2 inotify 한계 우회
       // 감지 주기는 짧게 유지한다 — 비싼 쪽은 stat 스윕이 아니라 aggregate+렌더이고,
       // 그건 아래 스로틀이 막는다. 여기까지 늘리면 스로틀 위에 지연이 한 겹 더 얹힌다.

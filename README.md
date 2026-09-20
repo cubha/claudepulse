@@ -1,6 +1,10 @@
-# Claude Code Gauge
+# AgentVitals
 
-> Real-time Claude Max rate limit monitor — right inside VS Code & Cursor.
+> Real-time Claude Code & Codex usage, cost and rate limits — right inside VS Code & Cursor.
+
+> **This extension was previously called “Claude Code Gauge.”** Same extension, same
+> publisher, same settings — only the name changed. Nothing to reinstall, and your
+> `claudeCodeGauge.*` settings keep working untouched.
 
 [![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/cubha.claude-code-gauge?label=VS%20Marketplace&color=0078d4)](https://marketplace.visualstudio.com/items?itemName=cubha.claude-code-gauge)
 [![Open VSX](https://img.shields.io/open-vsx/v/cubha/claude-code-gauge?label=Open%20VSX&color=a855f7)](https://open-vsx.org/extension/cubha/claude-code-gauge)
@@ -8,18 +12,26 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/cubha/claudepulse?style=social)](https://github.com/cubha/claudepulse)
 
-Stop switching to your browser to check Claude rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, **what Claude actually did**, **which skill & branch cost how much**, and **how much your subagents spend** — with burn rate predictions, tool usage breakdowns, per-skill cost attribution, and Git branch ROI — without leaving your editor.
+Stop switching to your browser to check rate limits. See your **5-hour session**, **7-day weekly usage**, **today's token cost**, **what your agent actually did**, **which skill & branch cost how much**, and **how much your subagents spend** — with burn rate predictions, tool usage breakdowns, per-skill cost attribution, and Git branch ROI — without leaving your editor. Works with both **Claude Code** and **Codex**, switchable from the sidebar.
 
 ![Sidebar and dashboard, side by side in the editor](media/screenshot-dashboard.png)
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.1.56
+## What's New in v0.2.0
+
+- **Codex support.** A Claude/Codex switcher in the sidebar header tracks either agent — gauges, today's cost, model/cache breakdown, Git branch ROI and the usage calendar all now read Codex's own session logs too. Rate-limit buckets are generated from what each session actually reports (a single 30-day window on Free, 5h+7d on paid plans), not hardcoded. What Codex's logs genuinely don't contain — per-skill cost, subagent breakdown, MCP attribution — is left out rather than guessed; in its place you get today's reasoning-token total, the model's real context-window size, and a plan badge. Three distinct empty states (not installed / not logged in / no sessions yet) each carry their own guidance instead of one generic "please log in."
+- **A visual pass on the dashboard and sidebar** — clearer type hierarchy, the card count trimmed from 17 to 6, end-of-line readouts on every chart, and a bigger 5-hour gauge as the sidebar's opening view.
+- **The extension is now called AgentVitals.** It used to be “Claude Code Gauge”. It is the same extension from the same publisher — you do not need to reinstall it, and every setting you have configured keeps working under its existing name.
+
+<details><summary>v0.1.56</summary>
 
 - **Fixed: Fable rendered as a black wedge in the Model Breakdown donut, and its bar didn't show at all.** Its colour was removed in v0.1.54 by a cleanup that searched for unused colours and concluded this one was unused — it wasn't; the chart looks it up by a name it assembles as it runs, which no search for that name can find. Every build check stayed green, so this shipped in both v0.1.54 and v0.1.55. The colour is back, and a new build rule now checks colours the way the code actually uses them, so a model can no longer end up without one.
 - **Fixed: changing a setting had no effect until you reloaded the window.** The poll interval and credentials path were compared against a key that could never match, so the extension never noticed you'd changed them.
 - **Fixed: usage figures could stay frozen for as long as you kept working.** The refresh waited for your logs to go quiet, but they don't go quiet while Claude Code is running — so the update arrived only after you stopped. It now refreshes immediately and then at a steady interval while you work. You can set that interval with **`claudeCodeGauge.usageRefreshIntervalMs`** (default 15 seconds), and the refresh button ignores it — that button now updates usage too, not just rate limits.
 - **Fixed: charts replayed their animation on every background refresh**, which looked like flickering rather than like data arriving.
+
+</details>
 
 <details><summary>v0.1.55</summary>
 

@@ -189,4 +189,23 @@ describe('UsageAggregator — 코어 롤업 [characterization] (v0.1.54 ST1 테�
     const r = agg.aggregate([rec({ costUsd: 1.0, timestamp: todayIso('09'), editedFiles: [] })]);
     expect(r.recentEditedFiles).toEqual([]);
   });
+
+  it('todayReasoningTokens는 당일 Codex 레코드의 reasoningTokens만 합산한다(verify-impl B-V2 보완)', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 1.0, timestamp: todayIso('09'), provider: 'codex', reasoningTokens: 120 }),
+      rec({ costUsd: 1.0, timestamp: todayIso('10'), provider: 'codex', reasoningTokens: 30 }),
+      rec({ costUsd: 1.0, timestamp: '2020-01-01T10:00:00.000Z', provider: 'codex', reasoningTokens: 999 }), // 과거 — 제외
+    ]);
+    expect(r.todayReasoningTokens).toBe(150);
+  });
+
+  it('Claude 레코드는 reasoningTokens가 미정의라 0으로 합산되고 기존 today 집계는 영향받지 않는다(무행위변경 확인)', () => {
+    const agg = new UsageAggregator();
+    const r = agg.aggregate([
+      rec({ costUsd: 2.0, timestamp: todayIso('09') }), // provider 미지정 = Claude, reasoningTokens 미정의
+    ]);
+    expect(r.todayReasoningTokens).toBe(0);
+    expect(r.today.costUsd).toBeCloseTo(2.0, 6);
+  });
 });

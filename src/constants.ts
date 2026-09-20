@@ -2,12 +2,13 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 
 export const EXTENSION_ID = 'cubha.claude-code-gauge';
-export const EXTENSION_NAME = 'Claude Code Gauge';
+export const EXTENSION_NAME = 'AgentVitals';
 
 export const COMMANDS = {
   openDashboard: 'claudeCodeGauge.openDashboard',
   refresh: 'claudeCodeGauge.refresh',
-  login: 'claudeCodeGauge.login'
+  login: 'claudeCodeGauge.login',
+  loginCodex: 'claudeCodeGauge.loginCodex'
 } as const;
 
 export const VIEW_IDS = {

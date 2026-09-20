@@ -1,5 +1,37 @@
 import type { PricingSource } from '../utils/pricing';
+import type { AgentProvider } from '../sources/recordKey';
+import type { AgentAvailability } from '../sources/AgentSource';
+import type { RateLimitBucket } from '../sources/codex/codexRollout';
 export type { PricingSource };
+export type { AgentProvider };
+export type { AgentAvailability };
+export type { RateLimitBucket };
+
+/**
+ * Codex 한도 스냅샷(v0.2.0, ST5/ST7) — `RateLimitSnapshot`(Claude, 고정 fiveHour/sevenDay +
+ * overage/fallback/plan)과 **의도적으로 분리**했다. Codex는 버킷 개수·기간이 플랜별로 가변이고
+ * (D9: free=단일 30일, 유료=5h+7d) overage·fallback 개념 자체가 없다 — 억지로 같은 타입에
+ * 끼워 맞추면 Claude 전용 필드가 Codex에서 항상 undefined인 반쪽 타입이 된다.
+ * `buckets: []`는 "값 없음"이 아니라 **게이지 섹션을 숨기라는 신호**다(extractRateLimitBuckets 계약,
+ * PLAN §8 불변식3 "빈 값과 0 값을 같게 그리지 않는다").
+ */
+export interface CodexRateLimitSnapshot {
+  buckets: RateLimitBucket[];
+  planType: string | null;
+  generatedAt: string;
+  /**
+   * 최근 관측된 `model_context_window`(v0.2.0, verify-impl B-V2/B-V6 보완) — Codex CLI가
+   * `token_count` 라인에 함께 실어 보내는 실측치. buckets와 별개 latest-wins 스캔(codex는 이
+   * 값이 없는 구버전도 있어 null 허용) — 없으면 UI가 그 행을 숨긴다(빈 값≠0 원칙).
+   */
+  modelContextWindow: number | null;
+}
+
+/** 양 프로바이더의 3단 빈 상태 판정 묶음(ST7/ST8) — 스위처가 "이 프로바이더로 전환 가능한가"를 안다. */
+export interface ProviderAvailability {
+  claude: AgentAvailability;
+  codex: AgentAvailability;
+}
 
 // Rate Limit 대시보드 도메인 모델 — Anthropic /v1/messages 응답 헤더 기반
 
@@ -96,7 +128,17 @@ export interface JournalUsage {
 
 /** dedup+비용 계산 후 남은 단일 assistant 레코드. */
 export interface SessionRecord {
-  messageId: string;    // message.id (cross-file dedup 키)
+  /**
+   * 이 레코드를 만든 에이전트(v0.2.0). 생략 시 'claude' — 기존 픽스처·저장 인덱스가 전부
+   * Claude이므로 옵셔널로 두어 마이그레이션 없이 호환한다(contextTokens와 같은 방식).
+   * 소비측은 `record.provider ?? 'claude'`로 읽는다.
+   */
+  provider?: AgentProvider;
+  /**
+   * dedup 키. Claude는 `message.id` 원본 그대로(§3#1, 키가 바뀌면 저장 인덱스와 어긋난다),
+   * 그 외 프로바이더는 `makeRecordKey`가 네임스페이스를 붙인다(`src/sources/recordKey.ts`).
+   */
+  messageId: string;
   requestId: string;    // requestId (스트리밍 dedup 키)
   sessionId: string;
   model: string;
@@ -111,6 +153,12 @@ export interface SessionRecord {
   isSidechain: boolean;       // jsonl entry.isSidechain (서브에이전트 소비 여부)
   agentId?: string;           // jsonl entry.agentId (서브에이전트 식별자)
   mcpServerCounts?: Record<string, number>;  // mcp__<server>__<tool> 서버별 호출수 (MCP 호출 없으면 미정의)
+  /**
+   * Codex 전용 추론 토큰(v0.2.0, verify-impl B-V2 보완) — `usage.reasoning_output_tokens`,
+   * Claude jsonl에는 대응 필드가 없어 항상 미정의. UsageAggregator가 today 스코프로 합산해
+   * `UsageSummary.todayReasoningTokens`에 싣는다(Claude는 합산에 기여 없이 0 유지 — 무행위변경).
+   */
+  reasoningTokens?: number;
   /**
    * 이 레코드 시점의 실제 컨텍스트 창 점유량(S2, 2026-08-03) — 과금용 usage 합계와 다르다.
    * top-level usage는 한 assistant 턴 안 여러 API 호출(iterations)의 **합산값**이라, 컨텍스트
@@ -146,6 +194,13 @@ export interface SessionSummary {
   model: string;          // 마지막 레코드의 모델 — 세션 선택기 모델 배지용
   contextTokens: number;  // 마지막 레코드의 컨텍스트 점유량(resolveContextTokens, 누적 아님) — 세션 선택기 토큰/윈도 표기용
   branch: string;         // 마지막 레코드의 gitBranch — 세션 선택기 표시용
+  /**
+   * 이 세션에 기여한 레코드 중 가격표에 없는(pricingSource='none') 모델이 하나라도 있으면 true.
+   * costUsd===0이 "실측 0"인지 "가격 미상이라 계산 불가"인지 fmtCost는 구분 못한다(v0.1.55
+   * 거짓초록 부류) — UI가 이 플래그로 0을 "미상"으로 표시할지 판단한다. today.unpricedModels와
+   * 달리 세션은 today 스코프가 아니라서(recentSessions=최근 20개, 날짜 무관) 그 필드로 대체 불가.
+   */
+  hasUnpricedRecords: boolean;
 }
 
 /**
@@ -213,6 +268,8 @@ export interface SkillUsage {
   costUsd: number;       // 누적 비용
   totalTokens: number;   // 누적 토큰
   share: number;         // 0.0 ~ 1.0 (귀속된 비용 중 비율)
+  /** 이 스킬에 기여한 레코드 중 가격표에 없는 모델이 하나라도 있으면 true (SessionSummary와 동일 목적). */
+  hasUnpricedRecords: boolean;
 }
 
 /**
@@ -224,6 +281,8 @@ export interface SkillUsage {
 export interface SkillUnattributed {
   costUsd: number;       // 누적 비용
   totalTokens: number;   // 누적 토큰
+  /** 이 버킷에 기여한 레코드 중 가격표에 없는 모델이 하나라도 있으면 true. */
+  hasUnpricedRecords: boolean;
 }
 
 /** 서브에이전트 vs 메인 소비 분리 통계. */
@@ -232,6 +291,9 @@ export interface SubagentStats {
   subagentCostUsd: number;   // isSidechain=true 비용
   subagentShare: number;     // 0.0 ~ 1.0 (전체 비용 중 서브에이전트 비중)
   subagentCount: number;     // 고유 agentId 수
+  /** mainCostUsd/subagentCostUsd 각각에 가격표에 없는 모델 기여가 있었는지(독립 플래그 — 한쪽만 미상일 수 있음). */
+  mainHasUnpriced: boolean;
+  subagentHasUnpriced: boolean;
 }
 
 /**
@@ -286,6 +348,8 @@ export interface BranchUsage {
   totalTokens: number;   // 누적 토큰
   sessionCount: number;  // 세션 수
   lastActive: string;    // 가장 최근 timestamp (ISO8601)
+  /** 이 브랜치에 기여한 레코드 중 가격표에 없는 모델이 하나라도 있으면 true (SessionSummary와 동일 목적). */
+  hasUnpricedRecords: boolean;
 }
 
 /** Webview로 전달하는 전체 사용량 요약. */
@@ -302,6 +366,11 @@ export interface UsageSummary {
    */
   unpricedModels: string[];
   modelShareBasis: ModelShareBasis;
+  /**
+   * 오늘 추론 토큰 합계(Codex 전용, v0.2.0). Claude 레코드는 `reasoningTokens` 미정의라 항상
+   * 0으로 합산돼 기존 Claude 화면에는 영향이 없다(그 필드를 렌더하는 곳이 아직 없다).
+   */
+  todayReasoningTokens: number;
   cacheStats: CacheStats;            // 오늘 캐시 효율
   todayToolCounts: ToolUseCounts;    // 오늘 도구 사용 집계
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드

@@ -63,7 +63,7 @@ export class DashboardPanel {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <link rel="stylesheet" href="${cssUri}">
-<title>Claude Code Gauge Dashboard</title>
+<title>AgentVitals Dashboard</title>
 </head><body class="theme-dark" data-mode="panel">
 <div id="root">Loading…</div>
 <script nonce="${nonce}" src="${jsUri}"></script>

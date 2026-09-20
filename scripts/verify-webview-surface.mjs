@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PANEL_HTML = path.resolve(__dirname, '../docs/demo/panel.html');
 const SIDEBAR_HTML = path.resolve(__dirname, '../docs/demo/sidebar.html');
+const PANEL_CODEX_HTML = path.resolve(__dirname, '../docs/demo/panel-codex.html');
+const SIDEBAR_CODEX_HTML = path.resolve(__dirname, '../docs/demo/sidebar-codex.html');
 const GOLDEN_PATH = path.resolve(__dirname, '../test/golden/webview-surface.json');
 
 const WIDTHS = [700, 1600];
@@ -51,9 +53,26 @@ const PANEL_IDS = [
 // id 없이 렌더된다(2026-08-30 grep 재확인, 최초 초안의 fh-*/sd-*/burn-rate-*는 panel 전용 오분류였음).
 const SIDEBAR_IDS = ['sb-ov-bar', 'sb-fh-bar', 'sb-sd-bar', 'sb-ctx-bar'];
 
+// codex axis에서 **정당하게** 미렌더되는 id(PLAN §8 불변식3 "빈 값과 0 값을 같게 그리지 않는다" —
+// 없는 개념을 채워 넣지 않고, 대신 여기서 "이 provider엔 원래 없다"고 명시한다).
+// sidebar: ST7 구현 완료(2026-09-19) — buildCodexSidebarHtml이 fiveHour/sevenDay/overage/컨텍스트
+// 게이지를 전혀 쓰지 않고 버킷 배열 기반 동적 id(sb-codex-bucket-N)로 그린다. 감시 목록(SIDEBAR_IDS)의
+// 고정 4개는 애초에 Codex 개념이 아니라서 전부 null이 정상이다 — 새 동적 id는 이 감시망 밖이라
+// (고정 목록 계약, assertCoverage 주석 참조) 별도 스냅샷 차원의 확인은 Extension Dev Host 캡처가 맡는다.
+// panel: panelView.ts는 아직 provider 미분기(ST6 미착수) — 그대로 0.
+const CODEX_EXPECTED_NULL_IDS = { sidebar: ['sb-ov-bar', 'sb-fh-bar', 'sb-sd-bar', 'sb-ctx-bar'], panel: [] };
+
+// provider 축(P2, v0.2.0) — main.ts는 아직 provider를 몰라(ST6 이전) 렌더 함수는 Claude용 그대로다.
+// codex 변형은 같은 HTML 골격에 mock-data-codex.js(Codex 실 fixture 파생값, skill/subagent/mcp
+// 실제로 빈 배열)를 꽂아넣는다 — id 구조는 같아도 skillBreakdown 등 빈 배열을 만나는 기존
+// empty-state 경로를 실제로 통과시켜 캡처하므로 byte-identical 중복이 아니다(PLAN §4 P-2).
+// ST6이 "빈 섹션 자체를 안 그림(null)"으로 바꾸면 이 축에서 diff가 나는 게 정상 — 그때
+// --accept-regression 사유로 ST6 SubTask를 적는다(순서 역전 금지 계약).
 const SURFACES = [
-  { mode: 'panel', html: PANEL_HTML, ids: PANEL_IDS },
-  { mode: 'sidebar', html: SIDEBAR_HTML, ids: SIDEBAR_IDS },
+  { mode: 'panel', provider: 'claude', html: PANEL_HTML, ids: PANEL_IDS },
+  { mode: 'sidebar', provider: 'claude', html: SIDEBAR_HTML, ids: SIDEBAR_IDS },
+  { mode: 'panel', provider: 'codex', html: PANEL_CODEX_HTML, ids: PANEL_IDS },
+  { mode: 'sidebar', provider: 'codex', html: SIDEBAR_CODEX_HTML, ids: SIDEBAR_IDS },
 ];
 
 async function openPage(browser, html, viewport, lang) {
@@ -98,14 +117,15 @@ function assertCoverage(digests, label) {
   for (const surface of SURFACES) {
     for (const width of WIDTHS) {
       for (const lang of LANGS) {
-        const key = `${surface.mode}@${width}px@${lang}`;
+        const key = `${surface.mode}@${width}px@${lang}@${surface.provider}`;
         const d = digests[key];
         if (!d || !d.bySelector) { problems.push(`${key}: 캡처 없음`); continue; }
         const watched = Object.keys(d.bySelector);
         if (watched.length !== surface.ids.length) {
           problems.push(`${key}: 감시 id 수 ${watched.length} ≠ 선언 ${surface.ids.length}`);
         }
-        const nulls = watched.filter((id) => d.bySelector[id] === null);
+        const expectedNull = surface.provider === 'codex' ? (CODEX_EXPECTED_NULL_IDS[surface.mode] ?? []) : [];
+        const nulls = watched.filter((id) => d.bySelector[id] === null && !expectedNull.includes(id));
         if (nulls.length) problems.push(`${key}: 렌더 안 된 감시 id ${nulls.length}건 — ${nulls.join(', ')}`);
       }
     }
@@ -122,7 +142,7 @@ async function captureAll(browser) {
   for (const surface of SURFACES) {
     for (const width of WIDTHS) {
       for (const lang of LANGS) {
-        const key = `${surface.mode}@${width}px@${lang}`;
+        const key = `${surface.mode}@${width}px@${lang}@${surface.provider}`;
         const page = await openPage(browser, surface.html, { width, height: 900 }, lang);
         const d = await page.evaluate(digest, surface.ids);
         result[key] = d;
@@ -142,6 +162,13 @@ function diffDigests(golden, current) {
     if (!g || !c) { diffs.push(`${key}: 캡처 자체가 없음(golden=${!!g}, current=${!!c})`); continue; }
     for (const id of Object.keys(g.bySelector)) {
       const gv = g.bySelector[id];
+      // 감시 목록에서 id를 **뺀** 경우 current엔 키 자체가 없다(=undefined). null(=요소 미렌더)과
+      // 구분하지 않으면 아래 childElementCount 접근이 TypeError로 죽어 재캡처 자체가 불가능해진다
+      // — id는 그동안 추가만 돼서 드러나지 않았던 경로다(2026-09-18 카드 제거 시 실측).
+      if (!(id in c.bySelector)) {
+        diffs.push(`${key} #${id}: 감시 목록에서 제거됨(golden에만 존재)`);
+        continue;
+      }
       const cv = c.bySelector[id];
       const gExists = gv !== null;
       const cExists = cv !== null;

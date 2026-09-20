@@ -28,15 +28,19 @@ import { CacheStore } from './services/CacheStore';
 import { GitLogReader } from './services/GitLogReader';
 import { CommitAttributor } from './services/CommitAttributor';
 import { RetroStore } from './services/RetroStore';
-import { PushPollerError, PushRateLimit, PushRetroSummary, PushUsageSummary } from './messaging/contracts';
+import { PushActiveProvider, PushCodexRateLimit, PushPollerError, PushProviderAvailability, PushRateLimit, PushRetroSummary, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
 import { resolveCredentialsPath } from './utils/credentialsPath';
 import { readOneMillionModelsFromClaudeJson } from './utils/claudeJsonModels';
 import { buildSessionPickerItems } from './utils/sessionPicker';
-import type { CommitMeta, CommitScopeInfo, PollHistoryPoint, PollerError, RateLimitSnapshot, RetroCommitScope, RetroSummary, SessionRecord, UsageSummary } from './types';
+import { ClaudeSource } from './sources/claude/ClaudeSource';
+import { CodexSource, codexHomeDir } from './sources/codex/CodexSource';
+import type { AgentProvider, CodexRateLimitSnapshot, CommitMeta, CommitScopeInfo, PollHistoryPoint, PollerError, ProviderAvailability, RateLimitSnapshot, RetroCommitScope, RetroSummary, SessionRecord, UsageSummary } from './types';
+
+const ACTIVE_PROVIDER_STATE_KEY = 'ccg-active-provider';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const logger = new Logger('Claude Code Gauge');
+  const logger = new Logger('AgentVitals');
   logger.info('extension activating...');
 
   const messenger = new Messenger();
@@ -53,13 +57,25 @@ export function activate(context: vscode.ExtensionContext): void {
   const MAX_POLL_HISTORY = 60;
   const snapshotHistory: PollHistoryPoint[] = [];
 
-  // jsonl 파이프라인
+  // jsonl 파이프라인 (Claude — §3 CRITICAL 무행위변경)
   const jsonlParser = new JsonlParser();
   const aggregator = new UsageAggregator();
   const workspaceMapper = new WorkspaceMapper();
   let fileWatcher: FileWatcher | null = null;
   const cacheStore = new CacheStore(context.globalStorageUri.fsPath);
   let allRecords: SessionRecord[] = [];
+
+  // 프로바이더 레지스트리(ST5/ST7, v0.2.0) — 회고(usage×git)는 Claude 전용으로 남긴다
+  // (types/index.ts CommitUsage 주석의 포워드 컨트랙트: Codex는 이번 범위에서 회고에 합류하지 않음).
+  const claudeSource = new ClaudeSource();
+  const codexSource = new CodexSource();
+  let codexFileWatcher: FileWatcher | null = null;
+  let codexRecords: SessionRecord[] = [];
+  let lastCodexUsageSummary: UsageSummary | null = null;
+  let lastCodexRateLimit: CodexRateLimitSnapshot | null = null;
+  let providerAvailability: ProviderAvailability = { claude: 'ready', codex: 'not_installed' };
+  const savedProvider = context.globalState.get<string>(ACTIVE_PROVIDER_STATE_KEY);
+  let activeProvider: AgentProvider = savedProvider === 'codex' ? 'codex' : 'claude';
 
   // usage×git 회고 파이프라인 (v0.1.37) — lazy(뷰 오픈 시), HEAD SHA 캐시
   const gitLogReader = new GitLogReader();
@@ -215,7 +231,11 @@ export function activate(context: vscode.ExtensionContext): void {
     await cacheStore.merge(lastUsageSummary.historicalDays);
     // 전체 이력을 UsageSummary에 주입 (CacheStore가 jsonl 회전 이후에도 보존한 값으로 교체)
     lastUsageSummary.historicalDays = cacheStore.getAll();
-    messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
+    // PushUsageSummary는 이제 '활성 프로바이더' 단일 채널이다(ST5/ST7) — Codex가 활성일 때
+    // Claude 리프레시가 뒤늦게 끼어들며 화면을 덮어쓰지 않도록 게이트한다.
+    if (activeProvider === 'claude') {
+      messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
+    }
     // 회고도 push(패널 열렸을 때만 — pushRetro 내부 게이트). retroDirty=true로 갱신본 1회 재빌드.
     pushRetro();
   }
@@ -284,6 +304,74 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push({ dispose: () => fileWatcher?.stop() });
   startFileWatcher();
 
+  // ── Codex 프로바이더(ST5) ──────────────────────────────────────────
+  // `~/.codex/sessions/YYYY/MM/DD`(깊이3) 중첩감시. Claude와 별도 인스턴스 — 경로·깊이가 다르고
+  // (FileWatcher subdir/depth 4·5번째 인자, §3 CRITICAL 무행위변경 유지) 레코드를 섞지 않는다
+  // (allRecords/회고는 Claude 전용으로 남는다 — types/index.ts CommitUsage 포워드 컨트랙트).
+  let codexRefreshInFlight: Promise<void> | null = null;
+  function refreshCodexUsage(): Promise<void> {
+    if (codexRefreshInFlight) return codexRefreshInFlight;
+    codexRefreshInFlight = doRefreshCodexUsage()
+      .catch((err: unknown) => { logger.error('refreshCodexUsage failed', err); })
+      .finally(() => { codexRefreshInFlight = null; });
+    return codexRefreshInFlight;
+  }
+
+  async function doRefreshCodexUsage(): Promise<void> {
+    codexRecords = await codexSource.loadAllSessionRecords();
+    const workspaceRoots = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath);
+    lastCodexUsageSummary = aggregator.aggregate(codexRecords, workspaceRoots);
+    lastCodexRateLimit = await codexSource.loadLatestRateLimit();
+    await refreshProviderAvailability();
+    if (activeProvider === 'codex') {
+      messenger.sendNotification(PushUsageSummary, BROADCAST, lastCodexUsageSummary);
+      messenger.sendNotification(PushCodexRateLimit, BROADCAST, lastCodexRateLimit);
+    }
+  }
+
+  /** 양 프로바이더 3단 판정을 다시 읽어 변경 시에만 브로드캐스트한다(설치·로그인 상태 변화 감지). */
+  async function refreshProviderAvailability(): Promise<void> {
+    const [claude, codex] = await Promise.all([
+      claudeSource.detectAvailability(),
+      codexSource.detectAvailability(),
+    ]);
+    if (claude === providerAvailability.claude && codex === providerAvailability.codex) return;
+    providerAvailability = { claude, codex };
+    messenger.sendNotification(PushProviderAvailability, BROADCAST, providerAvailability);
+  }
+
+  function startCodexFileWatcher(): void {
+    codexFileWatcher?.stop();
+    codexFileWatcher = new FileWatcher(codexHomeDir(), getConfig().usageRefreshIntervalMs, 'sessions', 3);
+    codexFileWatcher.on('change', () => { void refreshCodexUsage(); });
+    codexFileWatcher.start();
+  }
+  context.subscriptions.push({ dispose: () => codexFileWatcher?.stop() });
+  startCodexFileWatcher();
+
+  /** 활성 프로바이더에 해당하는 캐시된 요약을 (재계산 없이) 재푸시 — 스위처 전환 시 즉시 반영용. */
+  function pushActiveProviderSnapshot(): void {
+    if (activeProvider === 'claude') {
+      if (lastUsageSummary) messenger.sendNotification(PushUsageSummary, BROADCAST, lastUsageSummary);
+      if (lastSnapshot) messenger.sendNotification(PushRateLimit, BROADCAST, lastSnapshot);
+    } else {
+      if (lastCodexUsageSummary) messenger.sendNotification(PushUsageSummary, BROADCAST, lastCodexUsageSummary);
+      messenger.sendNotification(PushCodexRateLimit, BROADCAST, lastCodexRateLimit);
+    }
+  }
+
+  function setActiveProvider(provider: AgentProvider): void {
+    if (provider === activeProvider) return;
+    activeProvider = provider;
+    void context.globalState.update(ACTIVE_PROVIDER_STATE_KEY, provider);
+    messenger.sendNotification(PushActiveProvider, BROADCAST, activeProvider);
+    pushActiveProviderSnapshot();
+  }
+
+  void refreshProviderAvailability();
+  void refreshCodexUsage();
+  // ── /Codex 프로바이더 ──────────────────────────────────────────────
+
   // 시작 시 초기 집계
   void refreshUsage();
 
@@ -293,12 +381,13 @@ export function activate(context: vscode.ExtensionContext): void {
     () => snapshotHistory,
     () => {
       // webview의 GetUsageSummary pull = 로드 완료(ready) 신호 → 회고도 push로 first-paint.
-      // (패널 열렸을 때만 — pushRetro 내부 게이트. retroDirty 가드로 중복 git 빌드 없음.)
+      // (패널 열렸을 때만 — pushRetro 내부 게이트. retroDirty 가드로 중복 git 빌드 없음. Claude 전용)
       pushRetro();
-      return lastUsageSummary;
+      return activeProvider === 'claude' ? lastUsageSummary : lastCodexUsageSummary;
     },
-    () => { poller?.poll(); void refreshUsage(); },   // webview 새로고침 버튼도 동일(스로틀 우회)
+    () => { poller?.poll(); void refreshUsage(); void refreshCodexUsage(); },   // webview 새로고침 버튼도 동일(스로틀 우회)
     () => vscode.commands.executeCommand(COMMANDS.login),
+    () => vscode.commands.executeCommand(COMMANDS.loginCodex),
     () => { void vscode.commands.executeCommand(COMMANDS.openDashboard); },
     () => { void vscode.env.openExternal(vscode.Uri.parse('https://claude.ai/settings/usage')); },
     () => currentLang,
@@ -308,7 +397,11 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     () => buildRetroSummary(),
     () => openSessionPicker(),
-    () => clearPinnedSession()
+    () => clearPinnedSession(),
+    () => activeProvider,
+    (provider) => setActiveProvider(provider),
+    () => providerAvailability,
+    () => lastCodexRateLimit
   );
 
   const sidebarProvider = new SidebarViewProvider(context.extensionUri, messenger);
@@ -334,6 +427,11 @@ export function activate(context: vscode.ExtensionContext): void {
       // 'claude login'은 유효한 서브커맨드가 아니다 — CLI가 인자를 프롬프트로 해석해 REPL만 열린다.
       // 정식 인증 명령은 'claude auth login'. (alias/함수 래퍼 환경은 셸 제어 밖이라 보장 불가 — login_hint로 수동 안내)
       terminal.sendText('claude auth login');
+    }),
+    vscode.commands.registerCommand(COMMANDS.loginCodex, () => {
+      const terminal = vscode.window.createTerminal({ name: 'Codex Login' });
+      terminal.show();
+      terminal.sendText('codex login');
     })
   );
 
@@ -367,7 +465,10 @@ export function activate(context: vscode.ExtensionContext): void {
         snapshotHistory.push({ t: snapshot.generatedAt.toISOString(), fh: snapshot.fiveHour.utilization, sd: snapshot.sevenDay.utilization });
         if (snapshotHistory.length > MAX_POLL_HISTORY) snapshotHistory.shift();
         statusBar.update(snapshot, lastUsageSummary?.today.costUsd);
-        messenger.sendNotification(PushRateLimit, BROADCAST, snapshot);
+        // PushRateLimit은 Claude 전용 채널 — Codex가 활성일 때는 안 보낸다(PushCodexRateLimit이 대신함).
+        if (activeProvider === 'claude') {
+          messenger.sendNotification(PushRateLimit, BROADCAST, snapshot);
+        }
         checkThreshold(snapshot);
       },
       (error: PollerError) => {
@@ -404,14 +505,14 @@ export function activate(context: vscode.ExtensionContext): void {
       lastAlerted = 'fiveHour';
       const pct = (snapshot.fiveHour.utilization * 100).toFixed(0);
       void vscode.window.showWarningMessage(
-        `Claude Code Gauge: Session usage at ${pct}% — resets in ${fmtReset(snapshot.fiveHour.msUntilReset)}`,
+        `AgentVitals: Session usage at ${pct}% — resets in ${fmtReset(snapshot.fiveHour.msUntilReset)}`,
         'Open Dashboard'
       ).then(sel => { if (sel) void vscode.commands.executeCommand(COMMANDS.openDashboard); });
     } else if (sdOver && lastAlerted !== 'sevenDay') {
       lastAlerted = 'sevenDay';
       const pct = (snapshot.sevenDay.utilization * 100).toFixed(0);
       void vscode.window.showWarningMessage(
-        `Claude Code Gauge: Weekly usage at ${pct}% — resets in ${fmtReset(snapshot.sevenDay.msUntilReset)}`,
+        `AgentVitals: Weekly usage at ${pct}% — resets in ${fmtReset(snapshot.sevenDay.msUntilReset)}`,
         'Open Dashboard'
       ).then(sel => { if (sel) void vscode.commands.executeCommand(COMMANDS.openDashboard); });
     } else if (!fhOver && !sdOver) {

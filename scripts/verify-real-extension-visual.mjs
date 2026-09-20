@@ -119,7 +119,7 @@ async function main() {
     // Command Palette로 사이드바 뷰 열기
     await page.keyboard.press('Control+Shift+P');
     await page.waitForTimeout(400);
-    await page.keyboard.type('View: Show Claude Code Gauge');
+    await page.keyboard.type('View: Show AgentVitals');
     await page.waitForTimeout(400);
     await page.keyboard.press('Enter');
     await page.waitForTimeout(4000); // chokidar 초기 스캔 + jsonl 파싱 + 렌더 대기

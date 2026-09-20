@@ -15,6 +15,7 @@ function summary(p: Partial<ContextSessionSummary> & { sessionId: string }): Con
     contextTokens: 50_000,
     maxWindow: 200_000,
     ratio: 0.25,
+    hasUnpricedRecords: false,
     ...p,
   };
 }

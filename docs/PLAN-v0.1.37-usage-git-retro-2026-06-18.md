@@ -108,7 +108,7 @@ interface RetroSummary {
 
 ## 5. ⚠️ 포워드 컨트랙트 — codex-later 사이드이펙트 (사용자 요청: 비교검증 + 권장)
 
-> 사용자 결정: **회고 뷰 먼저**. PLAN-v0.1.4-codex-provider(확정·미구현, `SessionRecord`에 `provider` 추가 + `src/sources/AgentSource` 추상화)가 **나중**. advisor 2회 교차검증 결론: **회고-first는 base-agnostic로 지으면 저위험**. 단 아래 6개를 계획에 못박는다.
+> 사용자 결정: **회고 뷰 먼저**. PLAN-v0.2.0-codex-provider(확정·미구현, `SessionRecord`에 `provider` 추가 + `src/sources/AgentSource` 추상화)가 **나중**. advisor 2회 교차검증 결론: **회고-first는 base-agnostic로 지으면 저위험**. 단 아래 6개를 계획에 못박는다.
 
 | # | 사이드이펙트 | 완화(본 계획 반영) |
 |---|---|---|

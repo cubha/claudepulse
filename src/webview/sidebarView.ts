@@ -2,16 +2,18 @@
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
-  GetRateLimit, GetUsageSummary, PushPollerError, PushRateLimit, PushUsageSummary,
-  RequestClearPinnedSession, RequestLogin, RequestOpenBillingSettings, RequestOpenDashboard,
-  RequestOpenSessionPicker, RequestRefresh, RequestSetLang,
+  GetActiveProvider, GetCodexRateLimit, GetProviderAvailability, GetRateLimit, GetUsageSummary,
+  PushActiveProvider, PushCodexRateLimit, PushPollerError, PushProviderAvailability, PushRateLimit, PushUsageSummary,
+  RequestClearPinnedSession, RequestLogin, RequestLoginCodex, RequestOpenBillingSettings, RequestOpenDashboard,
+  RequestOpenSessionPicker, RequestRefresh, RequestSetLang, RequestSetProvider,
 } from '../messaging/contracts';
-import type { PollerError, RateLimitSnapshot, UsageSummary } from '../types';
+import type { AgentProvider, CodexRateLimitSnapshot, PollerError, ProviderAvailability, RateLimitSnapshot, UsageSummary } from '../types';
 import { getLang, setLang, t } from './i18n';
 import { escapeHtml, fmtCost, formatErrorHtml } from './format';
 import { resolveContextGaugeState } from './contextGaugeState';
 import type { CalendarDay } from './calendarView';
 import type { PollPoint } from './burnRate';
+import { filterQualifyingCostDays, calcCostAnomalyPct } from './metricCalc';
 import { vsApi } from './webviewApi';
 import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
@@ -66,6 +68,12 @@ export function initSidebar(): void {
   let lastError: PollerError | null = null;
   let lastSnapshot: RateLimitSnapshot | null = null;
   let lastUsage: UsageSummary | null = null;
+  // 프로바이더 스위처(ST7) — PushUsageSummary는 '활성 프로바이더' 단일 채널이라 lastUsage는
+  // 그대로 재사용하지만, 한도 스냅샷은 Claude/Codex가 구조가 달라(overage·fallback 없음, 버킷
+  // 개수 가변) 별도 채널(PushCodexRateLimit)로 온다 — lastSnapshot과 나란히 별도 보관한다.
+  let activeProvider: AgentProvider = 'claude';
+  let providerAvailability: ProviderAvailability = { claude: 'ready', codex: 'not_installed' };
+  let lastCodexSnapshot: CodexRateLimitSnapshot | null = null;
 
   function recordSbHistory(snapshot: RateLimitSnapshot): void {
     const t = new Date(snapshot.generatedAt);
@@ -89,6 +97,21 @@ export function initSidebar(): void {
 
   messenger.onNotification(PushUsageSummary, (usage) => {
     lastUsage = usage;
+    renderSidebar(lastSnapshot, lastError);
+  });
+
+  messenger.onNotification(PushActiveProvider, (provider) => {
+    activeProvider = provider;
+    renderSidebar(lastSnapshot, lastError);
+  });
+
+  messenger.onNotification(PushProviderAvailability, (availability) => {
+    providerAvailability = availability;
+    renderSidebar(lastSnapshot, lastError);
+  });
+
+  messenger.onNotification(PushCodexRateLimit, (snapshot) => {
+    lastCodexSnapshot = snapshot;
     renderSidebar(lastSnapshot, lastError);
   });
 
@@ -116,10 +139,27 @@ export function initSidebar(): void {
     })
     .catch(() => renderSidebar(null, lastError));
 
+  void messenger.sendRequest(GetActiveProvider, HOST_EXTENSION, undefined)
+    .then((provider) => { activeProvider = provider; renderSidebar(lastSnapshot, lastError); })
+    .catch(() => undefined);
+
+  void messenger.sendRequest(GetProviderAvailability, HOST_EXTENSION, undefined)
+    .then((availability) => { providerAvailability = availability; renderSidebar(lastSnapshot, lastError); })
+    .catch(() => undefined);
+
+  void messenger.sendRequest(GetCodexRateLimit, HOST_EXTENSION, undefined)
+    .then((snapshot) => { lastCodexSnapshot = snapshot; renderSidebar(lastSnapshot, lastError); })
+    .catch(() => undefined);
+
   function renderSidebar(snapshot: RateLimitSnapshot | null, error: PollerError | null): void {
+    // .provider-codex.theme-dark/.theme-light(styles.css ST9)이 실제 적용되려면 body에 이 클래스가
+    // 있어야 한다(D-2 무성실패와 같은 부류 — 클래스 안 붙으면 게이트는 그린인데 CSS는 죽어있다).
+    // .theme-dark/.theme-light 자체는 DashboardPanel.ts/SidebarViewProvider.ts HTML shell이
+    // 고정 부여하므로 여기서는 provider 토글만 담당한다.
+    document.body.classList.toggle('provider-codex', activeProvider === 'codex');
     const CAL_AREA = '.sb-calendar-wrap .calendar-grid-area';
     captureCalendarScroll(root!.querySelector(CAL_AREA), sidebarCalendarScroll);
-    root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory, lastUsage);
+    root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory, lastUsage, activeProvider, providerAvailability, lastCodexSnapshot);
     // 좁은 사이드바에서 오늘 셀이 잘리지 않도록 우측 끝 정렬(대시보드와 동일 계약).
     applyCalendarScroll(root!.querySelector(CAL_AREA), sidebarCalendarScroll);
     // JS로 진행바 width 설정 (innerHTML 내 inline style은 CSP 안전망으로 차단될 수 있음)
@@ -137,11 +177,25 @@ export function initSidebar(): void {
         ctxBar.style.width = `${Math.min(100, lastUsage.sessionContext.ratio * 100)}%`;
       }
     }
+    // Codex 버킷 바 — 배열 길이만큼 동적 생성된 id를 순회한다(고정 id 목록이 없다, ST6 계약).
+    (lastCodexSnapshot?.buckets ?? []).forEach((b, i) => {
+      const bar = root!.querySelector<HTMLElement>(`#sb-codex-bucket-${i}`);
+      if (bar) bar.style.width = `${Math.min(100, b.usedPercent)}%`;
+    });
     root!.querySelectorAll<HTMLButtonElement>('.js-refresh').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestRefresh, HOST_EXTENSION));
     });
     root!.querySelectorAll<HTMLButtonElement>('.js-login').forEach(btn => {
       btn.addEventListener('click', () => messenger.sendNotification(RequestLogin, HOST_EXTENSION));
+    });
+    root!.querySelectorAll<HTMLButtonElement>('.js-login-codex').forEach(btn => {
+      btn.addEventListener('click', () => messenger.sendNotification(RequestLoginCodex, HOST_EXTENSION));
+    });
+    root!.querySelectorAll<HTMLButtonElement>('.js-set-provider').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const provider = btn.dataset.provider as AgentProvider | undefined;
+        if (provider) messenger.sendNotification(RequestSetProvider, HOST_EXTENSION, provider);
+      });
     });
     root!.querySelectorAll<HTMLSelectElement>('.js-lang-select').forEach(sel => {
       sel.addEventListener('change', () => {
@@ -185,10 +239,18 @@ function modelAccentClass(model: string): string {
 
 function buildUsageRowHtml(usage: UsageSummary | null): string {
   if (!usage) return '';
-  const { today, modelBreakdown, cacheStats, todayToolCounts, activeBranch, branchBreakdown } = usage;
+  const { today, modelBreakdown, cacheStats, todayToolCounts, activeBranch, branchBreakdown, historicalDays } = usage;
   if (today.totalTokens === 0 && today.costUsd === 0) {
     return `<div class="sb-usage-row">${t('no_usage_today')}</div>`;
   }
+
+  // 게이지 밖 ③ 비용 이상 감지 — 사이드탭 유일 항목(P1-Placement: "$ 오늘" 옆 칩 하나뿐).
+  // 대시보드(panelView.ts updateDailyChart)와 동일한 calcCostAnomalyPct/filterQualifyingCostDays 재사용.
+  const qualifyingCosts = filterQualifyingCostDays(historicalDays, today.date).map(d => d.costUsd);
+  const anomalyPct = calcCostAnomalyPct(today.costUsd, qualifyingCosts);
+  const anomalyChip = anomalyPct !== null && anomalyPct > 0.15
+    ? `<span class="sb-chip sb-chip--anomaly" title="${escapeHtml(t('cost_anomaly_median_note'))}">${t('cost_anomaly_vs_median')} +${(anomalyPct * 100).toFixed(0)}%</span>`
+    : '';
 
   // modelBreakdown은 share 내림차순이고 share 기준은 가격을 다 알 때만 비용이다(v0.1.55).
   // 그래서 여기서 다시 정렬하지 않는다 — 예전엔 비용 정렬이라, 가격표에 없는 모델이 실제
@@ -265,11 +327,21 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
     }
   }
 
+  // costUsd===0이 "$0 측정값"인지 "전부 미가격이라 계산 불가"인지 fmtCost는 구분 못 한다(그대로
+  // 두면 '<$0.01'로 찍혀 실측값처럼 보인다 — panelView.ts의 model-bar-cost--unknown과 같은 부류의
+  // 거짓초록, v0.1.55 원칙). 오늘 토큰이 전부 미가격 모델이면 비용 대신 '가격 미상'을 보여준다.
+  const todayAllUnpriced = today.costUsd === 0 && usage.unpricedModels.length > 0
+    && modelBreakdown.every(m => m.pricingSource === 'none');
+  const costDisplay = todayAllUnpriced
+    ? `<span class="sb-usage-cost mono" title="${escapeHtml(t('pricing_unknown_note'))}">${t('pricing_unknown')}</span>`
+    : `<span class="sb-usage-cost mono">${fmtCost(today.costUsd)}</span>`;
+
   return `<div class="sb-usage-row">
     <span class="sb-usage-icon">◎</span>
     <span class="sb-usage-tokens">${fmtTokens(today.totalTokens)} ${t('tokens')}</span>
     <span class="sb-usage-sep">·</span>
-    <span class="sb-usage-cost mono">${fmtCost(today.costUsd)}</span>
+    ${costDisplay}
+    ${anomalyChip}
   </div>
   ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}
   ${toolRow}
@@ -289,13 +361,92 @@ function buildLangSelect(currentLang: string): string {
   ).join('');
   return `<select class="lang-select js-lang-select" aria-label="Language">${options}</select>`;
 }
+/**
+ * 프로바이더 스위처(ST7) — Codex가 not_installed면 전환할 대상이 없으므로 스위처 자체를 숨긴다
+ * (사용자 확정 사양: 죽은 UI를 만들지 않는다). 그 외에는 항상 두 탭을 보여준다 — Free/유료
+ * 플랜 차이는 레이아웃이 아니라 탭 내부 배지·비활성화로 표현한다(사용자 확정 사양).
+ */
+function buildProviderSwitcherHtml(active: AgentProvider, availability: ProviderAvailability): string {
+  if (availability.codex === 'not_installed') return '';
+  // Main.dc.html Case C("미감지" — 설치됐지만 세션 0건) 의도: 토글은 유지하되 흐리게 표시,
+  // 클릭하면 no_records 안내로 이동한다(기능은 이미 있었음 — 이번엔 시각 신호만 추가, verify-impl B-V12 보완).
+  const dim = (p: AgentProvider) => p === 'codex' && availability.codex === 'no_records' ? ' is-unavailable' : '';
+  const tab = (p: AgentProvider, label: string) =>
+    `<button class="sb-provider-btn${p === active ? ' is-active' : ''}${dim(p)} js-set-provider" data-provider="${p}" role="tab" aria-selected="${p === active}">${label}</button>`;
+  return `<div class="sb-provider-switch" role="tablist">${tab('claude', t('provider_claude'))}${tab('codex', t('provider_codex'))}</div>`;
+}
+
+/**
+ * 사이드바 footer(ST9 신설) — `.sb-footer`는 이전까지 CSS만 있고 렌더 소비자가 없었다(PLAN §5).
+ * 활성 프로바이더 아이덴티티(점 색=--identity-accent, provider-codex 스코프에서 자동 교체)·
+ * plan·마지막 갱신시각을 담는다. Codex 경로는 지금까지 plan_type·generatedAt을 어디에도
+ * 렌더하지 않고 있었다(header가 Claude 전용 planBadge/timestamp만 그림) — 이 footer가 그 첫
+ * 소비자다. planLabel은 원본 문자열을 그대로 쓴다(§8 불변식3, plan_type 하드코딩 분기 금지).
+ */
+function buildFooterHtml(provider: AgentProvider, planLabel: string | null, generatedAt: string | Date | null): string {
+  const providerLabel = provider === 'codex' ? t('provider_codex') : t('provider_claude');
+  const plan = planLabel ? escapeHtml(planLabel.charAt(0).toUpperCase() + planLabel.slice(1)) : t('plan_unknown');
+  const time = generatedAt ? fmtTime(new Date(generatedAt)) : '—';
+  return `<div class="sb-footer">
+    <span class="sb-footer-dot" aria-hidden="true"></span>
+    <span class="sb-footer-provider">${providerLabel}</span>
+    <span class="sb-footer-sep">·</span>
+    <span class="sb-footer-plan">${plan}</span>
+    <span class="sb-footer-sep">·</span>
+    <span class="sb-footer-time mono">${time}</span>
+  </div>`;
+}
+
+/** 3단 빈 상태(ST8) — not_installed 전용 카드. 양 프로바이더 공용 골격, 문구·명령만 다르다. */
+function buildNotInstalledCard(
+  provider: AgentProvider,
+  active: AgentProvider,
+  availability: ProviderAvailability,
+  title: string,
+  sub: string,
+  installCmd: string
+): string {
+  return `
+    <div class="sb-layout">
+      <div class="sb-header">
+        ${buildProviderSwitcherHtml(active, availability)}
+        ${buildLangSelect(getLang())}
+        <div class="sb-header-spacer"></div>
+        <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
+      </div>
+      <div class="sb-error-card card">
+        <div class="sb-error-icon">⛔</div>
+        <div class="sb-error-msg">${title}</div>
+        <div class="sb-error-sub">${sub}</div>
+        <code class="sb-install-cmd mono">${escapeHtml(installCmd)}</code>
+      </div>
+    </div>`;
+}
+
 function buildSidebarHtml(
   snapshot: RateLimitSnapshot | null,
   error: PollerError | null,
   fhHist: PollPoint[],
   sdHist: PollPoint[],
-  usage: UsageSummary | null
+  usage: UsageSummary | null,
+  activeProvider: AgentProvider,
+  providerAvailability: ProviderAvailability,
+  codexSnapshot: CodexRateLimitSnapshot | null
 ): string {
+  if (activeProvider === 'codex') {
+    return buildCodexSidebarHtml(codexSnapshot, providerAvailability, usage, activeProvider);
+  }
+
+  // Claude — not_installed는 기존 PollerError 분기보다 우선한다(§6, classifyAvailability와 동일
+  // 우선순위: 미설치면 로그인 버튼을 주지 않는다). 그 외(not_authenticated류·no_records·ready)는
+  // 기존에 이미 잘 동작하던 PollerError 기반 로직을 무변경으로 유지한다(회귀 위험 최소화).
+  if (providerAvailability.claude === 'not_installed') {
+    return buildNotInstalledCard(
+      'claude', activeProvider, providerAvailability,
+      t('not_installed_title'), t('login_sub_not_installed'), t('install_claude_cmd')
+    );
+  }
+
   if (!snapshot) {
     const needsLogin = error === 'credentials_missing' || error === 'token_expired' || error === 'token_stale';
     const icon = error === 'token_stale' ? '🔄' : needsLogin ? '🔑' : '⚠';
@@ -318,6 +469,7 @@ function buildSidebarHtml(
     return `
       <div class="sb-layout">
         <div class="sb-header">
+          ${buildProviderSwitcherHtml(activeProvider, providerAvailability)}
           ${buildLangSelect(lang)}
           <div class="sb-header-spacer"></div>
           <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
@@ -402,6 +554,7 @@ function buildSidebarHtml(
     <div class="sb-layout">
       <!-- 헤더 -->
       <div class="sb-header">
+        ${buildProviderSwitcherHtml(activeProvider, providerAvailability)}
         ${planBadge}
         <span class="status-badge ${overall}">${statusLabel(overall)}</span>
         ${buildLangSelect(lang)}
@@ -413,17 +566,16 @@ function buildSidebarHtml(
       ${buildUsageRowHtml(usage)}
       ${fallbackBanner}
 
-      <!-- 5h 세션 섹션 -->
+      <!-- 5h 세션 섹션 — hero(사이드바에서 유일하게 22px로 격상되는 지표) -->
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:${statusColor(fh.status)};"></span>
         <span class="sb-section-label">${t('session_5h')}</span>
         <span class="sb-section-right">
-          <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(fh.utilization)}</span>
-          <span class="sb-section-sep">·</span>
           <span class="mono" style="color:${statusColor(fh.status)};">${fmtPct(1 - fh.utilization)} ${t('left')}</span>
         </span>
       </div>
       <div class="sb-rate-card${isFhBottleneck ? ' is-bottleneck' : ''}">
+        <div class="sb-hero-value mono" style="color:${statusColor(fh.status)};">${fmtPct(fh.utilization)}</div>
         <div class="rate-bar">
           <div class="rate-bar-fill" id="sb-fh-bar" data-status="${fh.status}"></div>
         </div>
@@ -457,6 +609,7 @@ function buildSidebarHtml(
       ${buildContextGaugeHtml(usage)}
       ${buildSidebarCalendarHtml(usage)}
       <div class="sb-spacer"></div>
+      ${buildFooterHtml(activeProvider, snapshot.plan?.subscriptionType ?? null, snapshot.generatedAt)}
       <div class="sb-dashboard-wrap">
         <button class="sb-dashboard-btn js-open-dashboard">⚡ ${t('open_dashboard')}</button>
       </div>
@@ -542,4 +695,128 @@ function buildSidebarCalendarHtml(usage: UsageSummary | null): string {
     </div>
     ${buildCalendarHtml(allDays, SIDEBAR_CALENDAR_WINDOW_DAYS, todayKey, false)}
   </div>`;
+}
+
+/**
+ * Codex 전용 사이드바 렌더(ST6/ST7/ST8). Claude와 레이아웃 문법(sb-section-hdr/sb-rate-card)은
+ * 공유하되 데이터 계약이 다르다: overage·fallback·plan 배지가 없고, 한도는 **버킷 배열**로 와서
+ * 개수·라벨이 런타임에 정해진다(D9 — free=1개/유료=2개, 5H/7D 하드코딩 금지). buckets가 비어있으면
+ * (세션에 rate_limits 자체가 없음, API key 모드 등) 게이지 섹션 자체를 생략한다(§8 불변식5).
+ * skillBreakdown·subagentStats·mcpServerBreakdown은 렌더하지 않는다(CODEX_CAPABILITIES=false,
+ * §8 불변식6 — 추정으로 빈 섹션을 채우지 않는다. 사이드바는 원래 그 섹션들을 안 그리므로 이는
+ * "숨김"이 아니라 panelView.ts ST6 몫이라는 점을 남겨둔다).
+ */
+function buildCodexSidebarHtml(
+  snapshot: CodexRateLimitSnapshot | null,
+  providerAvailability: ProviderAvailability,
+  usage: UsageSummary | null,
+  activeProvider: AgentProvider
+): string {
+  const avail = providerAvailability.codex;
+
+  if (avail === 'not_installed') {
+    return buildNotInstalledCard(
+      'codex', activeProvider, providerAvailability,
+      t('codex_not_installed_title'), t('codex_not_installed_sub'), t('install_codex_cmd')
+    );
+  }
+
+  // Plan 배지(verify-impl B-V5/B-V6 보완) — Claude의 planBadge(subscriptionType)와 동일 위치·
+  // 클래스 재사용. planType은 원본 문자열 그대로 대문자화만 한다(값별 분기 없음, §8 불변식5).
+  const codexPlanBadge = snapshot?.planType
+    ? `<span class="plan-badge">${escapeHtml(snapshot.planType.toUpperCase())}</span>`
+    : '';
+
+  const header = `
+    <div class="sb-header">
+      ${buildProviderSwitcherHtml(activeProvider, providerAvailability)}
+      ${codexPlanBadge}
+      ${buildLangSelect(getLang())}
+      <div class="sb-header-spacer"></div>
+      <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
+    </div>`;
+
+  if (avail === 'not_authenticated') {
+    return `
+      <div class="sb-layout">
+        ${header}
+        <div class="sb-error-card card">
+          <div class="sb-error-icon">🔑</div>
+          <div class="sb-error-msg">${t('codex_not_authenticated_title')}</div>
+          <div class="sb-error-sub">${t('codex_not_authenticated_sub')}</div>
+          <button class="login-btn js-login-codex">${t('login_cmd_codex')}</button>
+          <div class="login-hint">${t('login_hint')}</div>
+        </div>
+      </div>`;
+  }
+
+  if (avail === 'no_records') {
+    // 0%·$0을 그리지 않는다(§6) — "아직 안 씀"과 "한도 소진"을 같은 화면으로 만들지 않는다.
+    return `
+      <div class="sb-layout">
+        ${header}
+        <div class="sb-context-empty" style="margin-top:8px;">${t('codex_no_records_sub')}</div>
+      </div>`;
+  }
+
+  // 컨텍스트 창 실측 + 추론 토큰(verify-impl B-V6 보완). model_context_window는 사용률(%) 계산
+  // 근거가 없어(PLAN §7 — Codex는 context 점유율 계측 범위 밖) 크기만 실측치로 노출한다(추정 금지).
+  // 추론 토큰은 today 스코프 실측 합계 — usage가 있고(오늘 활동 있음) 0이어도 측정된 0이라 표시한다.
+  const codexContextRow = snapshot?.modelContextWindow != null
+    ? `<div class="sb-section-hdr">
+        <span class="sb-section-label">${t('codex_context_window')}</span>
+        <span class="sb-section-right">
+          <span class="mono" title="${escapeHtml(t('codex_context_window_note'))}">${snapshot.modelContextWindow.toLocaleString()}</span>
+        </span>
+      </div>`
+    : '';
+  const codexReasoningRow = (usage && (usage.today.totalTokens > 0 || usage.today.costUsd > 0))
+    ? `<div class="sb-section-hdr">
+        <span class="sb-section-label">${t('reasoning_tokens')}</span>
+        <span class="sb-section-right">
+          <span class="mono">${usage.todayReasoningTokens.toLocaleString()}</span>
+        </span>
+      </div>`
+    : '';
+
+  const buckets = snapshot?.buckets ?? [];
+  const bucketCards = buckets.map((b, i) => {
+    const status: 'allowed' | 'allowed_warning' | 'danger' =
+      b.usedPercent >= 90 ? 'danger' : b.usedPercent >= 70 ? 'allowed_warning' : 'allowed';
+    const color = status === 'danger' ? 'var(--c-danger)' : status === 'allowed_warning' ? 'var(--c-warn)' : 'var(--c-sonnet)';
+    const label = b.labelKey ? t(b.labelKey) : `${b.windowMinutes}min`;
+    const resetMs = Math.max(0, b.resetsAt * 1000 - Date.now());
+    return `
+      <div class="sb-section-hdr">
+        <span class="sb-section-dot" style="background:${color};"></span>
+        <span class="sb-section-label">${escapeHtml(label)}</span>
+        <span class="sb-section-meta">window ${b.windowMinutes}</span>
+        <span class="sb-section-right">
+          <span class="mono" style="color:${color};">${b.usedPercent.toFixed(0)}%</span>
+        </span>
+      </div>
+      <div class="sb-rate-card">
+        <div class="rate-bar">
+          <div class="rate-bar-fill" id="sb-codex-bucket-${i}" data-status="${status}"></div>
+        </div>
+        <div class="rate-meta-row">
+          <span class="rate-reset-label">${t('resets_in')} <span class="mono">${fmtReset(resetMs)}</span></span>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="sb-layout">
+      ${header}
+      ${buildUsageRowHtml(usage)}
+      ${bucketCards}
+      ${codexContextRow}
+      ${codexReasoningRow}
+      ${buildSidebarCalendarHtml(usage)}
+      <div class="sb-spacer"></div>
+      ${buildFooterHtml(activeProvider, snapshot?.planType ?? null, snapshot?.generatedAt ?? null)}
+      <div class="sb-dashboard-wrap">
+        <button class="sb-dashboard-btn js-open-dashboard">⚡ ${t('open_dashboard')}</button>
+      </div>
+    </div>`;
 }

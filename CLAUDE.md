@@ -1,4 +1,4 @@
-# Claudepulse — 프로젝트 운영 규칙
+# AgentVitals (claudepulse) — 프로젝트 운영 규칙
 
 ## 0. 프로젝트 정체성
 
