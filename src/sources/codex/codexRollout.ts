@@ -10,8 +10,10 @@
  * 2. `token_usage_record`가 있으면 그것만 쓴다. `token_count`는 한도(rate_limits) 읽기 전용 —
  *    `total_token_usage`는 새 턴에서 fill_to_context_window가 덮어써 리셋되므로 누적 진실원이 아니다(D8).
  *    구버전(<0.154, token_usage_record 부재)만 token_count로 폴백한다.
- * 3. dedup은 누적쌍(thread_token_usage) 비교 — 같으면 replay(skip), 다르면 신규(count).
- *    타임스탬프 3중키가 아니라 누적값 자체를 키로 쓴다(단조증가 검사는 compaction에서 틀린다, D4).
+ * 3. dedup 키는 `response_id`가 1순위다(있으면 `id:<response_id>`) — 같은 응답의 재생(replay)은
+ *    같은 response_id를 갖는다. response_id가 없는 구버전 레코드만 누적쌍(thread_token_usage)
+ *    비교로 폴백한다(`cum:<turn_id>|<JSON.stringify(threadTokenUsage)>`). 타임스탬프 3중키는
+ *    쓰지 않는다 — 단조증가 검사는 compaction에서 틀린다(D4, `tokenUsageRecordDedupKey` 참조).
  * 4. rate_limits 버킷은 window_minutes에서 런타임 생성한다. 5h/7d 하드코딩 금지 — free 플랜은
  *    단일 30일 버킷이고 secondary가 없다(D9, 자체 실측).
  */

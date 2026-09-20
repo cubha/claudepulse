@@ -183,19 +183,28 @@
 /* Codex 프로바이더 팔레트(PLAN §5 B안) — .theme-dark/.theme-light의 정상/경고/위험 슬롯 +
    정체성 크롬을 재정의한다(§5 결정1: 새 토큰 이름 신설 금지, 기존 이름 재정의만). sonnet/warn/danger
    패밀리 전체(base+tint+border+outline+fg)를 같이 바꾼다 — base만 바꾸면 "파란 틴트 위 초록 글씨"가
-   된다(advisor 지적). fable/opus/haiku/slate/success는 그대로 둔다 — Codex 모델은 modelKind()가
-   전부 'other'→slate 폴백이라(PLAN §5 결정5) 이 슬롯들의 실제 소비자가 없다(재정의해도 무효과).
+   된다(advisor 지적). opus/slate/success는 그대로 둔다(opus 보라는 이미 sonnet/warn/danger와 충분히
+   구분됨 — Codex 4번째 모델 패밀리 슬롯으로 재사용 가능, 재정의 불필요).
+   fable/haiku는 Codex 모델 도넛/칩 색상 구분(2026-09-20, 사용자 요청)을 위해 재정의한다 —
+   modelKind(model,'codex')가 CODEX_MODEL_FAMILY_SLOTS로 패밀리를 sonnet/fable(/opus/haiku)
+   슬롯에 배정하므로(webviewShared.ts), 그 슬롯이 실제 소비된다. haiku 기본값은 Codex sonnet 틸과
+   색상거리가 너무 가까워 구분이 안 돼 필수 재정의, fable은 Claude 핑크와 무관한 인디고 톤으로
+   바꿔 4개 슬롯(sonnet/fable/opus/haiku)이 서로 뚜렷이 갈리게 한다(실제 값은 아래 선언 참조).
    D-3은 이 compound 셀렉터(`.provider-codex.theme-dark {`)를 보지 않으므로 페어 검증은 D-5가 한다. */
 .provider-codex.theme-dark {
   --c-sonnet: #10A37F;
   --c-warn: #D9982F;
   --c-danger: #D6455B;
+  --c-fable: #6E8EF5;
+  --c-haiku: #ED64C0;
   /* 모노크롬 크롬(PLAN §5 표 "0F0F0F/FAFAFA") — 다크 배경 위에서 보이려면 밝은 쪽이어야 한다.
      표는 값만 나열했지 테마별 배정을 정하지 않았다 — 대비 원칙(밝은 크롬 on 어두운 배경)으로 배정. */
   --identity-accent: #FAFAFA;
   --tint-sonnet: rgba(16,163,127,0.14);
   --tint-warn:   rgba(217,152,47,0.14);
   --tint-danger: rgba(214,69,91,0.14);
+  --tint-fable:  rgba(110,142,245,0.14);
+  --tint-haiku:  rgba(237,100,192,0.14);
   --tint-sonnet-border: rgba(16,163,127,0.27);
   --tint-warn-border:   rgba(217,152,47,0.27);
   --tint-danger-border: rgba(214,69,91,0.27);
@@ -204,16 +213,22 @@
   --outline-danger: rgba(214,69,91,0.65);
   --fg-sonnet: #29F0BF;
   --fg-warn:   #F6C678;
+  --fg-fable:  #B7C6FF;
+  --fg-haiku:  #F4A8E0;
 }
 
 .provider-codex.theme-light {
   --c-sonnet: #0F9574;
   --c-warn: #A7731F;
   --c-danger: #B2273C;
+  --c-fable: #3D5FCC;
+  --c-haiku: #B23896;
   --identity-accent: #0F0F0F;
   --tint-sonnet: rgba(15,149,116,0.10);
   --tint-warn:   rgba(167,115,31,0.10);
   --tint-danger: rgba(178,39,60,0.10);
+  --tint-fable:  rgba(61,95,204,0.10);
+  --tint-haiku:  rgba(178,56,150,0.10);
   --tint-sonnet-border: rgba(15,149,116,0.27);
   --tint-warn-border:   rgba(167,115,31,0.27);
   --tint-danger-border: rgba(178,39,60,0.27);
@@ -222,6 +237,8 @@
   --outline-danger: rgba(178,39,60,0.65);
   --fg-sonnet: #0F9574;
   --fg-warn:   #A7731F;
+  --fg-fable:  #24399B;
+  --fg-haiku:  #7A2569;
 }
 
 /* App-wide resets inside a theme container. */

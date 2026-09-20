@@ -1,6 +1,6 @@
 // 사이드바·패널 양쪽이 공유하는 순수 포맷터 + Usage Calendar HTML 빌더 (v0.1.54 ST5 분리).
 // DOM에 접근하지 않는다 — main.ts에서 기계적으로 추출.
-import type { UnifiedWindow } from '../types';
+import type { AgentProvider, UnifiedWindow } from '../types';
 import { t, getLang } from './i18n';
 import { escapeHtml, fmtCost } from './format';
 import { buildCalendarCells, heatLevel, monthLabelFlags, type CalendarDay } from './calendarView';
@@ -79,11 +79,60 @@ export function fmtTokens(n: number): string {
 export type ModelKind = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other';
 export const MODEL_KINDS: Exclude<ModelKind, 'other'>[] = ['fable', 'opus', 'sonnet', 'haiku'];
 
-export function modelKind(model: string): ModelKind {
+// Codex 모델 패밀리 → 액센트 슬롯 명시 등록(Claude의 .includes(k) 패밀리 매칭과 같은 원리 —
+// 점버전(5.3→5.4)은 등록 없이도 같은 패밀리로 묶이고, 새 패밀리만 여기 추가한다).
+// 미등록 패밀리는 'other'(slate)로 폴백 — 색을 추측해 지어내지 않는다(reference_add_new_model.md와 동일 원칙).
+// 실측: gpt-5.3-codex(codex 패밀리) · gpt-5.6-terra(terra 패밀리, 2026-09-19 자체 실측 신모델).
+export const CODEX_MODEL_FAMILY_SLOTS: Record<string, Exclude<ModelKind, 'other'>> = {
+  codex: 'sonnet',
+  terra: 'fable',
+};
+
+/**
+ * family→slot 테이블에서 model에 포함된 family 중 **가장 긴(가장 구체적인) 것**을 우선한다
+ * (longest-prefix, `codexPricing.ts`의 `findCodexPricing`과 동일 전략으로 통일 — ANALYSIS #6.
+ * 이전엔 `Object.keys().find()`로 테이블 선언 순서에 의존했다). 순수 함수라 임의 테이블로 직접
+ * 단위테스트 가능하다(ST9).
+ */
+export function matchLongestFamily<T extends string>(model: string, table: Record<string, T>): T | undefined {
+  let best: T | undefined;
+  let bestLen = -1;
+  for (const family of Object.keys(table)) {
+    if (model.includes(family) && family.length > bestLen) {
+      best = table[family];
+      bestLen = family.length;
+    }
+  }
+  return best;
+}
+
+// codex-mini-latest처럼 의미 없는 접미사가 마지막 세그먼트로 오면 그 앞 세그먼트를 라벨로 쓴다
+// (ST5 — "Latest"가 그대로 노출되던 버그. codexPricing.ts CODEX_PRICING에 실재하는 모델이라
+// 실사용 경로에 도달한다).
+const GENERIC_MODEL_LABEL_SUFFIXES = new Set(['latest']);
+
+function lastMeaningfulSegment(model: string): string {
+  const parts = model.split('-');
+  while (parts.length > 1 && GENERIC_MODEL_LABEL_SUFFIXES.has(parts[parts.length - 1])) {
+    parts.pop();
+  }
+  return parts[parts.length - 1] ?? model;
+}
+
+export function modelKind(model: string, provider: AgentProvider = 'claude'): ModelKind {
+  if (provider === 'codex') {
+    return matchLongestFamily(model, CODEX_MODEL_FAMILY_SLOTS) ?? 'other';
+  }
   return MODEL_KINDS.find(k => model.includes(k)) ?? 'other';
 }
 
-export function modelShortName(model: string): string {
+export function modelShortName(model: string, provider: AgentProvider = 'claude'): string {
+  if (provider === 'codex') {
+    // Codex는 색 슬롯(재사용된 sonnet/fable 토큰)과 표시 이름을 분리한다 — 슬롯 이름을 그대로
+    // 라벨로 쓰면 "Codex 모델인데 Sonnet"처럼 Claude 모델명이 잘못 노출된다.
+    const last = lastMeaningfulSegment(model);
+    return last ? last.charAt(0).toUpperCase() + last.slice(1) : model;
+  }
   const k = modelKind(model);
   if (k === 'other') return model.split('-').slice(-2).join('-');
   return k.charAt(0).toUpperCase() + k.slice(1);
