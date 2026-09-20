@@ -134,6 +134,36 @@
 > **그 판단은 틀렸다** — `.tooltip`·`.sb-dashboard-btn`은 라이트 전용 값이 따로 있었으므로 테마 불변 상수가
 > 아니었고, 정확히 테마 토큰이 푸는 문제였다. 토큰화하자 `.theme-light` 오버라이드 3규칙이 사라졌다.
 
+### 2.5 Provider Palette Override — `.provider-codex` (v0.2.0/v0.2.1, CLAUDE.md §9 절차 이행)
+
+**새 토큰을 신설하지 않는다** — compound 셀렉터 `.provider-codex.theme-dark`/`.provider-codex.theme-light`가
+§2.1~2.3의 기존 토큰 이름을 **재정의**한다(7+1 cap 안에서 해결). `body.provider-codex`가 붙었을 때만
+적용되며, Claude 경로(§2.1~2.3 원본 값)는 무변경이다. D-3(다크/라이트 페어 게이트)은 이 compound
+셀렉터를 보지 않으므로 페어 검증은 D-5가 전담한다.
+
+**재정의 대상 — sonnet/warn/danger(상태 슬롯) + fable/haiku(모델 슬롯)**. opus·slate·success는 재정의
+없이 그대로 재사용(opus 보라가 이미 sonnet/warn/danger와 충분히 구분되어 Codex 4번째 모델 패밀리
+슬롯으로 쓸 수 있다).
+
+| Token | `.provider-codex.theme-dark` | `.provider-codex.theme-light` | 비고 |
+|---|---|---|---|
+| `--c-sonnet` | `#10A37F` | `#0F9574` | 상태(정상) 슬롯 — Codex 브랜드 그린 |
+| `--c-warn` | `#D9982F` | `#A7731F` | 상태(경고) 슬롯 |
+| `--c-danger` | `#D6455B` | `#B2273C` | 상태(위험) 슬롯 |
+| `--c-fable` | `#6E8EF5` | `#3D5FCC` | 모델 슬롯 — `terra` 패밀리(`CODEX_MODEL_FAMILY_SLOTS`, webviewShared.ts) |
+| `--c-haiku` | `#ED64C0` | `#B23896` | 모델 슬롯 — 미등록 패밀리 폴백 확장용(기본 teal이 Codex sonnet과 색상거리 부족해 필수 재정의) |
+| `--identity-accent` | `#FAFAFA` | `#0F0F0F` | 사이드바 footer 등 신규 브랜드 정체성 크롬 — **7+1 cap 밖**(모델/상태 아님) |
+
+파생(`--tint-*`/`--fg-*`/`--tint-*-border`/`--outline-*`)은 위 5개 슬롯(sonnet/warn/danger/fable/haiku)
+전체를 **베이스와 함께** 재정의한다 — 베이스만 바꾸면 "파란 틴트 위 초록 글씨"가 되므로 §2.2/2.3 규약
+(다크 14%/라이트 10% 배경, 다크 tint-300/라이트 shade-700 전경)을 그대로 따라 계산한다. 실제 선언값은
+`src/webview/styles.css`의 `.provider-codex.theme-dark`/`.provider-codex.theme-light` 블록 참조(Ground
+Truth — 값이 어긋나면 CSS가 옳다).
+
+`modelKind(model, 'codex')`가 `CODEX_MODEL_FAMILY_SLOTS`(`codex`→sonnet, `terra`→fable)로 패밀리를
+색 슬롯에 배정하므로, 여기서 재정의된 fable/haiku가 실제로 소비된다(2026-09-20, 사용자 요청 — Codex
+모델 도넛/칩이 전부 slate로 뭉개지던 문제의 수정).
+
 ---
 
 ## 3. Typography

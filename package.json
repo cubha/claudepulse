@@ -2,7 +2,7 @@
   "name": "claude-code-gauge",
   "displayName": "AgentVitals — Claude Code & Codex Usage",
   "description": "Claude Code & Codex usage, cost and rate limits inside your editor — gauges, burn rate, per-skill cost and Git branch ROI, for both agents.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "cubha",
   "icon": "media/icon.png",
   "license": "MIT",

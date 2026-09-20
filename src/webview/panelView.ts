@@ -783,7 +783,7 @@ function updateUsageCalendar(): void {
 }
 
 function modelColor(model: string): string {
-  const k = modelKind(model);
+  const k = modelKind(model, activePanelProvider);
   return getCssVar(k === 'other' ? '--c-slate' : `--c-${k}`);
 }
 
@@ -801,7 +801,7 @@ function updateModelBreakdown(): void {
   const axisColor = getCssVar('--vscode-descriptionForeground');
   const borderColor = getCssVar('--vscode-panel-border');
 
-  const labels = breakdown.map(b => modelShortName(b.model));
+  const labels = breakdown.map(b => modelShortName(b.model, activePanelProvider));
   // 도넛도 share와 같은 기준으로 그린다. 비용 기준으로 고정하면 가격 미상 모델이 0으로 들어가
   // 조각이 아예 사라지고, 사용자는 "그 모델을 안 썼다"로 읽는다(실측 사고의 시각적 형태).
   const byTokens = panelUsage?.modelShareBasis === 'tokens';
@@ -816,7 +816,7 @@ function updateModelBreakdown(): void {
       : `<span class="model-bar-cost mono">${fmtCost(b.costUsd)}${b.pricingSource === 'family' ? `<span class="model-approx" title="${escapeHtml(t('pricing_unknown_note'))}">~</span>` : ''}</span>`;
     return `
     <div class="model-bar-row">
-      <span class="model-bar-label">${escapeHtml(modelShortName(b.model))}</span>
+      <span class="model-bar-label">${escapeHtml(modelShortName(b.model, activePanelProvider))}</span>
       <div class="model-bar-track">
         <div class="model-bar-fill" style="width:${(b.share * 100).toFixed(1)}%;background:${modelColor(b.model)};"></div>
       </div>

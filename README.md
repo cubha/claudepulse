@@ -18,11 +18,21 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.2.0
+## What's New in v0.2.1
+
+- **A Codex usage-count bug fixed.** If a subagent replayed a parent session's response, Codex's usage total could count that response twice — the same class of billing bug this extension already guards against for Claude Code. Duplicate responses are now recognized across files, not just within one.
+- **Codex now reads faster** — and more safely. Every refresh used to re-read and re-parse the full Codex session history from disk; it now picks up only what's new since the last refresh, the same incremental approach Claude Code sessions already used. A record could have been silently lost if a refresh landed mid-write; the reader now only advances past complete lines.
+- **Fixed: `codex-mini-latest` showed up as "Latest"** instead of the model name.
+- **Fixed: the sidebar's per-bucket burn-rate row could show the wrong bucket's history** after a Free→paid plan change or similar bucket-shape change. Each bucket's rate now tracks only its own history.
+- Each Codex rate-limit bucket in the sidebar now shows its own burn-rate line, matching Claude's 5h/7d gauges.
+
+<details><summary>v0.2.0</summary>
 
 - **Codex support.** A Claude/Codex switcher in the sidebar header tracks either agent — gauges, today's cost, model/cache breakdown, Git branch ROI and the usage calendar all now read Codex's own session logs too. Rate-limit buckets are generated from what each session actually reports (a single 30-day window on Free, 5h+7d on paid plans), not hardcoded. What Codex's logs genuinely don't contain — per-skill cost, subagent breakdown, MCP attribution — is left out rather than guessed; in its place you get today's reasoning-token total, the model's real context-window size, and a plan badge. Three distinct empty states (not installed / not logged in / no sessions yet) each carry their own guidance instead of one generic "please log in."
 - **A visual pass on the dashboard and sidebar** — clearer type hierarchy, the card count trimmed from 17 to 6, end-of-line readouts on every chart, and a bigger 5-hour gauge as the sidebar's opening view.
 - **The extension is now called AgentVitals.** It used to be “Claude Code Gauge”. It is the same extension from the same publisher — you do not need to reinstall it, and every setting you have configured keeps working under its existing name.
+
+</details>
 
 <details><summary>v0.1.56</summary>
 

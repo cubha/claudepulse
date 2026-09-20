@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   rolloutLinesToSessionRecords,
   listRolloutFiles,
@@ -226,10 +226,202 @@ describe('CodexSource.loadLatestRateLimit — 실 fixture 기반', () => {
         payload: { total_token_usage: { total_tokens: 0 }, last_token_usage: { total_tokens: 0 }, model_context_window: 128_000, rate_limits: null },
       }),
     ];
-    fs.writeFileSync(path.join(deep, 'rollout-no-limits.jsonl'), lines.join('\n'));
+    fs.writeFileSync(path.join(deep, 'rollout-no-limits.jsonl'), lines.join('\n') + '\n');
     const src = new CodexSource(tmpHome);
     // buckets가 0건이라 스냅샷 자체는 null(기존 계약 유지) — modelContextWindow만 있어도 전체를
     // 살리지 않는다(§6 "버킷 0건=섹션 숨김" 신호가 더 강한 계약).
     expect(await src.loadLatestRateLimit()).toBeNull();
+  });
+});
+
+/** response_id를 공유하는 token_usage_record 1건을 담은 rollout 파일 raw text를 만든다. */
+function tokenUsageRecordLine(sessionId: string, turnId: string, responseId: string, ordinal: number): string[] {
+  return [
+    JSON.stringify({ timestamp: '2026-09-20T00:00:00.000Z', ordinal: ordinal * 3, type: 'session_meta', payload: { session_id: sessionId, cwd: '/x' } }),
+    JSON.stringify({ timestamp: '2026-09-20T00:00:01.000Z', ordinal: ordinal * 3 + 1, type: 'turn_context', payload: { turn_id: turnId, model: 'gpt-5-codex' } }),
+    JSON.stringify({
+      timestamp: '2026-09-20T00:00:02.000Z', ordinal: ordinal * 3 + 2, type: 'token_usage_record',
+      payload: {
+        turn_id: turnId, thread_id: 'th1', response_id: responseId,
+        usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100 },
+        turn_token_usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100 },
+        thread_token_usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100 },
+      },
+    }),
+  ];
+}
+
+describe('CodexSource.loadAllSessionRecords — 크로스파일 dedup(ST1, ANALYSIS 🔴#1)', () => {
+  let tmpHome: string;
+
+  afterEach(() => {
+    if (tmpHome) fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  it('서브에이전트(thread_spawn) 파일이 부모 파일과 같은 response_id를 재생해도 1건만 집계한다', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    // 부모 세션 파일: response_id=resp-shared
+    fs.writeFileSync(path.join(deep, 'a-parent.jsonl'), tokenUsageRecordLine('parent-session', 't1', 'resp-shared', 0).join('\n') + '\n');
+    // 서브에이전트 파일: 자기 sessionId는 다르지만 부모의 response_id를 그대로 재생(실제 91× 인플레 원인)
+    fs.writeFileSync(path.join(deep, 'b-subagent.jsonl'), tokenUsageRecordLine('subagent-session', 't1', 'resp-shared', 1).join('\n') + '\n');
+
+    const src = new CodexSource(tmpHome);
+    const records = await src.loadAllSessionRecords();
+    expect(records.length).toBe(1);
+  });
+
+  it('서로 다른 response_id를 가진 레코드는 별개 파일이어도 둘 다 집계한다(과잉 dedup 방지)', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    fs.writeFileSync(path.join(deep, 'a-parent.jsonl'), tokenUsageRecordLine('parent-session', 't1', 'resp-a', 0).join('\n') + '\n');
+    fs.writeFileSync(path.join(deep, 'b-other.jsonl'), tokenUsageRecordLine('other-session', 't1', 'resp-b', 1).join('\n') + '\n');
+
+    const src = new CodexSource(tmpHome);
+    const records = await src.loadAllSessionRecords();
+    expect(records.length).toBe(2);
+  });
+
+  it('같은 파일 내부 dedup(기존 계약)은 그대로 유지된다', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    fs.copyFileSync(
+      path.join(FIXTURE_DIR, 'synth-plus-2turn-replay.jsonl'),
+      path.join(deep, 'rollout-synth.jsonl')
+    );
+    const src = new CodexSource(tmpHome);
+    const records = await src.loadAllSessionRecords();
+    expect(records.length).toBe(3); // 파일 내부 fixture 자체가 replay 1건을 포함 — 기존과 동일 기대값
+  });
+});
+
+describe('CodexSource — 증분 파싱(ST2, ANALYSIS 🔴#2 mtime+offset 캐시)', () => {
+  let tmpHome: string;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (tmpHome) fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  it('mtime이 변하지 않은 파일은 두 번째 loadAllSessionRecords 호출에서 다시 읽지 않는다', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-a.jsonl');
+    fs.writeFileSync(file, tokenUsageRecordLine('s1', 't1', 'resp-1', 0).join('\n') + '\n');
+
+    const src = new CodexSource(tmpHome);
+    const first = await src.loadAllSessionRecords();
+    expect(first.length).toBe(1);
+
+    const readSpy = vi.spyOn(fs.promises, 'readFile');
+    const second = await src.loadAllSessionRecords();
+    expect(second.length).toBe(1);
+    // 캐시 히트 — 변경 없는 파일 내용을 다시 읽지 않는다(mtime 비교로 스킵).
+    expect(readSpy).not.toHaveBeenCalled();
+  });
+
+  it('파일에 내용이 추가(append)되면 새로 추가된 레코드만 반영해 누적된다(기존 레코드 유지)', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-a.jsonl');
+    fs.writeFileSync(file, tokenUsageRecordLine('s1', 't1', 'resp-1', 0).join('\n') + '\n');
+
+    const src = new CodexSource(tmpHome);
+    const first = await src.loadAllSessionRecords();
+    expect(first.length).toBe(1);
+
+    // mtime 해상도(초 단위 파일시스템) 문제를 피하려고 명시적으로 mtime을 미래로 이동한다.
+    fs.appendFileSync(file, tokenUsageRecordLine('s1', 't2', 'resp-2', 1).join('\n') + '\n');
+    const future = new Date(Date.now() + 5000);
+    fs.utimesSync(file, future, future);
+
+    const second = await src.loadAllSessionRecords();
+    expect(second.length).toBe(2);
+    const firstIds = first.map(r => r.messageId);
+    const secondIds = second.map(r => r.messageId);
+    expect(secondIds).toEqual(expect.arrayContaining(firstIds));
+  });
+
+  it('캐시된 mtime 이후 파일이 축소(rotate/truncate)되면 안전하게 전체 재파싱으로 폴백한다', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-a.jsonl');
+    const twoRecords = [...tokenUsageRecordLine('s1', 't1', 'resp-1', 0), ...tokenUsageRecordLine('s1', 't2', 'resp-2', 1)];
+    fs.writeFileSync(file, twoRecords.join('\n') + '\n');
+
+    const src = new CodexSource(tmpHome);
+    const first = await src.loadAllSessionRecords();
+    expect(first.length).toBe(2);
+
+    // 파일이 교체되어 더 짧아짐(오프셋 > 새 크기) — 증분 불가, 전체 재파싱 폴백해야 한다.
+    fs.writeFileSync(file, tokenUsageRecordLine('s1', 't3', 'resp-3', 2).join('\n') + '\n');
+    const future = new Date(Date.now() + 5000);
+    fs.utimesSync(file, future, future);
+
+    const third = await src.loadAllSessionRecords();
+    expect(third.length).toBe(1);
+  });
+
+  it('청크 경계에 개행 없는 미완결 라인이 걸려도(파일 쓰는 도중 읽힘) 그 레코드를 잃지 않는다(보안검토 지적)', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-a.jsonl');
+    // 완결된 1번째 레코드(개행으로 끝남) + 2번째 레코드의 session_meta 줄이 개행 없이 잘린 채로 끝남
+    // (Codex CLI가 write() 도중인 상태를 흉내).
+    const rec1 = tokenUsageRecordLine('s1', 't1', 'resp-1', 0);
+    const rec2 = tokenUsageRecordLine('s1', 't2', 'resp-2', 1);
+    const truncatedRec2FirstLine = rec2[0].slice(0, Math.floor(rec2[0].length / 2));
+    fs.writeFileSync(file, rec1.join('\n') + '\n' + truncatedRec2FirstLine);
+
+    const src = new CodexSource(tmpHome);
+    const first = await src.loadAllSessionRecords();
+    // 미완결 라인은 이번엔 파싱하지 않는다 — invalid JSON으로 조용히 버려지는 대신, 아예 시도하지
+    // 않고 다음 라운드로 미룬다.
+    expect(first.length).toBe(1);
+
+    // 같은 줄의 나머지 + 남은 2개 줄이 이어서 append됨(쓰기 완료) — 오프셋이 미완결 라인 "이전"
+    // 지점에 머물러 있어야 이 append로 그 줄 전체가 다시 읽힌다.
+    const restOfFirstLine = rec2[0].slice(Math.floor(rec2[0].length / 2));
+    fs.appendFileSync(file, restOfFirstLine + '\n' + rec2.slice(1).join('\n') + '\n');
+    const future = new Date(Date.now() + 5000);
+    fs.utimesSync(file, future, future);
+
+    const second = await src.loadAllSessionRecords();
+    expect(second.length).toBe(2);
+    expect(second.map(r => r.messageId)).toEqual(expect.arrayContaining(first.map(r => r.messageId)));
+  });
+});
+
+describe('CodexSource — 파일읽기 실패 로깅(ST3, ANALYSIS 🟡#2)', () => {
+  let tmpHome: string;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (tmpHome) fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  it('rollout 파일 읽기 실패 시 console.error로 무성하지 않게 남긴다(loadAllSessionRecords)', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '20');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-broken.jsonl');
+    fs.writeFileSync(file, tokenUsageRecordLine('s1', 't1', 'resp-1', 0).join('\n') + '\n');
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const readSpy = vi.spyOn(fs.promises, 'readFile').mockRejectedValueOnce(new Error('EACCES: permission denied'));
+
+    const src = new CodexSource(tmpHome);
+    const records = await src.loadAllSessionRecords();
+
+    expect(records).toEqual([]);
+    expect(errorSpy).toHaveBeenCalled();
+    readSpy.mockRestore();
   });
 });

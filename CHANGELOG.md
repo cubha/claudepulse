@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-20
+
+### Fixed
+- **A Codex session record could be silently and permanently lost if a refresh read the log file
+  mid-write.** The new incremental reader could land between a completed line and the newline that
+  terminates it — Codex CLI writes are not guaranteed atomic from a concurrent reader's point of
+  view — and would then advance its cached read-offset past that incomplete line anyway, so the
+  next refresh never went back for it even once the write finished. The reader now only advances
+  its offset up to the last complete line in each chunk; anything after the final newline is left
+  for the next refresh to pick up whole.
+- **Codex usage could be overcounted when a subagent replayed a parent session's response.** Duplicate
+  detection ran per file, so the same `response_id` appearing in both a parent rollout and a
+  `thread_spawn` subagent's own file was counted twice — the same class of billing bug the extension
+  already guards against for Claude Code. `loadAllSessionRecords()` now does a second, file-spanning
+  dedup pass keyed on `messageId` after the per-file parse, so a replayed response is counted once
+  regardless of which file(s) it appears in.
+- **Every refresh (every 15s while a session is active) re-read and re-parsed the full Codex log
+  history from disk**, with no cache of what had already been parsed. Codex sources now track an
+  mtime+offset per file, the same incremental-read pattern `JsonlParser` already uses for Claude —
+  unchanged files are skipped entirely, and a file that only grew re-parses just the new bytes. A
+  truncated or replaced file (mtime moved but offset now exceeds the file size) safely falls back to
+  a full re-parse instead of reading past the end.
+- **A file read failure was silently swallowed** (`catch { continue }`) instead of logged, making a
+  missing Codex session invisible rather than diagnosable. Both the per-file parse and the rate-limit
+  scan now log the failure via `console.error` and keep the previously-cached records for that file.
+- **`codex-mini-latest` displayed as "Latest"** instead of the model name — the short-name logic took
+  the last `-`-separated segment verbatim, and for this model that segment is the generic `latest`
+  suffix. Generic trailing segments are now skipped before taking the last meaningful one.
+- **Model-family matching for Codex used first-match instead of longest-prefix**, unlike the pricing
+  table's own matching rule (`codexPricing.ts`), so a shorter, less specific family could shadow a
+  longer, more specific one depending on object key order. Both now share the same longest-prefix
+  strategy (`matchLongestFamily`).
+- The sidebar's plan badge showed different casing depending on where it rendered (uppercase in the
+  header, Title Case in the footer, for the same value). Both now follow the same per-provider rule.
+
+### Added
+- Per-bucket burn-rate row in the Codex sidebar, reusing the existing provider-agnostic `buildBurnRow`
+  — the same "time to next reset at current pace" line Claude's 5h/7d gauges already show, now under
+  each of Codex's runtime-generated buckets too. History is keyed by the bucket's `windowMinutes`
+  (not array position), so a plan or bucket-shape change mid-session can't make one bucket's row
+  render another bucket's past samples.
+
+### Internal
+- `.provider-codex` palette override table (dark/light, sonnet/warn/danger/fable/haiku +
+  `--identity-accent`) is now documented in `DESIGN-TOKENS.md` per the project's token-change
+  procedure — it shipped in v0.2.0 without the matching doc update.
+- Regression coverage added for the Codex model-color branch (`modelKind`/`modelShortName`/
+  `CODEX_MODEL_FAMILY_SLOTS`), which had shipped in v0.2.0 with no dedicated tests.
+- Marketplace screenshot and demo GIF refreshed to the current AgentVitals dashboard (previous
+  assets predated the v0.1.57 rebrand and v0.2.0 visual overhaul).
+
 ## [0.2.0] - 2026-09-20
 
 ### Added

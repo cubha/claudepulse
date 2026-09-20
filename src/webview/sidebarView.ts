@@ -65,6 +65,12 @@ export function initSidebar(): void {
   const MAX_SB_HISTORY = 288;
   const sbFhHistory: PollPoint[] = [];
   const sbSdHistory: PollPoint[] = [];
+  // Codex 버킷별 히스토리(ST10, verify-impl V1 보완) — 버킷 개수가 가변(D9: free=1개/유료=2개)이라
+  // windowMinutes(버킷 정체성)로 키를 잡는다. 배열 인덱스로 키를 잡으면 세션 도중 버킷 구성이
+  // 바뀔 때(예: free↔paid 전환, CLI가 순서를 다르게 반환) 이전 버킷의 이력이 다른 버킷에 잘못
+  // 붙어 틀린 burn rate를 확신 있게 표시하게 된다.
+  // Claude의 sbFhHistory/sbSdHistory와 같은 원리(클라이언트 측 누적, PollPoint[]).
+  const sbCodexHistory = new Map<number, PollPoint[]>();
   let lastError: PollerError | null = null;
   let lastSnapshot: RateLimitSnapshot | null = null;
   let lastUsage: UsageSummary | null = null;
@@ -81,6 +87,18 @@ export function initSidebar(): void {
     sbSdHistory.push({ t, v: snapshot.sevenDay.utilization });
     if (sbFhHistory.length > MAX_SB_HISTORY) sbFhHistory.shift();
     if (sbSdHistory.length > MAX_SB_HISTORY) sbSdHistory.shift();
+  }
+
+  /** Codex 버킷별 히스토리 누적(ST10) — usedPercent(0~100)를 utilization(0~1)로 정규화해 저장한다. */
+  function recordCodexSbHistory(snapshot: CodexRateLimitSnapshot): void {
+    const t = new Date(snapshot.generatedAt);
+    snapshot.buckets.forEach((b) => {
+      const key = b.windowMinutes;
+      const hist = sbCodexHistory.get(key) ?? [];
+      hist.push({ t, v: b.usedPercent / 100 });
+      if (hist.length > MAX_SB_HISTORY) hist.shift();
+      sbCodexHistory.set(key, hist);
+    });
   }
 
   messenger.onNotification(PushRateLimit, (snapshot) => {
@@ -112,6 +130,7 @@ export function initSidebar(): void {
 
   messenger.onNotification(PushCodexRateLimit, (snapshot) => {
     lastCodexSnapshot = snapshot;
+    if (snapshot) recordCodexSbHistory(snapshot);
     renderSidebar(lastSnapshot, lastError);
   });
 
@@ -148,7 +167,7 @@ export function initSidebar(): void {
     .catch(() => undefined);
 
   void messenger.sendRequest(GetCodexRateLimit, HOST_EXTENSION, undefined)
-    .then((snapshot) => { lastCodexSnapshot = snapshot; renderSidebar(lastSnapshot, lastError); })
+    .then((snapshot) => { lastCodexSnapshot = snapshot; if (snapshot) recordCodexSbHistory(snapshot); renderSidebar(lastSnapshot, lastError); })
     .catch(() => undefined);
 
   function renderSidebar(snapshot: RateLimitSnapshot | null, error: PollerError | null): void {
@@ -159,7 +178,7 @@ export function initSidebar(): void {
     document.body.classList.toggle('provider-codex', activeProvider === 'codex');
     const CAL_AREA = '.sb-calendar-wrap .calendar-grid-area';
     captureCalendarScroll(root!.querySelector(CAL_AREA), sidebarCalendarScroll);
-    root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory, lastUsage, activeProvider, providerAvailability, lastCodexSnapshot);
+    root!.innerHTML = buildSidebarHtml(snapshot, error, sbFhHistory, sbSdHistory, lastUsage, activeProvider, providerAvailability, lastCodexSnapshot, sbCodexHistory);
     // 좁은 사이드바에서 오늘 셀이 잘리지 않도록 우측 끝 정렬(대시보드와 동일 계약).
     applyCalendarScroll(root!.querySelector(CAL_AREA), sidebarCalendarScroll);
     // JS로 진행바 width 설정 (innerHTML 내 inline style은 CSP 안전망으로 차단될 수 있음)
@@ -232,12 +251,12 @@ function fmtAge(ms: number): string {
 
 /** 경과 4시간 초과 시 stale 표시(S3) — 배경 폴링 간격(15s)보다 훨씬 커, 진짜 오래된 값만 dim. */
 const CONTEXT_STALE_THRESHOLD_MS = 4 * 60 * 60 * 1000;
-function modelAccentClass(model: string): string {
-  const k = modelKind(model);
+function modelAccentClass(model: string, provider: AgentProvider): string {
+  const k = modelKind(model, provider);
   return k === 'other' ? 'slate' : k;
 }
 
-function buildUsageRowHtml(usage: UsageSummary | null): string {
+function buildUsageRowHtml(usage: UsageSummary | null, provider: AgentProvider): string {
   if (!usage) return '';
   const { today, modelBreakdown, cacheStats, todayToolCounts, activeBranch, branchBreakdown, historicalDays } = usage;
   if (today.totalTokens === 0 && today.costUsd === 0) {
@@ -258,8 +277,8 @@ function buildUsageRowHtml(usage: UsageSummary | null): string {
   const topModel = modelBreakdown[0];
   const modelUnpriced = topModel !== undefined && topModel.pricingSource === 'none';
   const modelChip = topModel
-    ? `<span class="sb-chip sb-chip--model ${modelAccentClass(topModel.model)}"${modelUnpriced ? ` title="${escapeHtml(t('pricing_unknown_note'))}"` : ''}>`
-      + `${escapeHtml(modelShortName(topModel.model))}${modelUnpriced ? ' ⚠' : ''}</span>`
+    ? `<span class="sb-chip sb-chip--model ${modelAccentClass(topModel.model, provider)}"${modelUnpriced ? ` title="${escapeHtml(t('pricing_unknown_note'))}"` : ''}>`
+      + `${escapeHtml(modelShortName(topModel.model, provider))}${modelUnpriced ? ' ⚠' : ''}</span>`
     : '';
 
   const cacheChip = cacheStats.hitRate > 0
@@ -385,7 +404,12 @@ function buildProviderSwitcherHtml(active: AgentProvider, availability: Provider
  */
 function buildFooterHtml(provider: AgentProvider, planLabel: string | null, generatedAt: string | Date | null): string {
   const providerLabel = provider === 'codex' ? t('provider_codex') : t('provider_claude');
-  const plan = planLabel ? escapeHtml(planLabel.charAt(0).toUpperCase() + planLabel.slice(1)) : t('plan_unknown');
+  // ANALYSIS #4 — Codex는 헤더 배지(.toUpperCase(), panelView.ts와 동일 관례)와 footer가 서로
+  // 다른 대소문자로 같은 planType 값을 렌더하던 버그. Claude는 기존 Title Case를 그대로 유지한다
+  // (§8 불변식1 "Claude 경로 행위 변경 금지" — provider 분기만 추가).
+  const plan = planLabel
+    ? escapeHtml(provider === 'codex' ? planLabel.toUpperCase() : planLabel.charAt(0).toUpperCase() + planLabel.slice(1))
+    : t('plan_unknown');
   const time = generatedAt ? fmtTime(new Date(generatedAt)) : '—';
   return `<div class="sb-footer">
     <span class="sb-footer-dot" aria-hidden="true"></span>
@@ -431,10 +455,11 @@ function buildSidebarHtml(
   usage: UsageSummary | null,
   activeProvider: AgentProvider,
   providerAvailability: ProviderAvailability,
-  codexSnapshot: CodexRateLimitSnapshot | null
+  codexSnapshot: CodexRateLimitSnapshot | null,
+  codexBucketHistory: Map<number, PollPoint[]> = new Map()
 ): string {
   if (activeProvider === 'codex') {
-    return buildCodexSidebarHtml(codexSnapshot, providerAvailability, usage, activeProvider);
+    return buildCodexSidebarHtml(codexSnapshot, providerAvailability, usage, activeProvider, codexBucketHistory);
   }
 
   // Claude — not_installed는 기존 PollerError 분기보다 우선한다(§6, classifyAvailability와 동일
@@ -474,7 +499,7 @@ function buildSidebarHtml(
           <div class="sb-header-spacer"></div>
           <button class="sb-icon-btn js-refresh" title="Refresh">↻</button>
         </div>
-        ${buildUsageRowHtml(usage)}
+        ${buildUsageRowHtml(usage, activeProvider)}
         <div class="sb-error-card card">
           <div class="sb-error-icon">${icon}</div>
           <div class="sb-error-msg">${title}</div>
@@ -563,7 +588,7 @@ function buildSidebarHtml(
         <button class="sb-icon-btn js-refresh" aria-label="Refresh" title="Refresh">↻</button>
       </div>
 
-      ${buildUsageRowHtml(usage)}
+      ${buildUsageRowHtml(usage, activeProvider)}
       ${fallbackBanner}
 
       <!-- 5h 세션 섹션 — hero(사이드바에서 유일하게 22px로 격상되는 지표) -->
@@ -710,7 +735,8 @@ function buildCodexSidebarHtml(
   snapshot: CodexRateLimitSnapshot | null,
   providerAvailability: ProviderAvailability,
   usage: UsageSummary | null,
-  activeProvider: AgentProvider
+  activeProvider: AgentProvider,
+  bucketHistory: Map<number, PollPoint[]> = new Map()
 ): string {
   const avail = providerAvailability.codex;
 
@@ -786,6 +812,10 @@ function buildCodexSidebarHtml(
     const color = status === 'danger' ? 'var(--c-danger)' : status === 'allowed_warning' ? 'var(--c-warn)' : 'var(--c-sonnet)';
     const label = b.labelKey ? t(b.labelKey) : `${b.windowMinutes}min`;
     const resetMs = Math.max(0, b.resetsAt * 1000 - Date.now());
+    // ST10 — buildBurnRow는 이미 provider/window에 무관한 순수 함수(reference_codex_integration D13).
+    // 버킷별 windowMinutes를 그대로 windowMs로 넘겨 하드코딩 없이 재사용한다(§8 불변식2).
+    const bucketWindowMs = b.windowMinutes * 60_000;
+    const burnRow = buildBurnRow(bucketHistory.get(b.windowMinutes) ?? [], b.usedPercent / 100, resetMs, bucketWindowMs);
     return `
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:${color};"></span>
@@ -802,13 +832,14 @@ function buildCodexSidebarHtml(
         <div class="rate-meta-row">
           <span class="rate-reset-label">${t('resets_in')} <span class="mono">${fmtReset(resetMs)}</span></span>
         </div>
+        ${burnRow}
       </div>`;
   }).join('');
 
   return `
     <div class="sb-layout">
       ${header}
-      ${buildUsageRowHtml(usage)}
+      ${buildUsageRowHtml(usage, activeProvider)}
       ${bucketCards}
       ${codexContextRow}
       ${codexReasoningRow}
