@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-09-20T07:16:51.887Z",
-  "reason": "verify-impl B-V1/B-V2/B-V6 보완: panelView.ts가 GetCodexRateLimit/PushCodexRateLimit를 이제 구독해 panel-plan-badge를 Codex planType으로 채운다(기존엔 blank 방치, 축B가 지적한 배선 누락). 신규 panel-codex-band-grid/panel-codex-band-note/panel-codex-extra-card는 하네스 추적 selector 밖이라 diff에 안 잡힘 — 실제 렌더는 headless 스크린샷으로 별도 확인(panel-codex-v2.png/plus.png, sidebar-codex-v2.png/plus.png).",
+  "capturedAt": "2026-09-21T02:14:59.691Z",
+  "reason": "v0.2.2 기간별 비용 통합: 일별/장기/월별 3섹션이 단일 panel-cost-period-card + 탭 3개(cost-pane-*)로 합쳐지면서 감시 id가 바뀐다 — panel-daily-card→panel-cost-period-card, panel-longterm-card/panel-monthly-card는 id 소멸(pane으로 대체), cost-pane-daily/longterm/monthly 3건 신규. 차트 canvas 3종(chart-daily/longterm/monthly)과 빈상태 3종은 전부 존치하므로 섹션 소실이 아니다. 비활성 탭의 차트는 의도적으로 전환 시점에 생성되므로(0x0 캔버스 회피) monthly/longterm의 hasText/childElementCount가 초기 로드 시점 기준으로 바뀔 수 있다.",
   "digests": {
     "panel@700px@ko@claude": {
       "bySelector": {
@@ -79,9 +79,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -92,6 +92,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -199,11 +214,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -212,11 +222,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -241,9 +246,9 @@
         }
       },
       "counts": {
-        "totalElements": 705,
+        "totalElements": 710,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "panel@700px@en@claude": {
@@ -323,9 +328,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -336,6 +341,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -443,11 +463,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -456,11 +471,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -485,9 +495,9 @@
         }
       },
       "counts": {
-        "totalElements": 705,
+        "totalElements": 710,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "panel@1600px@ko@claude": {
@@ -567,9 +577,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -580,6 +590,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -687,11 +712,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -700,11 +720,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -729,9 +744,9 @@
         }
       },
       "counts": {
-        "totalElements": 705,
+        "totalElements": 710,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "panel@1600px@en@claude": {
@@ -811,9 +826,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -824,6 +839,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -931,11 +961,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -944,11 +969,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -973,9 +993,9 @@
         }
       },
       "counts": {
-        "totalElements": 705,
+        "totalElements": 710,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "sidebar@700px@ko@claude": {
@@ -1002,9 +1022,9 @@
         }
       },
       "counts": {
-        "totalElements": 219,
+        "totalElements": 221,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     },
     "sidebar@700px@en@claude": {
@@ -1031,9 +1051,9 @@
         }
       },
       "counts": {
-        "totalElements": 219,
+        "totalElements": 221,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     },
     "sidebar@1600px@ko@claude": {
@@ -1060,9 +1080,9 @@
         }
       },
       "counts": {
-        "totalElements": 219,
+        "totalElements": 221,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     },
     "sidebar@1600px@en@claude": {
@@ -1089,9 +1109,9 @@
         }
       },
       "counts": {
-        "totalElements": 219,
+        "totalElements": 221,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     },
     "panel@700px@ko@codex": {
@@ -1171,9 +1191,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -1184,6 +1204,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -1291,11 +1326,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -1304,11 +1334,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -1333,9 +1358,9 @@
         }
       },
       "counts": {
-        "totalElements": 633,
+        "totalElements": 638,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "panel@700px@en@codex": {
@@ -1415,9 +1440,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -1428,6 +1453,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -1535,11 +1575,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -1548,11 +1583,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -1577,9 +1607,9 @@
         }
       },
       "counts": {
-        "totalElements": 633,
+        "totalElements": 638,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "panel@1600px@ko@codex": {
@@ -1659,9 +1689,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -1672,6 +1702,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -1779,11 +1824,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -1792,11 +1832,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -1821,9 +1856,9 @@
         }
       },
       "counts": {
-        "totalElements": 633,
+        "totalElements": 638,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "panel@1600px@en@codex": {
@@ -1903,9 +1938,9 @@
           "childElementCount": 0,
           "hasText": true
         },
-        "panel-daily-card": {
+        "panel-cost-period-card": {
           "tag": "div",
-          "childElementCount": 4,
+          "childElementCount": 5,
           "hasText": true
         },
         "chart-daily": {
@@ -1916,6 +1951,21 @@
         "daily-empty": {
           "tag": "div",
           "childElementCount": 0,
+          "hasText": true
+        },
+        "cost-pane-daily": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-longterm": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "cost-pane-monthly": {
+          "tag": "div",
+          "childElementCount": 2,
           "hasText": true
         },
         "panel-calendar-card": {
@@ -2023,11 +2073,6 @@
           "childElementCount": 1,
           "hasText": true
         },
-        "panel-longterm-card": {
-          "tag": "div",
-          "childElementCount": 4,
-          "hasText": true
-        },
         "chart-longterm": {
           "tag": "canvas",
           "childElementCount": 0,
@@ -2036,11 +2081,6 @@
         "longterm-empty": {
           "tag": "div",
           "childElementCount": 0,
-          "hasText": true
-        },
-        "panel-monthly-card": {
-          "tag": "div",
-          "childElementCount": 3,
           "hasText": true
         },
         "chart-monthly": {
@@ -2065,9 +2105,9 @@
         }
       },
       "counts": {
-        "totalElements": 633,
+        "totalElements": 638,
         "canvases": 7,
-        "heatCells": 376
+        "heatCells": 377
       }
     },
     "sidebar@700px@ko@codex": {
@@ -2078,9 +2118,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 174,
+        "totalElements": 179,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     },
     "sidebar@700px@en@codex": {
@@ -2091,9 +2131,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 174,
+        "totalElements": 179,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     },
     "sidebar@1600px@ko@codex": {
@@ -2104,9 +2144,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 174,
+        "totalElements": 179,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     },
     "sidebar@1600px@en@codex": {
@@ -2117,9 +2157,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 174,
+        "totalElements": 179,
         "canvases": 0,
-        "heatCells": 91
+        "heatCells": 92
       }
     }
   }

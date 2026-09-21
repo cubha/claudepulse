@@ -223,6 +223,13 @@ const dict: Record<string, Record<Lang, string>> = {
   projected:        { ko: '예상',               en: 'Projected',             ja: '予測',                    zh: '预测' },
   long_term_trend:  { ko: '장기 비용 트렌드',     en: 'Long-term Cost Trend',  ja: '長期コストトレンド',       zh: '长期费用趋势' },
   monthly_cost:     { ko: '월별 비용',            en: 'Monthly Cost',          ja: '月別コスト',              zh: '月度费用' },
+  // 기간별 비용 통합 탭(v0.2.2). 위 daily_cost/long_term_trend/monthly_cost 3키는 **삭제하지 않는다** —
+  // daily_cost는 panelView의 브랜치 비용 라벨이 t('daily_cost').split(' ')[0]로 재사용 중이고,
+  // 나머지 둘도 탭 라벨과 의미가 달라(전체 문구 vs 짧은 탭명) 대체 관계가 아니다.
+  cost_by_period:   { ko: '기간별 비용',          en: 'Cost by Period',        ja: '期間別コスト',            zh: '按周期费用' },
+  period_tab_daily: { ko: '일별',                 en: 'Daily',                 ja: '日別',                    zh: '每日' },
+  period_tab_longterm: { ko: '장기',              en: 'Long-term',             ja: '長期',                    zh: '长期' },
+  period_tab_monthly: { ko: '월별',               en: 'Monthly',               ja: '月別',                    zh: '月度' },
   scope_30d:        { ko: '30일',               en: '30d',                   ja: '30日',                    zh: '30天' },
   scope_90d:        { ko: '90일',               en: '90d',                   ja: '90日',                    zh: '90天' },
   scope_180d:       { ko: '180일',              en: '180d',                  ja: '180日',                   zh: '180天' },

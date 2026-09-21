@@ -1522,6 +1522,38 @@ body[data-mode="sidebar"] #root { height: 100%; }
   font-weight: 600;
 }
 
+/* 기간별 비용 탭줄(v0.2.2). 최초 구현은 .scope-btn 계열 선언을 그대로 공유했는데, verify-impl
+   축B가 **버튼 모양이 완전히 같아 1px 경계선만으로는 구분이 약하다**고 지적했다(B-V1) — 장기 탭
+   pane 안에 같은 알약 버튼 줄(.lt-scope-btn)이 한 번 더 들어가므로 "무엇을 볼지(탭)"와 "얼마나
+   볼지(범위)"가 한 덩어리로 읽혔다. 그래서 탭은 알약이 아니라 **밑줄형 탭**으로 분화한다 —
+   탭이라는 관례 자체가 구분을 설명하므로 설명 라벨을 더 붙일 필요가 없다. 신규 색 토큰은 여전히 0. */
+.cost-tab-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.cost-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: var(--fs-label);
+  font-family: var(--ff-mono);
+  padding: 3px 2px var(--sp-2);
+  margin-bottom: -1px;          /* .cost-tab-row의 하단 경계선 위에 밑줄이 겹쳐 앉는다 */
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.cost-tab-btn:hover { color: var(--vscode-foreground); }
+.cost-tab-btn.active {
+  color: var(--vscode-foreground);
+  border-bottom-color: var(--vscode-focusBorder);
+  font-weight: 600;
+}
+
 /* ── 사이드바 오늘 사용량 행 ── */
 .sb-usage-row {
   display: flex;

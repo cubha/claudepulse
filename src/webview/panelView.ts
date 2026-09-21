@@ -46,6 +46,13 @@ let monthlyChart: Chart | null = null;
 let cacheSparkChart: Chart | null = null;
 let chartScopeMin = 120; // 기본 2h
 let longTermScopeDays = 30;
+/**
+ * 기간별 비용 섹션의 활성 탭(v0.2.2). Chart.js는 `display:none` 컨테이너에서 생성되면 캔버스가
+ * 0×0으로 잡혀 이후 resize에 의존하게 된다 — 그래서 아예 **활성 탭의 차트만 생성/갱신**하고,
+ * 숨은 탭은 전환하는 순간(컨테이너가 이미 보이는 시점) 처음 그린다.
+ */
+type CostPeriodTab = 'daily' | 'longterm' | 'monthly';
+let costPeriodTab: CostPeriodTab = 'daily';
 let attrScope: 'all' | '24h' | '7d' = 'all';
 let panelUsage: UsageSummary | null = null;
 let lastPanelSnapshot: RateLimitSnapshot | null = null;
@@ -105,6 +112,13 @@ function wirePanelButtons(messenger: InstanceType<typeof Messenger>): void {
       updateLongTermSection();
     });
   });
+  document.querySelectorAll<HTMLButtonElement>('.cost-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      costPeriodTab = (btn.dataset.period as CostPeriodTab) || 'daily';
+      applyCostPeriodTab();
+      updateCostPeriodSection();
+    });
+  });
   document.querySelectorAll<HTMLButtonElement>('.attr-scope-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       attrScope = (btn.dataset.scope as 'all' | '24h' | '7d') || 'all';
@@ -147,6 +161,7 @@ function rebuildPanelDom(messenger: InstanceType<typeof Messenger>): void {
   chartScopeMin = 120;
   longTermScopeDays = 30;
   attrScope = 'all';
+  costPeriodTab = 'daily';
   wirePanelButtons(messenger);
 }
 
@@ -430,17 +445,51 @@ function buildPanelShell(): string {
         <div class="pace-caption" id="pace-caption"></div>
       </div>
 
-      <!-- 7일 사용량 바 차트 -->
-      <div class="card panel-trend-card" id="panel-daily-card">
-        <div class="panel-chart-header">${t('daily_cost')}<span class="panel-chart-readout" id="daily-readout"></span></div>
-        <!-- 게이지 밖 ③ — 오늘 · 평소(30일 중앙값) · 편차를 나란히(C3-CostAnomaly 보드). 비교 기준을
-             안 보여주면 "+N%"가 무엇 대비인지 화면에서 알 수 없다. -->
-        <div class="cost-anomaly-row" id="daily-anomaly-row"></div>
-        <div class="panel-trend-wrap">
-          <canvas id="chart-daily" style="display:none"></canvas>
-          <div class="panel-loading" id="daily-empty">${t('collecting_data')}</div>
+      <!-- 기간별 비용 (v0.2.2) — 일별(7일)·장기(30/90/180일)·월별 3개 섹션을 탭 1개로 통합.
+           같은 지표(비용)를 기간 단위만 달리해 화면 세 곳에 흩어 놓았던 것이라, 비교하려면
+           스크롤을 오가야 했다. 카드 슬롯은 기존 일별 카드의 것을 그대로 승계한다(카드 6개 불변).
+           각 pane의 canvas/빈상태/note/readout id는 **전부 그대로 유지** — update* 함수들이
+           id로만 DOM을 찾으므로 렌더 로직은 무변경이다. -->
+      <div class="card panel-trend-card" id="panel-cost-period-card">
+        <div class="panel-chart-header">${t('cost_by_period')}<span class="panel-chart-readout cost-period-readout" id="daily-readout"></span><span class="panel-chart-readout cost-period-readout" id="longterm-readout" style="display:none"></span><span class="panel-chart-readout cost-period-readout" id="monthly-readout" style="display:none"></span></div>
+        <div class="cost-tab-row" role="tablist" aria-label="${t('cost_by_period')}">
+          <button class="cost-tab-btn active" data-period="daily" role="tab" aria-selected="true" aria-controls="cost-pane-daily">${t('period_tab_daily')}</button>
+          <button class="cost-tab-btn" data-period="longterm" role="tab" aria-selected="false" aria-controls="cost-pane-longterm">${t('period_tab_longterm')}</button>
+          <button class="cost-tab-btn" data-period="monthly" role="tab" aria-selected="false" aria-controls="cost-pane-monthly">${t('period_tab_monthly')}</button>
         </div>
-        <div class="cost-median-legend" id="daily-median-legend"></div>
+
+        <div class="cost-period-pane" id="cost-pane-daily" role="tabpanel">
+          <!-- 게이지 밖 ③ — 오늘 · 평소(30일 중앙값) · 편차를 나란히(C3-CostAnomaly 보드). 비교 기준을
+               안 보여주면 "+N%"가 무엇 대비인지 화면에서 알 수 없다. -->
+          <div class="cost-anomaly-row" id="daily-anomaly-row"></div>
+          <div class="panel-trend-wrap">
+            <canvas id="chart-daily" style="display:none"></canvas>
+            <div class="panel-loading" id="daily-empty">${t('collecting_data')}</div>
+          </div>
+          <div class="cost-median-legend" id="daily-median-legend"></div>
+        </div>
+
+        <div class="cost-period-pane" id="cost-pane-longterm" role="tabpanel" style="display:none">
+          <div class="chart-scope-row">
+            <span class="chart-scope-label">${t('scope_label')}:</span>
+            <button class="lt-scope-btn active" data-scope="30">${t('scope_30d')}</button>
+            <button class="lt-scope-btn" data-scope="90">${t('scope_90d')}</button>
+            <button class="lt-scope-btn" data-scope="180">${t('scope_180d')}</button>
+          </div>
+          <div class="panel-trend-wrap">
+            <canvas id="chart-longterm" style="display:none"></canvas>
+            <div class="panel-loading" id="longterm-empty">${t('collecting_data')}</div>
+          </div>
+          <div id="longterm-cost-note"></div>
+        </div>
+
+        <div class="cost-period-pane" id="cost-pane-monthly" role="tabpanel" style="display:none">
+          <div class="panel-trend-wrap">
+            <canvas id="chart-monthly" style="display:none"></canvas>
+            <div class="panel-loading" id="monthly-empty">${t('collecting_data')}</div>
+          </div>
+          <div id="monthly-cost-note"></div>
+        </div>
       </div>
 
       <!-- Usage Calendar 히트맵 (v0.1.43) — 고정 1년(53주) 뷰, 토글 없음(GitHub 관례) -->
@@ -526,31 +575,6 @@ function buildPanelShell(): string {
         <div id="panel-codex-extra-list"></div>
       </div>
 
-      <!-- 장기 비용 트렌드 -->
-      <div class="panel-trend-card panel-flush" id="panel-longterm-card">
-        <div class="panel-chart-header">${t('long_term_trend')}<span class="panel-chart-readout" id="longterm-readout"></span></div>
-        <div class="chart-scope-row">
-          <span class="chart-scope-label">${t('scope_label')}:</span>
-          <button class="lt-scope-btn active" data-scope="30">${t('scope_30d')}</button>
-          <button class="lt-scope-btn" data-scope="90">${t('scope_90d')}</button>
-          <button class="lt-scope-btn" data-scope="180">${t('scope_180d')}</button>
-        </div>
-        <div class="panel-trend-wrap">
-          <canvas id="chart-longterm" style="display:none"></canvas>
-          <div class="panel-loading" id="longterm-empty">${t('collecting_data')}</div>
-        </div>
-        <div id="longterm-cost-note"></div>
-      </div>
-
-      <!-- 월별 비용 -->
-      <div class="panel-trend-card panel-flush" id="panel-monthly-card">
-        <div class="panel-chart-header">${t('monthly_cost')}<span class="panel-chart-readout" id="monthly-readout"></span></div>
-        <div class="panel-trend-wrap">
-          <canvas id="chart-monthly" style="display:none"></canvas>
-          <div class="panel-loading" id="monthly-empty">${t('collecting_data')}</div>
-        </div>
-        <div id="monthly-cost-note"></div>
-      </div>
     </div>`;
 }
 
@@ -626,8 +650,40 @@ function medianLinePlugin() {
   };
 }
 
+/**
+ * 기간별 비용 탭 전환의 화면 반영(v0.2.2) — 버튼 active/aria, pane 표시, 헤더 readout 표시를
+ * **함께** 옮긴다. readout 3개는 각 update* 함수가 자기 id에만 쓰므로(daily-readout 등) 렌더
+ * 로직을 건드리지 않고 표시만 전환하면 된다.
+ */
+function applyCostPeriodTab(): void {
+  document.querySelectorAll<HTMLButtonElement>('.cost-tab-btn').forEach(b => {
+    const on = b.dataset.period === costPeriodTab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+  });
+  const panes: Record<CostPeriodTab, string> = {
+    daily: 'cost-pane-daily', longterm: 'cost-pane-longterm', monthly: 'cost-pane-monthly',
+  };
+  const readouts: Record<CostPeriodTab, string> = {
+    daily: 'daily-readout', longterm: 'longterm-readout', monthly: 'monthly-readout',
+  };
+  (Object.keys(panes) as CostPeriodTab[]).forEach(tab => {
+    const paneEl = document.getElementById(panes[tab]);
+    if (paneEl) paneEl.style.display = tab === costPeriodTab ? '' : 'none';
+    const readoutEl = document.getElementById(readouts[tab]);
+    if (readoutEl) readoutEl.style.display = tab === costPeriodTab ? '' : 'none';
+  });
+}
+
+/** 활성 탭의 차트만 그린다(숨은 pane에서 Chart 생성 금지 — costPeriodTab 주석 참조). */
+function updateCostPeriodSection(): void {
+  if (costPeriodTab === 'longterm') updateLongTermSection();
+  else if (costPeriodTab === 'monthly') updateMonthlyChart();
+  else updateDailyChart();
+}
+
 function updateUsageSection(): void {
-  updateDailyChart();
+  updateCostPeriodSection();
   updateUsageCalendar();
   updateModelBreakdown();
   updateCacheSection();
@@ -637,8 +693,6 @@ function updateUsageSection(): void {
   updateBranchSection();
   updateSkillSection();
   updateRetroSection();
-  updateLongTermSection();
-  updateMonthlyChart();
   updateCodexBandSection();
 }
 
