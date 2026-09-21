@@ -14,6 +14,7 @@ import { resolveContextGaugeState } from './contextGaugeState';
 import type { CalendarDay } from './calendarView';
 import type { PollPoint } from './burnRate';
 import { filterQualifyingCostDays, calcCostAnomalyPct } from './metricCalc';
+import { appendCodexBucketHistory } from './codexBucketHistory';
 import { vsApi } from './webviewApi';
 import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
@@ -24,7 +25,14 @@ import {
   SIDEBAR_CALENDAR_WINDOW_DAYS,
 } from './webviewShared';
 
-const root = document.getElementById('root');
+/**
+ * 모듈 최상단에서 `document`를 만지면 이 파일은 비-DOM 환경에서 **import 자체가 불가능**해진다
+ * (vitest `environment: 'node'` → `ReferenceError: document is not defined`). v0.2.1의 ST10
+ * 회귀테스트가 정확히 그 이유로 이월됐다(PLAN-v0.2.1 §7) — 코드가 옳은지와 무관하게 잠글 방법이
+ * 없었다. 렌더 함수는 전부 initSidebar() 이후에만 도는 webview 런타임 코드라, 여기서 늦게 잡아도
+ * 동작은 동일하고 테스트 가능성만 얻는다.
+ */
+let root: HTMLElement | null = null;
 
 /**
  * 사이드바 미니 Usage Calendar의 가로 스크롤 계약 상태(v0.1.55).
@@ -35,6 +43,7 @@ const root = document.getElementById('root');
 const sidebarCalendarScroll = createCalendarScrollState();
 
 export function initSidebar(): void {
+  root = document.getElementById('root');
   if (!root) return;
 
   // acquireVsCodeApi가 없으면 non-webview 환경 — 명확한 에러 표시
@@ -89,16 +98,9 @@ export function initSidebar(): void {
     if (sbSdHistory.length > MAX_SB_HISTORY) sbSdHistory.shift();
   }
 
-  /** Codex 버킷별 히스토리 누적(ST10) — usedPercent(0~100)를 utilization(0~1)로 정규화해 저장한다. */
+  /** Codex 버킷별 히스토리 누적(ST10) — 키잉 규칙과 그 근거는 codexBucketHistory.ts에 있다. */
   function recordCodexSbHistory(snapshot: CodexRateLimitSnapshot): void {
-    const t = new Date(snapshot.generatedAt);
-    snapshot.buckets.forEach((b) => {
-      const key = b.windowMinutes;
-      const hist = sbCodexHistory.get(key) ?? [];
-      hist.push({ t, v: b.usedPercent / 100 });
-      if (hist.length > MAX_SB_HISTORY) hist.shift();
-      sbCodexHistory.set(key, hist);
-    });
+    appendCodexBucketHistory(sbCodexHistory, snapshot.buckets, new Date(snapshot.generatedAt), MAX_SB_HISTORY);
   }
 
   messenger.onNotification(PushRateLimit, (snapshot) => {
@@ -731,7 +733,7 @@ function buildSidebarCalendarHtml(usage: UsageSummary | null): string {
  * §8 불변식6 — 추정으로 빈 섹션을 채우지 않는다. 사이드바는 원래 그 섹션들을 안 그리므로 이는
  * "숨김"이 아니라 panelView.ts ST6 몫이라는 점을 남겨둔다).
  */
-function buildCodexSidebarHtml(
+export function buildCodexSidebarHtml(
   snapshot: CodexRateLimitSnapshot | null,
   providerAvailability: ProviderAvailability,
   usage: UsageSummary | null,

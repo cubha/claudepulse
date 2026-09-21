@@ -169,6 +169,8 @@ export async function listRolloutFiles(sessionsDir: string): Promise<string[]> {
 interface RolloutFileCache {
   mtime: number;
   offset: number;
+  /** 파일 선두 지문 — 같은 크기로 교체된 파일을 오프셋 재사용 전에 가려낸다(readHeadFingerprint). */
+  head: string;
   /** 이 파일에서 지금까지 누적 파싱된 SessionRecord — 새로 읽은 증분만 파싱해 이어붙인다. */
   records: SessionRecord[];
   /** 증분 파싱이 이어지려면 session_meta/turn_context에서 나온 문맥을 유지해야 한다(다음 청크의
@@ -186,7 +188,53 @@ interface RolloutFileCache {
 interface RawLineCache {
   mtime: number;
   offset: number;
+  head: string;
   lines: string[];
+}
+
+const HEAD_FINGERPRINT_BYTES = 256;
+
+/**
+ * 파일 선두 바이트의 지문(hex) — 같은 크기로 교체(rotate)된 파일을 오프셋 재사용 전에 가려낸다.
+ *
+ * `cached.offset <= stat.size`만으로는 "뒤에 append됐다"와 "같은 크기의 **다른** 파일로 바뀌었다"가
+ * 구분되지 않는다. 후자에서 오프셋은 새 파일 한가운데를 가리키고, 그 앞의 레코드는 영영 읽히지
+ * 않는다(무성 billing 손실 — v0.2.1 /ship 보안검토 #2로 지적됐으나 그때는 as-is로 남겼다).
+ *
+ * 메타데이터(`ino`·`birthtimeMs`)가 아니라 **내용**을 보는 이유: 그 값들의 의미가 WSL/DrvFs와
+ * 네이티브 Windows 사이에서 달라, 비교가 틀리면 폴링마다 전체 재파싱이 도는 쪽으로 조용히
+ * 무너진다 — 원래 버그보다 나쁜 결과다.
+ *
+ * hex로 담고 **상호 접두 비교**를 쓴다: rollout은 append-only라 파일이 256바이트보다 짧은 동안에만
+ * 지문 길이가 자라는데, hex는 바이트 접두가 곧 문자열 접두라 그 구간에서 거짓 불일치가 안 난다
+ * (base64는 패딩 때문에 이 성질이 없다).
+ */
+async function readHeadFingerprint(file: string): Promise<string> {
+  const handle = await fs.promises.open(file, 'r');
+  try {
+    const buf = Buffer.alloc(HEAD_FINGERPRINT_BYTES);
+    const { bytesRead } = await handle.read(buf, 0, HEAD_FINGERPRINT_BYTES, 0);
+    return buf.subarray(0, bytesRead).toString('hex');
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * 캐시된 지문으로 오프셋을 재사용해도 되는가 — **완전 길이(256바이트)일 때 정확히 일치**할 때만.
+ *
+ * 처음엔 상호 접두 비교(짧은 쪽이 긴 쪽의 접두면 같은 파일)로 썼는데, /ship 보안검토가 그 관용이
+ * 자기가 고치려던 버그의 좁은 변종을 되살린다고 지적했다: 파일이 256바이트에 못 미치던 시점에
+ * 잡힌 짧은 지문은 rollout의 **공통 선두**(`{"timestamp":"2026-…`)만 담을 수 있어, 그 사이 다른
+ * 세션 파일로 교체돼도 접두가 우연히 일치한다 → `canIncrement`가 서서 앞쪽 레코드가 영영 안 읽힌다.
+ *
+ * 그래서 짧은 지문은 관용하지 않고 전체 재파싱하게 둔다. **비용은 사실상 0이다** — 지문이 짧다는
+ * 것 자체가 그 시점 파일이 256바이트 미만이라는 뜻이고, 파일이 그 크기를 넘는 순간 지문은
+ * 완전 길이로 고정돼 다시는 이 경로를 타지 않는다(rollout은 append-only).
+ */
+function canReuseHead(cachedHead: string, head: string): boolean {
+  if (cachedHead.length !== HEAD_FINGERPRINT_BYTES * 2) return false;
+  return cachedHead === head;
 }
 
 /**
@@ -235,8 +283,15 @@ export class CodexSource implements AgentSource {
     }
 
     // 파일이 축소(교체/rotate)됐으면 오프셋을 신뢰할 수 없다 — 전체 재파싱으로 안전하게 폴백한다
-    // (JsonlParser.ts와 동일 원칙).
-    const canIncrement = cached !== undefined && cached.offset <= stat.size;
+    // (JsonlParser.ts와 동일 원칙). 크기가 줄지 **않은** 교체도 있으므로 선두 지문까지 함께 본다
+    // (readHeadFingerprint 주석 참조).
+    let head = '';
+    try {
+      head = await readHeadFingerprint(file);
+    } catch {
+      // 지문을 못 읽으면 증분을 포기하고 전체 재파싱한다(아래 readFileChunk가 같은 실패를 로깅한다).
+    }
+    const canIncrement = cached !== undefined && cached.offset <= stat.size && canReuseHead(cached.head, head);
     const startOffset = canIncrement ? cached.offset : 0;
 
     let buf: Buffer;
@@ -264,6 +319,7 @@ export class CodexSource implements AgentSource {
     this.fileCache.set(file, {
       mtime: stat.mtimeMs,
       offset: startOffset + consumedBytes,
+      head,
       records,
       ...nextState,
     });
@@ -290,7 +346,11 @@ export class CodexSource implements AgentSource {
     const cached = this.rawLineCache.get(file);
     if (cached && cached.mtime === stat.mtimeMs) return cached.lines;
 
-    const canIncrement = cached !== undefined && cached.offset <= stat.size;
+    let head = '';
+    try {
+      head = await readHeadFingerprint(file);
+    } catch { /* parseFileIncremental과 동일 — 지문 실패 시 증분 포기 */ }
+    const canIncrement = cached !== undefined && cached.offset <= stat.size && canReuseHead(cached.head, head);
     const startOffset = canIncrement ? cached.offset : 0;
 
     let buf: Buffer;
@@ -304,7 +364,7 @@ export class CodexSource implements AgentSource {
     // parseFileIncremental과 동일한 이유로 미완결 마지막 라인은 버리고 offset도 그 앞까지만 전진시킨다.
     const { lines: newLines, consumedBytes } = splitCompleteLines(buf);
     const lines = canIncrement ? [...cached!.lines, ...newLines] : newLines;
-    this.rawLineCache.set(file, { mtime: stat.mtimeMs, offset: startOffset + consumedBytes, lines });
+    this.rawLineCache.set(file, { mtime: stat.mtimeMs, offset: startOffset + consumedBytes, head, lines });
     return lines;
   }
 

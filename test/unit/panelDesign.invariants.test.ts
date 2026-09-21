@@ -18,9 +18,12 @@ describe('panelView.ts 카드 축소(M2) 회귀 잠금', () => {
     expect(matches.length).toBe(6);
   });
 
-  it('묶음이 필요한 6곳(일별·캘린더·모델·캐시·도구·귀속)만 카드를 유지한다', () => {
+  it('묶음이 필요한 6곳(기간별비용·캘린더·모델·캐시·도구·귀속)만 카드를 유지한다', () => {
+    // v0.2.2: 'panel-daily-card' → 'panel-cost-period-card'. 일별/장기/월별 3섹션을 탭 1개로
+    // 통합하면서 통합 카드가 **일별 카드의 슬롯을 그대로 승계**했다 — 그래서 위 개수 6은 불변이다
+    // (카드를 늘리거나 줄인 변경이 아니라 셋을 하나로 접은 변경이라는 뜻).
     const survivorIds = [
-      'panel-daily-card', 'panel-calendar-card', 'panel-model-card',
+      'panel-cost-period-card', 'panel-calendar-card', 'panel-model-card',
       'panel-cache-card', 'panel-tool-card', 'panel-skill-card',
     ];
     for (const id of survivorIds) {
@@ -29,10 +32,13 @@ describe('panelView.ts 카드 축소(M2) 회귀 잠금', () => {
   });
 
   it('지표 밴드·차트 3·목록 4는 카드 클래스가 없다(구분선으로 대체)', () => {
+    // v0.2.2: 'panel-longterm-card'/'panel-monthly-card'는 통합으로 **id 자체가 사라졌다**.
+    // 아래 루프가 `idx > -1`을 단언하므로 남겨 두면 "카드 클래스가 붙었다"가 아니라 "id가 없다"로
+    // 실패한다 — 약화가 아니라 사라진 대상을 목록에서 뺀 것이다. 두 섹션이 사라지지 않고 탭 안으로
+    // 들어갔다는 사실은 바로 아래 '통합' describe가 canvas 3개 존치로 대신 잠근다.
     const strippedIds = [
       'panel-fh-card', 'panel-sd-card', 'panel-files-card',
       'panel-session-card', 'panel-branch-card', 'panel-retro-card',
-      'panel-longterm-card', 'panel-monthly-card',
     ];
     for (const id of strippedIds) {
       const re = new RegExp(`id="${id}"`);
@@ -41,6 +47,40 @@ describe('panelView.ts 카드 축소(M2) 회귀 잠금', () => {
       const lineStart = panelSrc.lastIndexOf('\n', idx);
       const line = panelSrc.slice(lineStart, idx);
       expect(line).not.toMatch(/class="card /);
+    }
+  });
+});
+
+// v0.2.2 기간별 비용 통합 — "셋을 하나로 접었다"를 잠근다. 위 카드 수 6과 짝이 되는 단언으로,
+// 카드가 줄지 않았다는 사실만으로는 차트가 조용히 사라진 경우를 구분할 수 없기 때문이다.
+describe('panelView.ts 기간별 비용 탭 통합(v0.2.2) 회귀 잠금', () => {
+  it('탭 버튼과 pane이 각각 정확히 3개다(일별·장기·월별)', () => {
+    const tabs = panelSrc.match(/class="cost-tab-btn[^"]*"/g) ?? [];
+    expect(tabs.length).toBe(3);
+    const panes = panelSrc.match(/class="cost-period-pane"/g) ?? [];
+    expect(panes.length).toBe(3);
+    for (const period of ['daily', 'longterm', 'monthly']) {
+      expect(panelSrc).toMatch(new RegExp(`data-period="${period}"`));
+      expect(panelSrc).toMatch(new RegExp(`id="cost-pane-${period}"`));
+    }
+  });
+
+  it('세 차트 canvas와 빈상태·readout이 전부 살아 있다(통합≠삭제)', () => {
+    for (const id of ['chart-daily', 'chart-longterm', 'chart-monthly',
+                      'daily-empty', 'longterm-empty', 'monthly-empty',
+                      'daily-readout', 'longterm-readout', 'monthly-readout']) {
+      expect(panelSrc).toMatch(new RegExp(`id="${id}"`));
+    }
+  });
+
+  it('세 pane이 통합 카드 안에만 있다(옛 독립 카드 id는 소멸)', () => {
+    expect(panelSrc).not.toMatch(/id="panel-longterm-card"/);
+    expect(panelSrc).not.toMatch(/id="panel-monthly-card"/);
+    expect(panelSrc).not.toMatch(/id="panel-daily-card"/);
+    const cardIdx = panelSrc.indexOf('id="panel-cost-period-card"');
+    expect(cardIdx).toBeGreaterThan(-1);
+    for (const period of ['daily', 'longterm', 'monthly']) {
+      expect(panelSrc.indexOf(`id="cost-pane-${period}"`)).toBeGreaterThan(cardIdx);
     }
   });
 });

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-09-21
+
+### Changed
+- **Daily, long-term and monthly cost are now one "Cost by Period" section with tabs**, instead of
+  three separate sections scattered down the dashboard. Comparing the same figure across time
+  windows used to mean scrolling past unrelated cards to reach the next one. The long-term tab keeps
+  its own 30/90/180-day range toggle, and that toggle still filters the chart exactly as before.
+  Nothing was dropped — all three charts, their empty states and their end-of-line readouts are
+  unchanged; only their arrangement changed. A chart is now drawn when its tab is opened rather than
+  on load, so it is never built into a hidden, zero-sized container.
+
+### Fixed
+- **A Codex log file that was replaced by a different file of exactly the same size was not detected
+  as replaced.** The incremental reader decided it could reuse its cached read-offset whenever the
+  offset still fell inside the file, which cannot distinguish "more was appended" from "this is a
+  different file now" — and in the latter case every record before the offset would never be read.
+  The reader now also fingerprints the first bytes of the file and re-reads from the start when they
+  change.
+
+### Internal
+- The sidebar module no longer touches `document` at import time, which had made the whole file —
+  including its pure HTML builders — impossible to import under the unit-test runner. The per-bucket
+  history accumulator is now its own pure module with regression tests covering bucket reordering and
+  plan changes; this closes the test that v0.2.1 had to defer.
+- New build check exercises the cost tabs across two widths, two locales, all three tabs, a language
+  switch (which rebuilds the panel) and the long-term tab's own range toggle — asserting in each case
+  that the chart that should be on screen actually rendered, not merely that the right button looks
+  selected.
+- `scripts/capture-media.mjs` re-shoots the marketplace screenshot and demo GIF from the real build
+  in one command, so release images can no longer quietly go stale.
+
 ## [0.2.1] - 2026-09-20
 
 ### Fixed

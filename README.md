@@ -18,13 +18,22 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.2.1
+## What's New in v0.2.2
+
+- **Daily, long-term and monthly cost are one section now.** They were three separate blocks spread down the dashboard; comparing the same number across time windows meant scrolling past everything in between. They are now a single **Cost by Period** card with tabs — Daily / Long-term / Monthly. The long-term tab keeps its own 30/90/180-day range toggle, working exactly as before. No chart was removed.
+- **Fixed: a Codex log file replaced by a different file of the same size wasn't noticed.** The reader would carry on from where it left off and never read anything before that point. It now checks the start of the file and re-reads from the beginning when it has changed.
+- Internal: the sidebar's per-bucket history is now covered by tests that were impossible to write before, and the marketplace screenshot and demo GIF are re-shot from the real build by a single command.
+
+<details><summary>v0.2.1</summary>
+
 
 - **A Codex usage-count bug fixed.** If a subagent replayed a parent session's response, Codex's usage total could count that response twice — the same class of billing bug this extension already guards against for Claude Code. Duplicate responses are now recognized across files, not just within one.
 - **Codex now reads faster** — and more safely. Every refresh used to re-read and re-parse the full Codex session history from disk; it now picks up only what's new since the last refresh, the same incremental approach Claude Code sessions already used. A record could have been silently lost if a refresh landed mid-write; the reader now only advances past complete lines.
 - **Fixed: `codex-mini-latest` showed up as "Latest"** instead of the model name.
 - **Fixed: the sidebar's per-bucket burn-rate row could show the wrong bucket's history** after a Free→paid plan change or similar bucket-shape change. Each bucket's rate now tracks only its own history.
 - Each Codex rate-limit bucket in the sidebar now shows its own burn-rate line, matching Claude's 5h/7d gauges.
+
+</details>
 
 <details><summary>v0.2.0</summary>
 

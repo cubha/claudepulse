@@ -425,3 +425,84 @@ describe('CodexSource — 파일읽기 실패 로깅(ST3, ANALYSIS 🟡#2)', () 
     readSpy.mockRestore();
   });
 });
+
+describe('CodexSource — 동일 크기 rotate 감지(v0.2.1 보안검토 #2 이월분)', () => {
+  let tmpHome: string;
+
+  afterEach(() => {
+    if (tmpHome) fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  it('파일이 같은 바이트 크기의 다른 세션으로 교체되면 오프셋을 재사용하지 않고 전체를 다시 읽는다', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '21');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-rotate.jsonl');
+
+    // 1차: 세션 A. 2차: 같은 경로가 **동일 크기**의 세션 B로 교체된다(세션/응답 id만 다름).
+    const a = tokenUsageRecordLine('sessAAAA', 'turnAAAA', 'respAAAA', 0).join('\n') + '\n';
+    const b = tokenUsageRecordLine('sessBBBB', 'turnBBBB', 'respBBBB', 0).join('\n') + '\n';
+    expect(Buffer.byteLength(b)).toBe(Buffer.byteLength(a));   // 전제: 크기가 같아야 이 버그가 성립한다
+
+    const src = new CodexSource(tmpHome);
+    fs.writeFileSync(file, a);
+    const first = await src.loadAllSessionRecords();
+    expect(first.length).toBe(1);
+
+    fs.writeFileSync(file, b);
+    const future = new Date(Date.now() + 5000);
+    fs.utimesSync(file, future, future);   // mtime 단축경로를 벗어나 실제로 증분 판정을 타게 한다
+
+    // 오프셋을 재사용하면 새 파일의 끝(=변화 0바이트)을 읽어 세션 A의 레코드를 그대로 돌려준다.
+    const second = await src.loadAllSessionRecords();
+    expect(second.length).toBe(1);
+    expect(second[0].sessionId).toBe('sessBBBB');
+  });
+
+  it('지문이 짧던 파일(<256B)이 256B를 넘겨 자라면 전체 재파싱하되 레코드가 중복되지 않는다', async () => {
+    // canReuseHead는 지문이 **완전 길이**일 때만 오프셋 재사용을 허용한다 — 짧은 지문 구간에서는
+    // 전체 재파싱으로 떨어진다(비용은 사실상 0, 그 시점 파일이 256B 미만이므로). 그때 dedup이
+    // 제 역할을 못 하면 같은 레코드가 두 번 세어져 §3#1급 billing 오류가 된다. 여기를 잠근다.
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '21');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-grow-past-head.jsonl');
+
+    const rec1 = tokenUsageRecordLine('s1', 't1', 'resp-1', 0);
+    // 1차: 첫 두 줄만 — 256바이트 미만이라 지문이 짧게 잡힌다.
+    const firstChunk = rec1.slice(0, 2).join('\n') + '\n';
+    expect(Buffer.byteLength(firstChunk)).toBeLessThan(256);
+    fs.writeFileSync(file, firstChunk);
+
+    const src = new CodexSource(tmpHome);
+    expect((await src.loadAllSessionRecords()).length).toBe(0);   // 아직 token_usage_record 없음
+
+    // 2차: 나머지 + 새 턴을 이어붙여 256바이트를 훌쩍 넘긴다.
+    fs.appendFileSync(file, rec1[2] + '\n' + tokenUsageRecordLine('s1', 't2', 'resp-2', 1).join('\n') + '\n');
+    expect(Buffer.byteLength(fs.readFileSync(file))).toBeGreaterThan(256);
+    const future = new Date(Date.now() + 5000);
+    fs.utimesSync(file, future, future);
+
+    const second = await src.loadAllSessionRecords();
+    expect(second.length).toBe(2);
+    expect(new Set(second.map(r => r.messageId)).size).toBe(2);   // 중복 0
+  });
+
+  it('append-only 성장은 여전히 증분으로 이어붙인다(지문 도입이 전체 재파싱으로 퇴행시키지 않는다)', async () => {
+    tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-home-'));
+    const deep = path.join(tmpHome, 'sessions', '2026', '09', '21');
+    fs.mkdirSync(deep, { recursive: true });
+    const file = path.join(deep, 'rollout-grow.jsonl');
+
+    const src = new CodexSource(tmpHome);
+    fs.writeFileSync(file, tokenUsageRecordLine('s1', 't1', 'resp-1', 0).join('\n') + '\n');
+    expect((await src.loadAllSessionRecords()).length).toBe(1);
+
+    fs.appendFileSync(file, tokenUsageRecordLine('s1', 't2', 'resp-2', 1).join('\n') + '\n');
+    const future = new Date(Date.now() + 5000);
+    fs.utimesSync(file, future, future);
+
+    const second = await src.loadAllSessionRecords();
+    expect(second.length).toBe(2);
+  });
+});

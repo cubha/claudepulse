@@ -164,6 +164,7 @@ else
     step "사이드바 미니 캘린더" node scripts/verify-sidebar-calendar.js
     step "사이드바 레이아웃" node scripts/verify-sidebar-layout.js
     step "목록 행 상한·가격 신호 (2폭×2로캘)" node scripts/verify-list-cap.js
+    step "기간별 비용 탭 전환 (2폭×2로캘×3탭)" node scripts/verify-cost-period-tabs.mjs
   fi
 
 fi

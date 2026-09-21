@@ -35,7 +35,8 @@ const PANEL_IDS = [
   'panel-plan-badge', 'panel-status', 'panel-fallback-banner',
   'panel-fh-card', 'fh-remaining', 'fh-bar-fill', 'fh-reset',
   'panel-sd-card', 'sd-remaining', 'sd-bar-fill', 'sd-reset', 'burn-rate-val', 'burn-rate-hr', 'safe-until-val', 'safe-until-proj',
-  'panel-daily-card', 'chart-daily', 'daily-empty',
+  'panel-cost-period-card', 'chart-daily', 'daily-empty',
+  'cost-pane-daily', 'cost-pane-longterm', 'cost-pane-monthly',
   'panel-calendar-card', 'panel-calendar-body',
   'panel-model-card', 'panel-model-body',
   'panel-cache-card', 'panel-cache-body', 'chart-cache-spark',
@@ -45,8 +46,8 @@ const PANEL_IDS = [
   'panel-branch-card', 'panel-branch-list',
   'panel-retro-card', 'panel-retro-list',
   'panel-skill-card', 'panel-skill-list', 'panel-mcp-list',
-  'panel-longterm-card', 'chart-longterm', 'longterm-empty',
-  'panel-monthly-card', 'chart-monthly', 'monthly-empty',
+  'chart-longterm', 'longterm-empty',
+  'chart-monthly', 'monthly-empty',
   'chart-trend', 'trend-empty',
 ];
 // sidebar 모드(buildSidebarHtml, main.ts:390-631)가 실제로 만드는 id는 4개뿐 — 나머지 텍스트 값은
