@@ -31,3 +31,46 @@ export function appendCodexBucketHistory(
   }
   return store;
 }
+
+/**
+ * 확장 ↔ 웹뷰 전송용 평탄화 형태 (v0.2.3).
+ *
+ * Map과 Date는 postMessage 직렬화를 통과하지 못한다 — Claude의 `PollHistoryPoint`가
+ * `t: string`인 것과 같은 이유다. 버킷 키를 각 점에 실어 평탄 배열로 보낸다.
+ */
+export interface CodexBucketHistoryPoint {
+  windowMinutes: number;
+  /** ISO 8601 */
+  t: string;
+  /** 0~1 정규화된 사용률 */
+  v: number;
+}
+
+export function flattenCodexBucketHistory(store: Map<number, PollPoint[]>): CodexBucketHistoryPoint[] {
+  const out: CodexBucketHistoryPoint[] = [];
+  for (const [windowMinutes, points] of store) {
+    for (const p of points) out.push({ windowMinutes, t: p.t.toISOString(), v: p.v });
+  }
+  return out;
+}
+
+/**
+ * 평탄 배열을 Map으로 되돌린다. **이미 있는 점은 덮어쓰지 않고 시각 순으로 병합**한다 —
+ * 웹뷰가 hydrate하기 전에 push를 먼저 받았을 수 있고(경쟁), 그때 통째로 갈아치우면
+ * 방금 받은 최신 점이 사라진다. 같은 (버킷, 시각)은 중복으로 쌓지 않는다.
+ */
+export function hydrateCodexBucketHistory(
+  store: Map<number, PollPoint[]>,
+  wire: readonly CodexBucketHistoryPoint[],
+  maxPoints: number,
+): Map<number, PollPoint[]> {
+  for (const w of wire) {
+    const hist = store.get(w.windowMinutes) ?? [];
+    const at = new Date(w.t).getTime();
+    if (!hist.some(p => p.t.getTime() === at)) hist.push({ t: new Date(w.t), v: w.v });
+    hist.sort((a, b) => a.t.getTime() - b.t.getTime());
+    while (hist.length > maxPoints) hist.shift();
+    store.set(w.windowMinutes, hist);
+  }
+  return store;
+}

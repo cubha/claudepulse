@@ -1,7 +1,8 @@
 import { Messenger } from 'vscode-messenger';
 import { BROADCAST } from 'vscode-messenger-common';
+import type { CodexBucketHistoryPoint } from '../webview/codexBucketHistory';
 import type { AgentProvider, CodexRateLimitSnapshot, PollHistoryPoint, ProviderAvailability, RateLimitSnapshot, RetroSummary, UsageSummary } from '../types';
-import { GetActiveProvider, GetCodexRateLimit, GetLang, GetPollHistory, GetProviderAvailability, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, RequestClearPinnedSession, RequestLogin, RequestLoginCodex, RequestOpenBillingSettings, RequestOpenDashboard, RequestOpenSessionPicker, RequestRefresh, RequestSetLang, RequestSetProvider } from './contracts';
+import { GetActiveProvider, GetCodexPollHistory, GetCodexRateLimit, GetLang, GetPollHistory, GetProviderAvailability, GetRateLimit, GetRetroSummary, GetUsageSummary, PushLang, RequestClearPinnedSession, RequestLogin, RequestLoginCodex, RequestOpenBillingSettings, RequestOpenDashboard, RequestOpenSessionPicker, RequestRefresh, RequestSetLang, RequestSetProvider } from './contracts';
 
 export function registerHandlers(
   messenger: Messenger,
@@ -21,7 +22,8 @@ export function registerHandlers(
   getActiveProvider: () => AgentProvider,
   onSetProvider: (provider: AgentProvider) => void,
   getProviderAvailability: () => ProviderAvailability,
-  getCodexRateLimit: () => CodexRateLimitSnapshot | null
+  getCodexRateLimit: () => CodexRateLimitSnapshot | null,
+  getCodexPollHistory: () => CodexBucketHistoryPoint[]
 ): void {
   messenger.onRequest(GetPollHistory, () => getPollHistory());
   messenger.onRequest(GetRateLimit, () => {
@@ -30,6 +32,7 @@ export function registerHandlers(
     return snap;
   });
   messenger.onRequest(GetCodexRateLimit, () => getCodexRateLimit());
+  messenger.onRequest(GetCodexPollHistory, () => getCodexPollHistory());
   messenger.onRequest(GetUsageSummary, () => getUsageSummary());
   messenger.onRequest(GetRetroSummary, () => getRetroSummary());
   messenger.onRequest(GetLang, () => getLang());

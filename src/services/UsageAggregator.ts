@@ -142,6 +142,25 @@ export class UsageAggregator {
     // 편집 파일 최근순 수집 (파일 경로 → 최근 timestamp)
     const fileLastSeen = new Map<string, string>();
 
+    // 워크스페이스 스코프 술어(v0.2.3 R6) — 아래 contextCandidates가 쓰던 것과 같은 규칙을
+    // 메인 루프에서도 쓸 수 있게 여기로 끌어올렸다(계산은 동일, 위치만 이동).
+    //
+    // 무엇을 스코핑하고 무엇을 안 하는가:
+    //   ✔ branchBreakdown · activeBranch · recentEditedFiles — 열린 프로젝트의 것만 보여야 한다
+    //     (차별점 #1). 남의 저장소 브랜치가 사이드바 칩에 뜨던 것이 v0.2.2까지의 동작이다.
+    //   ✘ recentSessions — v0.1.49 계약상 cross-project를 **유지해야 한다**. sidebarView.ts가
+    //     이 길이로 "워크스페이스 매칭 0건"과 "세션 기록 자체가 없음"을 구분한다(아래 주석 참조).
+    //   ✘ byDay/byModel/캐시/도구 — today 집계는 전역 사용량이 맞다(게이지·비용의 분모).
+    //
+    // activeBranch와 branchBreakdown은 **같이** 움직인다 — sidebarView.ts의
+    // `branchBreakdown.find(b => b.branch === activeBranch)`가 한쪽만 스코핑하면 조용히
+    // undefined가 되어 칩의 비용 표시가 사라진다.
+    const wsRoots = workspaceRoots === undefined
+      ? undefined
+      : (Array.isArray(workspaceRoots) ? workspaceRoots : [workspaceRoots]);
+    const inWorkspace = (r: SessionRecord): boolean =>
+      wsRoots === undefined || wsRoots.some(root => cwdMatchesWorkspace(r.cwd, root));
+
     for (const r of records) {
       const day = r.timestamp.slice(0, 10);
       // 세션·브랜치 단위 "가격 미상 기여 있었음" 플래그(defer #9) — today 스코프인 unpricedModels로는
@@ -209,8 +228,8 @@ export class UsageAggregator {
       s.messageCount += 1;
       if (recUnpriced) s.hasUnpricedRecords = true;
 
-      // 브랜치별 집계
-      if (r.gitBranch) {
+      // 브랜치별 집계 (워크스페이스 스코프 — R6)
+      if (r.gitBranch && inWorkspace(r)) {
         const b = byBranch.get(r.gitBranch) ?? {
           branch: r.gitBranch,
           costUsd: 0,
@@ -232,8 +251,8 @@ export class UsageAggregator {
         branchSessionSets.set(r.gitBranch, set);
       }
 
-      // 편집 파일 추적
-      for (const fp of r.editedFiles) {
+      // 편집 파일 추적 (워크스페이스 스코프 — R6)
+      for (const fp of (inWorkspace(r) ? r.editedFiles : [])) {
         const prev = fileLastSeen.get(fp);
         if (!prev || r.timestamp > prev) {
           fileLastSeen.set(fp, r.timestamp);
@@ -349,8 +368,12 @@ export class UsageAggregator {
       .sort((a, b) => b.costUsd - a.costUsd);
 
     // 가장 최근 활성 브랜치 (마지막 레코드의 gitBranch)
-    const lastRecord = records.length > 0
-      ? records.reduce((a, b) => a.timestamp > b.timestamp ? a : b)
+    // activeBranch(v0.2.3 R6) — branchBreakdown과 **같은 모집단**에서 뽑는다. 다른 모집단에서
+    // 뽑으면 sidebarView.ts:293의 `branchBreakdown.find(b => b.branch === activeBranch)`가
+    // 조용히 undefined가 되어 칩에서 비용만 사라진다(에러도 빈 화면도 아니라 눈에 안 띈다).
+    const branchScoped = records.filter(inWorkspace);
+    const lastRecord = branchScoped.length > 0
+      ? branchScoped.reduce((a, b) => a.timestamp > b.timestamp ? a : b)
       : null;
     const activeBranch = lastRecord?.gitBranch ?? '';
 
@@ -360,9 +383,8 @@ export class UsageAggregator {
     // 전체(records)에서 선택. 문자열 하나만 넘겨도(하위호환) 동작한다.
     // isSidechain 제외(S3, 2026-08-03) — 배경/자동 실행된 서브에이전트 세션이 사용자가 열지도 않은
     // 워크스페이스의 게이지를 가로채는 것을 방지(project_context_gauge_overcount 메모리 RC3).
-    const workspaceRootList = workspaceRoots === undefined
-      ? undefined
-      : (Array.isArray(workspaceRoots) ? workspaceRoots : [workspaceRoots]);
+    // wsRoots(위에서 계산) 재사용 — v0.2.3 R6에서 메인 루프도 쓰게 되면서 선언을 끌어올렸다.
+    const workspaceRootList = wsRoots;
     // provider 필터(v0.2.0): 컨텍스트 점유율 계측(contextTokens/findContextWindow)은 Claude jsonl
     // iterations 구조 전제라 Codex 모델명을 넣으면 무의미한 근사가 나온다 — 이번 범위에서 Codex는
     // 계측 밖으로 명시 제외한다(PLAN §7 결정, mock-data-codex.js sessionContext:null과 동일 계약).

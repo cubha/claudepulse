@@ -11,6 +11,10 @@
     --vscode-foreground: #CCCCCC;
     --vscode-descriptionForeground: #9D9D9D;
     --c-sonnet: #3B82F6;
+  /* 액센트 틴트 배경 위 전경(v0.2.3 R8) — styles.css `.theme-dark` 컬럼과 동일값.
+     솔리드 --c-* 를 전경으로 쓰면 같은 색 틴트 배경 위에서 대비가 무너진다(실측). */
+  --fg-sonnet: #A3CEF9;
+  --fg-warn:   #F7DA90;
     /* DESIGN-TOKENS.md 히트맵 강도 스케일 (블루, 브랜드) */
     --heat-0: #1B1B1D;
     --heat-1: #1F2937;
@@ -46,7 +50,7 @@
     border: 1px solid var(--vscode-panel-border); border-radius: 4px;
     font-size: 11px; padding: 2px 9px; cursor: pointer;
   }
-  .scope-toggle button.active { background: #2C3E55; color: #93C5FD; border-color: #1D5B95; }
+  .scope-toggle button.active { background: #2C3E55; color: var(--fg-sonnet); border-color: #1D5B95; }
 
   /* 히트맵 그리드 */
   .heat-wrap { display: flex; gap: 8px; }
@@ -66,7 +70,7 @@
 
   .ab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
   .tag { display: inline-block; font-size: 10px; padding: 1px 7px; border-radius: 3px; margin-left: 8px; vertical-align: middle; }
-  .tag.a { background: var(--heat-2); color: #93C5FD; }
+  .tag.a { background: var(--heat-2); color: var(--fg-sonnet); }
   .tag.b { background: var(--exp-b); color: #5EEAD4; }
   .note { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 10px; line-height: 1.5; }
   .scenario-mini .cells { grid-template-rows: repeat(7, 11px); }

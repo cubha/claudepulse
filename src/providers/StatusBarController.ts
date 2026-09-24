@@ -20,6 +20,20 @@ export class StatusBarController {
     this.item7d.show();
   }
 
+  /**
+   * 두 아이템을 상태바에서 내린다(v0.2.3 R2).
+   *
+   * Codex가 활성일 때 "update만 멈추는" 선택지는 틀렸다 — 마지막 Claude 값이 화면에 그대로
+   * 남아 Codex를 쓰는 동안 남의 수치를 읽게 된다. 이 컨트롤러는 RateLimitSnapshot의 고정
+   * fiveHour/sevenDay 의미론에 묶여 있어 Codex의 가변 버킷(300/10080/43200분)을 두 칸에
+   * 담을 수 없다. panelView.ts의 CLAUDE_ONLY_PANEL_IDS와 같은 판단 — 잘못된 라벨로 반쯤
+   * 맞는 화면보다 정직한 gap이 낫다.
+   */
+  hide(): void {
+    this.item5h.hide();
+    this.item7d.hide();
+  }
+
   update(snapshot: RateLimitSnapshot, todayCostUsd?: number): void {
     const fh = snapshot.fiveHour;
     const sd = snapshot.sevenDay;

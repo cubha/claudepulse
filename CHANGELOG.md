@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-09-24
+
+### Fixed
+- **The status bar kept showing Claude's 5h/7d figures while Codex was the selected agent.** The
+  rate-limit poller updated the two status-bar items outside the check that decides which agent the
+  UI is showing — that check only covered the dashboard and sidebar. Switching to Codex therefore
+  changed every surface except the one always on screen. The status bar now follows the switch, and
+  hides both items under Codex rather than relabelling them: Codex reports a variable number of
+  windows (a single 30-day one on Free, 5h+7d on paid), which two fixed slots cannot represent
+  without inventing a label.
+- **Burn rate read "0.00%/min" for long rate-limit windows, which is indistinguishable from idle.**
+  The rate was always printed per minute, so a 30-day window — the Free plan's only window — showed
+  12% of quota spent as 0.00 per minute. The unit now follows the length of the window (per minute,
+  per hour or per day), so a figure that is being measured is never displayed as zero. This affected
+  Claude's weekly window too, where a real rate of roughly 0.003 per minute had always rounded to
+  zero; the weekly row now reads per hour. Both agents share one implementation of the choice, so
+  the two cannot drift apart again.
+- **Branch and file lists showed work from other projects.** The active-branch chip, the branch cost
+  breakdown and Recently Edited Files were compiled from every session on the machine, regardless of
+  which project was open — so a branch you last touched in a different repository could appear as the
+  current one. All three are now scoped to the open workspace (all folders of a multi-root one). The
+  Recent Sessions list is deliberately left unscoped; the sidebar uses its emptiness to tell "no
+  sessions recorded at all" apart from "none for this project."
+- **The dashboard's plan badge could show the wrong agent's plan.** Several code paths wrote the badge,
+  each only when it had a value and none ever clearing it, so whichever arrived last won: opening the
+  dashboard with Codex selected could end up showing the Claude tier, switching back to Claude left
+  the Codex plan in place until the next poll, and changing the display language under Codex brought
+  back the Claude-only cards. The badge is now decided in one place from the selected agent and
+  redrawn — or cleared — on every update, and every rebuild of the dashboard restores the
+  agent-specific layout.
+- **The sidebar's Codex burn rows dropped the "(proj N% left)" projection** when they moved to their
+  own renderer in this release. It appears, as on Claude's rows, only when the current pace would
+  exhaust the window before it resets.
+
+### Added
+- **Each Codex rate-limit window on the dashboard now shows its own burn rate and safe-until time**,
+  matching what the sidebar has shown since v0.2.1. The dashboard was not missing a card so much as
+  missing the history behind one: it overwrote each incoming snapshot instead of accumulating them,
+  and a burn rate needs at least two readings, so the figure could never have been computed.
+- **The Utilization Trend chart now works under Codex.** It previously plotted two hardcoded series
+  (5h and 7d) and so was hidden entirely for an agent whose window count varies; it now plots one
+  line per reported window. The dashed "expected pace" overlay is drawn only for Claude — it is
+  derived from a fixed five-hour window that Codex has no equivalent of, and a made-up baseline is
+  worse than none.
+- **Light themes are now applied.** The webviews hardcoded the dark palette into their HTML, so the
+  light token set that has shipped since v0.1.53 was never reachable. Both views now follow VS Code's
+  active theme, including the two high-contrast variants, and switch live without losing the charts
+  or collected history.
+
+### Changed
+- The **Cost by Period** tabs are now ordered Daily → Monthly → Long-term. The two views used
+  day to day now sit next to each other, with the long-range view at the end.
+- The dashboard has a little more breathing room at its edges (16px → 24px).
+
+### Internal
+- `gifenc` and `pngjs`, used by the marketplace-image capture script, are now declared as dev
+  dependencies and present in the lockfile instead of being installed ad hoc.
+- A build check now fails if any extension→webview notification is added without registering it for
+  broadcast — the omission that made usage cards stick on "collecting" for three releases in v0.1.40.
+- Prototype screens no longer hard-code two colours that had drifted from the shipped palette.
+
 ## [0.2.2] - 2026-09-21
 
 ### Changed

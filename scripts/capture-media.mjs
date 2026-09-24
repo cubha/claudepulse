@@ -9,8 +9,8 @@
 //   media/demo-dashboard.gif         752×632 — docs/demo/panel.html 단독 스크롤 + 기간별 비용 탭 시연
 //
 // 전제: `npm run build` 선행(실 빌드 산출물 dist/webview/main.js를 로드한다 — 목업 HTML이 아니다).
-// GIF 인코딩 의존성은 런타임 스택이 아니므로 package.json에 넣지 않는다:
-//   npm install --no-save gifenc pngjs
+// GIF 인코딩 의존성(gifenc·pngjs)은 v0.2.3부터 devDependencies다. 이전에는 --no-save로만 깔았는데,
+// 그러면 lockfile에 없는 패키지가 되고 publish 워크플로의 `npm ci`는 그 불일치에서 hard-fail한다.
 //
 // 사용: npm run build && node scripts/capture-media.mjs
 import { chromium } from 'playwright-core';
@@ -78,7 +78,7 @@ const frames = [];   // { buf, delayMs }
   // 기간별 비용 카드로 되돌아와 탭 3개를 차례로 보여준다(v0.2.2 신규 섹션)
   await scrollTo(tabStop);
   await page.waitForTimeout(400);
-  for (const period of ['daily', 'longterm', 'monthly', 'daily']) {
+  for (const period of ['daily', 'monthly', 'longterm', 'daily']) {
     await page.click(`.cost-tab-btn[data-period="${period}"]`);
     await page.waitForTimeout(700);                    // 첫 렌더 애니메이션이 끝나게
     await shoot(1100);

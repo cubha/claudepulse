@@ -125,7 +125,7 @@ ccusage(★14k CLI)의 데이터 정확성 + Claudemeter의 실시간성 - 비�
 
 **D-2가 fail인 이유**: 선언되지 않은 `var(--x)`는 브라우저가 **선언째 폐기**한다 — tsc·eslint·빌드가 전부 통과하고 스타일만 사라지는 무성 실패다. 실제로 `.panel-title`의 `--ff-display`가 v0.1.52까지 이 상태였다.
 
-**design-lint에 `--gate`를 걸지 않는 이유**: `D-TYPE-07`이 `--fs-label`(11px, VS Code 네이티브 규격)에 상시 발화해 영원히 녹색이 될 수 없다. 게이트를 걸면 프로토타입을 고치는 방향으로 스코프가 샌다. `D-TOKEN-01`도 상시 잔존 대상이다 — harvest가 spacing과 font-size/border-width를 구분하지 않는 flat 집합이라, 0으로 스냅하면 정리가 아니라 왜곡이다(DESIGN-TOKENS.md §13.1). 기준선 **error 6 · warn 29**(v0.1.53, `--token-source src/webview/styles.css` 기준 — 플래그가 바뀌면 숫자도 바뀐다).
+**design-lint에 `--gate`를 걸지 않는 이유**: `D-TYPE-07`이 `--fs-label`(11px, VS Code 네이티브 규격)에 상시 발화해 영원히 녹색이 될 수 없다. 게이트를 걸면 프로토타입을 고치는 방향으로 스코프가 샌다. `D-TOKEN-01`도 상시 잔존 대상이다 — harvest가 spacing과 font-size/border-width를 구분하지 않는 flat 집합이라, 0으로 스냅하면 정리가 아니라 왜곡이다(DESIGN-TOKENS.md §13.1). 기준선 **error 6 · warn 29**(v0.2.3 재확인, `--token-source src/webview/styles.css` 기준 — 플래그가 바뀌면 숫자도 바뀐다). v0.2.0에서 프로토타입이 1개 늘며 error가 9로 올랐던 것을 v0.2.3이 기준선으로 되돌렸다 — 드리프트한 색 리터럴 2종(`#93C5FD`·`#FCD34D`)을 `--fg-sonnet`·`--fg-warn`으로 치환. **솔리드 `--c-*`가 아니라 `--fg-*`인 이유**: 같은 hue의 틴트 배경 위에 솔리드 액센트를 전경으로 올리면 대비가 무너진다(실측 — `.scope-toggle button.active`가 2.96:1). `--fg-*`는 6.62:1이다. 남은 error 6은 전부 D-TOKEN-01·D-TYPE-07 — §13.1의 상시 잔존 대상이다.
 
 ⚠️ **`design-lint-ignore` 주석은 프로토타입 HTML에서 동작하지 않는다** — 이 마커는 `--tokens`/`--token-source`가 가리키는 토큰 소스 문서의 harvest 줄 필터 전용이다. §3#5의 `design-lint-ignore` 예외는 `verify.sh` D-1(`styles.css`) 컨벤션이며 별개 메커니즘이다.
 

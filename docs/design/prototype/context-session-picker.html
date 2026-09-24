@@ -43,7 +43,7 @@
   .step-num {
     display: inline-flex; align-items: center; justify-content: center;
     width: 18px; height: 18px; border-radius: 50%;
-    background: rgba(59,130,246,0.16); color: #93C5FD;
+    background: rgba(59,130,246,0.16); color: var(--fg-sonnet);
     font-family: var(--ff-mono); font-size: 10px; font-weight: 700;
     margin-right: 7px; flex-shrink: 0;
   }
@@ -87,7 +87,7 @@
   }
   .sb-chip--branch { background: rgba(100,116,139,0.12); color: var(--vscode-descriptionForeground); }
   .sb-chip--pin { background: rgba(139,92,246,0.16); color: #C4B5FD; }
-  .sb-chip--warn { background: rgba(245,158,11,0.16); color: #FCD34D; }
+  .sb-chip--warn { background: rgba(245,158,11,0.16); color: var(--fg-warn); }
 
   /* 클릭 가능해진 워크스페이스 칩 — 신규 */
   .sb-chip--clickable {
@@ -103,7 +103,7 @@
   }
   .annot code {
     font-family: var(--ff-mono); background: rgba(255,255,255,0.06);
-    padding: 1px 4px; border-radius: 3px; font-size: 10px; color: #93C5FD;
+    padding: 1px 4px; border-radius: 3px; font-size: 10px; color: var(--fg-sonnet);
   }
 
   /* ── QuickPick 오버레이 mock ── */
@@ -137,9 +137,9 @@
     font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px;
     text-transform: uppercase; letter-spacing: 0.03em;
   }
-  .qp-badge--auto { background: rgba(59,130,246,0.18); color: #93C5FD; }
+  .qp-badge--auto { background: rgba(59,130,246,0.18); color: var(--fg-sonnet); }
   .qp-badge--pin { background: rgba(139,92,246,0.18); color: #C4B5FD; }
-  .qp-badge--stale { background: rgba(245,158,11,0.18); color: #FCD34D; }
+  .qp-badge--stale { background: rgba(245,158,11,0.18); color: var(--fg-warn); }
   .qp-meta {
     margin-top: 2px; font-size: 10.5px; color: var(--vscode-descriptionForeground);
     font-family: var(--ff-mono); display: flex; gap: 8px;
@@ -163,7 +163,7 @@
   .data-box h3 { margin: 0 0 8px; font-size: 12px; font-weight: 600; }
   .data-box table { border-collapse: collapse; width: 100%; }
   .data-box td { padding: 3px 8px 3px 0; vertical-align: top; border-bottom: 1px dashed rgba(255,255,255,0.06); }
-  .data-box td:first-child { font-family: var(--ff-mono); color: #93C5FD; white-space: nowrap; }
+  .data-box td:first-child { font-family: var(--ff-mono); color: var(--fg-sonnet); white-space: nowrap; }
   .data-box tr:last-child td { border-bottom: none; }
   .tag-new { font-size: 9px; font-weight: 700; background: rgba(20,184,166,0.18); color: #5EEAD4; padding: 1px 5px; border-radius: 3px; margin-left: 6px; }
 </style>

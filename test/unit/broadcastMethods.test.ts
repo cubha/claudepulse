@@ -55,4 +55,27 @@ describe('WEBVIEW_BROADCAST_METHODS', () => {
     // pull 계약은 fallback으로 유지(이중 보장 — 제거 금지).
     expect(GetRetroSummary.method).toBe('getRetroSummary');
   });
+
+  /**
+   * 망라성 잠금(v0.2.3) — 개별 항목을 손으로 적는 위 테스트들은 **새로 추가되는 Push\*를
+   * 못 본다**. v0.1.40 회귀가 정확히 "추가했는데 등재를 잊었다"였고, 그때 잡아 줄 수 있는
+   * 유일한 형태가 이것이다. 웹뷰가 수신할 필요가 없는 Push\*가 생기면 아래 목록에 사유와
+   * 함께 등재한다 — 자동 통과시키지 않는다.
+   */
+  it('contracts의 모든 Push* NotificationType이 브로드캐스트에 등재돼 있다', () => {
+    /** 웹뷰 수신 대상이 아닌 Push*. 비우고 시작한다 — 넣을 때는 사유를 같이 적는다. */
+    const EXEMPT = new Set<string>();
+
+    const pushMethods = Object.entries(contracts)
+      .filter(([name, v]) =>
+        name.startsWith('Push') &&
+        typeof v === 'object' && v !== null && 'method' in (v as object))
+      .map(([name, v]) => [name, (v as { method: string }).method] as const);
+
+    expect(pushMethods.length).toBeGreaterThan(0);
+    const missing = pushMethods
+      .filter(([, m]) => !EXEMPT.has(m) && !WEBVIEW_BROADCAST_METHODS.includes(m))
+      .map(([name, m]) => `${name}(${m})`);
+    expect(missing, 'broadcastMethods 미등재 — 해당 push는 死 핸들러가 된다').toEqual([]);
+  });
 });

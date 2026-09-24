@@ -14,7 +14,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PANEL_HTML = path.resolve(__dirname, '../docs/demo/panel.html');
 const WIDTHS = [700, 1600];
 const LANGS = ['ko', 'en'];
-const PERIODS = ['daily', 'longterm', 'monthly'];
+const PERIODS = ['daily', 'monthly', 'longterm'];   // 화면 탭 순서와 동일하게 유지
 const CANVAS_BY_PERIOD = { daily: 'chart-daily', longterm: 'chart-longterm', monthly: 'chart-monthly' };
 
 const problems = [];

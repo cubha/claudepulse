@@ -18,11 +18,25 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.2.2
+## What's New in v0.2.3
+
+- **Fixed: the status bar ignored the Claude/Codex switch.** It kept polling and showing Claude's 5h/7d figures while Codex was selected — every other surface followed the switch, but the one always on screen did not. Under Codex the two items now hide rather than relabel: Codex reports a variable number of windows (one 30-day window on Free, 5h+7d on paid), which two fixed slots can't show without making up a label.
+- **Fixed: burn rate showed "0.00%/min" on long windows**, which looks exactly like being idle. The rate was always per-minute, so 12% of a 30-day quota came out as zero. The unit now follows the window length — per minute, per hour or per day.
+- **Fixed: branch and file lists showed other projects' work.** The branch chip, branch cost breakdown and Recently Edited Files were built from every session on the machine. They are now scoped to the open workspace.
+- **Fixed: the dashboard's plan badge could show the other agent's plan** — e.g. the Claude tier with Codex selected, or the Codex plan lingering after switching back. It is now decided from the selected agent on every update.
+- **Fixed: the sidebar's Codex burn rows lost their "(proj N% left)" projection**, shown — as on Claude's rows — only when the current pace would exhaust the window before reset.
+- **Codex windows on the dashboard now carry their own burn rate and safe-until time**, like the sidebar has since v0.2.1 — the dashboard had been discarding each snapshot instead of keeping the history a burn rate needs.
+- **The Utilization Trend chart works under Codex now**, one line per reported window instead of two hardcoded ones. The dashed "expected pace" line stays Claude-only, since it is derived from a five-hour window Codex has no equivalent of.
+- The **Cost by Period** tabs are ordered Daily → Monthly → Long-term, so the two everyday views sit next to each other.
+- **Light themes are applied.** The webviews had the dark palette hardcoded, so the light tokens shipped since v0.1.53 were unreachable. Both views now follow VS Code's theme — including high contrast — and switch live.
+
+<details><summary>v0.2.2</summary>
 
 - **Daily, long-term and monthly cost are one section now.** They were three separate blocks spread down the dashboard; comparing the same number across time windows meant scrolling past everything in between. They are now a single **Cost by Period** card with tabs — Daily / Long-term / Monthly. The long-term tab keeps its own 30/90/180-day range toggle, working exactly as before. No chart was removed.
 - **Fixed: a Codex log file replaced by a different file of the same size wasn't noticed.** The reader would carry on from where it left off and never read anything before that point. It now checks the start of the file and re-reads from the beginning when it has changed.
 - Internal: the sidebar's per-bucket history is now covered by tests that were impossible to write before, and the marketplace screenshot and demo GIF are re-shot from the real build by a single command.
+
+</details>
 
 <details><summary>v0.2.1</summary>
 
