@@ -28,13 +28,16 @@ import { CacheStore } from './services/CacheStore';
 import { GitLogReader } from './services/GitLogReader';
 import { CommitAttributor } from './services/CommitAttributor';
 import { RetroStore } from './services/RetroStore';
-import { PushActiveProvider, PushCodexRateLimit, PushPollerError, PushProviderAvailability, PushRateLimit, PushRetroSummary, PushUsageSummary } from './messaging/contracts';
+import { PushActiveProvider, PushCodexRateLimit, PushPollerError, PushProviderAvailability, PushRateLimit, PushRetroSummary, PushTheme, PushUsageSummary } from './messaging/contracts';
 import { registerHandlers } from './messaging/handlers';
 import { resolveCredentialsPath } from './utils/credentialsPath';
 import { readOneMillionModelsFromClaudeJson } from './utils/claudeJsonModels';
 import { buildSessionPickerItems } from './utils/sessionPicker';
 import { ClaudeSource } from './sources/claude/ClaudeSource';
 import { CodexSource, codexHomeDir } from './sources/codex/CodexSource';
+import { themeClassFor } from './webview/themeClass';
+import { appendCodexBucketHistory, flattenCodexBucketHistory } from './webview/codexBucketHistory';
+import type { PollPoint } from './webview/burnRate';
 import type { AgentProvider, CodexRateLimitSnapshot, CommitMeta, CommitScopeInfo, PollHistoryPoint, PollerError, ProviderAvailability, RateLimitSnapshot, RetroCommitScope, RetroSummary, SessionRecord, UsageSummary } from './types';
 
 const ACTIVE_PROVIDER_STATE_KEY = 'ccg-active-provider';
@@ -45,7 +48,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const messenger = new Messenger();
   const statusBar = new StatusBarController();
-  statusBar.show();
+  // show()를 여기서 무조건 부르지 않는다(v0.2.3 R2) — activeProvider는 아직 globalState에서
+  // 읽기 전이라, 저장된 프로바이더가 codex인 사용자에게 Claude 아이템이 한 번 번쩍인다.
+  // 아래 activeProvider 확정 직후 syncStatusBarVisibility()가 표시 여부를 정한다.
 
   const credReader = new CredentialsReader();
   let lastSnapshot: RateLimitSnapshot | null = null;
@@ -73,9 +78,20 @@ export function activate(context: vscode.ExtensionContext): void {
   let codexRecords: SessionRecord[] = [];
   let lastCodexUsageSummary: UsageSummary | null = null;
   let lastCodexRateLimit: CodexRateLimitSnapshot | null = null;
+  /**
+   * Codex 버킷별 사용률 이력(v0.2.3) — Claude의 snapshotHistory에 대응한다.
+   *
+   * 웹뷰가 각자 쌓으면 **열린 시점이 다른 만큼 쌓인 양이 달라지고**, 그래서 같은 버킷의
+   * 소모율이 사이드바와 대시보드에서 다르게 보인다(사이드바는 활성화부터, 대시보드는
+   * 사용자가 열 때부터). 확장이 하나만 들고 있고 웹뷰는 열릴 때 그것을 받아 출발한다.
+   */
+  const codexBucketHistory = new Map<number, PollPoint[]>();
   let providerAvailability: ProviderAvailability = { claude: 'ready', codex: 'not_installed' };
   const savedProvider = context.globalState.get<string>(ACTIVE_PROVIDER_STATE_KEY);
   let activeProvider: AgentProvider = savedProvider === 'codex' ? 'codex' : 'claude';
+  // 함수 선언은 호이스팅되므로 정의 위치(아래)보다 먼저 부를 수 있다. statusBar·lastSnapshot·
+  // lastUsageSummary는 전부 이 줄 위에서 초기화가 끝났다.
+  syncStatusBarVisibility();
 
   // usage×git 회고 파이프라인 (v0.1.37) — lazy(뷰 오픈 시), HEAD SHA 캐시
   const gitLogReader = new GitLogReader();
@@ -322,6 +338,11 @@ export function activate(context: vscode.ExtensionContext): void {
     const workspaceRoots = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath);
     lastCodexUsageSummary = aggregator.aggregate(codexRecords, workspaceRoots);
     lastCodexRateLimit = await codexSource.loadLatestRateLimit();
+    if (lastCodexRateLimit) {
+      appendCodexBucketHistory(
+        codexBucketHistory, lastCodexRateLimit.buckets,
+        new Date(lastCodexRateLimit.generatedAt), MAX_POLL_HISTORY);
+    }
     await refreshProviderAvailability();
     if (activeProvider === 'codex') {
       messenger.sendNotification(PushUsageSummary, BROADCAST, lastCodexUsageSummary);
@@ -360,13 +381,38 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
+  /**
+   * 상태바 표시 동기화(v0.2.3 R2) — Claude일 때만 보인다.
+   * 폴러 콜백은 다음 폴링까지 안 돌므로, 전환 시점에 여기서 한 번 맞춰 줘야 "전환했는데
+   * 상태바만 한 주기 동안 남의 수치"인 구간이 생기지 않는다. 캐시된 lastSnapshot이 있으면
+   * 같이 갱신한다(없으면 첫 폴링이 채운다).
+   */
+  function syncStatusBarVisibility(): void {
+    if (activeProvider === 'claude') {
+      statusBar.show();
+      if (lastSnapshot) statusBar.update(lastSnapshot, lastUsageSummary?.today.costUsd);
+    } else {
+      statusBar.hide();
+    }
+  }
+
   function setActiveProvider(provider: AgentProvider): void {
     if (provider === activeProvider) return;
     activeProvider = provider;
     void context.globalState.update(ACTIVE_PROVIDER_STATE_KEY, provider);
     messenger.sendNotification(PushActiveProvider, BROADCAST, activeProvider);
     pushActiveProviderSnapshot();
+    syncStatusBarVisibility();
   }
+
+  // 테마 변경 브로드캐스트(v0.2.3 R5) — HTML shell은 뷰 생성 시 한 번만 만들어지므로,
+  // 그 안의 body 클래스는 테마를 바꿔도 저절로 갱신되지 않는다. shell을 다시 만들면 차트·
+  // 폴링 이력·열린 탭이 전부 초기화되므로 클래스만 토글하도록 알림을 보낸다.
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveColorTheme((theme) => {
+      messenger.sendNotification(PushTheme, BROADCAST, themeClassFor(theme.kind));
+    })
+  );
 
   void refreshProviderAvailability();
   void refreshCodexUsage();
@@ -401,7 +447,8 @@ export function activate(context: vscode.ExtensionContext): void {
     () => activeProvider,
     (provider) => setActiveProvider(provider),
     () => providerAvailability,
-    () => lastCodexRateLimit
+    () => lastCodexRateLimit,
+    () => flattenCodexBucketHistory(codexBucketHistory)
   );
 
   const sidebarProvider = new SidebarViewProvider(context.extensionUri, messenger);
@@ -464,11 +511,20 @@ export function activate(context: vscode.ExtensionContext): void {
         lastSnapshot = snapshot;
         snapshotHistory.push({ t: snapshot.generatedAt.toISOString(), fh: snapshot.fiveHour.utilization, sd: snapshot.sevenDay.utilization });
         if (snapshotHistory.length > MAX_POLL_HISTORY) snapshotHistory.shift();
-        statusBar.update(snapshot, lastUsageSummary?.today.costUsd);
-        // PushRateLimit은 Claude 전용 채널 — Codex가 활성일 때는 안 보낸다(PushCodexRateLimit이 대신함).
+        // StatusBar도 PushRateLimit과 같은 Claude 전용 표면이다(v0.2.3 R2).
+        // v0.2.2까지 이 호출만 게이트 **밖**에 있어서, Codex로 전환해도 상태바는 Claude의
+        // 5H/7D를 계속 갱신·표시했다. 아래 PushRateLimit과 같은 조건 안으로 들인다.
         if (activeProvider === 'claude') {
+          statusBar.update(snapshot, lastUsageSummary?.today.costUsd);
+          // PushRateLimit은 Claude 전용 채널 — Codex가 활성일 때는 안 보낸다(PushCodexRateLimit이 대신함).
           messenger.sendNotification(PushRateLimit, BROADCAST, snapshot);
         }
+        // checkThreshold는 **의도적으로 게이트 밖**이다(v0.2.3, acceptance-critic 별건 지적에 대한 결정).
+        // StatusBar와 다른 이유: 상태바는 Codex가 있어야 할 자리에 남의 숫자를 *표시*하는 문제라
+        // 내리는 게 맞지만, 임계 알림은 표시 슬롯이 아니라 **안전 경보**(CLAUDE.md §6 차별점 2)다.
+        // 대시보드를 Codex로 보고 있다고 Claude 한도 경고를 막으면, 사용자는 자기가 여전히 쓰고
+        // 있는 Claude 한도에 모르고 부딪힌다. Codex엔 대응 알림이 아예 없어서 "틀린 알림이 맞는
+        // 알림을 가리는" 상황도 아니다. 알림 문구가 Claude를 명시하는 한 이대로 둔다.
         checkThreshold(snapshot);
       },
       (error: PollerError) => {

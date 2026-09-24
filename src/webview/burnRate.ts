@@ -36,6 +36,29 @@ export function calcBurnRate(history: PollPoint[], windowMinutes: number = STABI
   return deltaV / deltaT; // %/min (양수 = 소비 중, 음수 = 윈도 리셋)
 }
 
+/** 표기 단위 선택 임계. 창 경계(5h/7d)보다 조금 넉넉하다 — 사유는 pickBurnUnit 주석. */
+const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+const EIGHT_DAYS_MS = 8 * 24 * 60 * 60 * 1000;
+
+/**
+ * 창 길이에 맞는 소모율 표기 단위를 고른다.
+ *
+ * 왜 창마다 달라야 하는가: 소모율은 %/min으로 산출되지만, 창이 길면 그 수치가
+ * `toFixed(2)`에서 **0.00으로 눌어붙는다**. 7일 창이 26% 찼을 때 실제 기울기는
+ * 0.003%/min이고 화면에는 "0.00%/min"이 뜬다 — 측정 불가도 유휴도 아닌데 유휴와
+ * 구분되지 않는 거짓 신호다(SAFE UNTIL이 idle을 "수집 중"으로 오표기하던 v0.1.47
+ * 결함과 같은 부류). Codex 30일 버킷은 더 심해서 0.00069%/min이다.
+ *
+ * 임계가 6h/8d로 창 경계보다 넉넉한 이유: Codex가 반환하는 window_minutes는 벤더 값이라
+ * 정확히 300/10080이 아닐 수 있다(labelKey가 null일 수 있는 것과 같은 이유). 경계에 딱
+ * 붙이면 10081분짜리 창이 %/day로 떨어진다.
+ */
+export function pickBurnUnit(windowMs: number): { suffix: string; perMinFactor: number } {
+  if (windowMs <= SIX_HOURS_MS) return { suffix: '%/min', perMinFactor: 1 };
+  if (windowMs <= EIGHT_DAYS_MS) return { suffix: '%/hr', perMinFactor: 60 };
+  return { suffix: '%/day', perMinFactor: 60 * 24 };
+}
+
 /** 히스토리가 부족할 때(세션 첫 진입 등) 경과 시간 기반 추정 번 레이트 */
 export function calcBurnRateEstimate(utilization: number, msUntilReset: number, windowMs: number): number | null {
   const elapsed = windowMs - msUntilReset;

@@ -151,6 +151,30 @@ export const PushCodexRateLimit: NotificationType<CodexRateLimitSnapshot | null>
 };
 
 /**
+ * Request: webview → extension. Codex 버킷별 사용률 이력 조회(v0.2.3 — Claude의 GetPollHistory 대응).
+ *
+ * 왜 필요한가: 이력이 없으면 소모율을 계산할 수 없는데, 웹뷰마다 따로 쌓으면 **열린 시점이
+ * 다른 만큼 쌓인 양이 다르고 그래서 같은 버킷의 소모율이 화면마다 달라진다**(사이드바는 활성화
+ * 때부터, 대시보드는 사용자가 열 때부터). 확장이 이력을 소유하고 웹뷰는 열릴 때 그것을 받아
+ * 출발한다 — Claude가 snapshotHistory + GetPollHistory로 이미 쓰는 구조 그대로다.
+ */
+export const GetCodexPollHistory: RequestType<void, import('../webview/codexBucketHistory').CodexBucketHistoryPoint[]> = {
+  method: 'getCodexPollHistory'
+};
+
+/**
+ * Notification: extension → webview. VS Code 테마 변경 브로드캐스트(v0.2.3 R5).
+ * 값은 body에 붙일 클래스명('theme-dark' | 'theme-light', themeClass.ts가 정한다).
+ *
+ * HTML shell을 다시 만들지 않고 클래스만 토글하는 이유: shell 재생성은 웹뷰를 처음부터
+ * 다시 그려 차트 인스턴스·수집된 폴링 이력·열려 있던 탭 상태를 전부 날린다. 테마를 바꿨을
+ * 뿐인데 "수집 중"으로 되돌아가는 화면은 버그로 읽힌다. provider-codex 클래스와 같은 경로다.
+ */
+export const PushTheme: NotificationType<string> = {
+  method: 'pushTheme'
+};
+
+/**
  * webview(사이드바·패널)가 BROADCAST로 수신해야 하는 알림 method 목록.
  *
  * ⚠️ vscode-messenger 계약: registerWebviewView/Panel의 broadcastMethods에 등재된
@@ -169,4 +193,5 @@ export const WEBVIEW_BROADCAST_METHODS: string[] = [
   PushActiveProvider.method,
   PushProviderAvailability.method,
   PushCodexRateLimit.method,
+  PushTheme.method,
 ];

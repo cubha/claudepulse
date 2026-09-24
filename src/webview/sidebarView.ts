@@ -2,8 +2,8 @@
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
-  GetActiveProvider, GetCodexRateLimit, GetProviderAvailability, GetRateLimit, GetUsageSummary,
-  PushActiveProvider, PushCodexRateLimit, PushPollerError, PushProviderAvailability, PushRateLimit, PushUsageSummary,
+  GetActiveProvider, GetCodexPollHistory, GetCodexRateLimit, GetProviderAvailability, GetRateLimit, GetUsageSummary,
+  PushActiveProvider, PushCodexRateLimit, PushPollerError, PushProviderAvailability, PushRateLimit, PushTheme, PushUsageSummary,
   RequestClearPinnedSession, RequestLogin, RequestLoginCodex, RequestOpenBillingSettings, RequestOpenDashboard,
   RequestOpenSessionPicker, RequestRefresh, RequestSetLang, RequestSetProvider,
 } from '../messaging/contracts';
@@ -14,7 +14,9 @@ import { resolveContextGaugeState } from './contextGaugeState';
 import type { CalendarDay } from './calendarView';
 import type { PollPoint } from './burnRate';
 import { filterQualifyingCostDays, calcCostAnomalyPct } from './metricCalc';
-import { appendCodexBucketHistory } from './codexBucketHistory';
+import { appendCodexBucketHistory, hydrateCodexBucketHistory } from './codexBucketHistory';
+import { buildCodexBucketBurnRow } from './codexBandBurn';
+import { THEME_CLASSES } from './themeClass';
 import { vsApi } from './webviewApi';
 import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
@@ -136,6 +138,15 @@ export function initSidebar(): void {
     renderSidebar(lastSnapshot, lastError);
   });
 
+  // 테마 변경(v0.2.3 R5) — 두 클래스가 공존하면 styles.css에서 나중 선언이 이겨 반대
+  // 팔레트가 나온다. 붙이기 전에 전부 지운다. 사이드바는 매 렌더가 innerHTML 통짜 교체라
+  // 차트 인스턴스가 없어서(패널과 달리) 클래스 토글 + 재렌더로 충분하다.
+  messenger.onNotification(PushTheme, (cls) => {
+    for (const c of THEME_CLASSES) document.body.classList.remove(c);
+    document.body.classList.add(cls);
+    renderSidebar(lastSnapshot, lastError);
+  });
+
   try {
     messenger.start();
   } catch (err) {
@@ -166,6 +177,16 @@ export function initSidebar(): void {
 
   void messenger.sendRequest(GetProviderAvailability, HOST_EXTENSION, undefined)
     .then((availability) => { providerAvailability = availability; renderSidebar(lastSnapshot, lastError); })
+    .catch(() => undefined);
+
+  // Codex 버킷 이력 pre-hydrate(v0.2.3) — panelView와 같은 이유. 사이드바가 먼저 열려 있어도
+  // 확장 재시작·뷰 재생성 뒤에는 이력이 비어 있고, 그 사이 대시보드만 값을 갖는 역전이 생긴다.
+  void messenger.sendRequest(GetCodexPollHistory, HOST_EXTENSION, undefined)
+    .then((wire) => {
+      if (!wire || wire.length === 0) return;
+      hydrateCodexBucketHistory(sbCodexHistory, wire, MAX_SB_HISTORY);
+      renderSidebar(lastSnapshot, lastError);
+    })
     .catch(() => undefined);
 
   void messenger.sendRequest(GetCodexRateLimit, HOST_EXTENSION, undefined)
@@ -814,10 +835,12 @@ export function buildCodexSidebarHtml(
     const color = status === 'danger' ? 'var(--c-danger)' : status === 'allowed_warning' ? 'var(--c-warn)' : 'var(--c-sonnet)';
     const label = b.labelKey ? t(b.labelKey) : `${b.windowMinutes}min`;
     const resetMs = Math.max(0, b.resetsAt * 1000 - Date.now());
-    // ST10 — buildBurnRow는 이미 provider/window에 무관한 순수 함수(reference_codex_integration D13).
-    // 버킷별 windowMinutes를 그대로 windowMs로 넘겨 하드코딩 없이 재사용한다(§8 불변식2).
+    // ST10(v0.2.1)은 여기에 Claude용 buildBurnRow를 그대로 썼다. 창 무관 순수함수인 건 맞지만
+    // **표기 단위가 %/min 고정**이라 free 플랜의 30일 버킷에서 "0.00%/min"이 나왔다 — 사용 중인데
+    // 유휴처럼 보이는 거짓 신호다(v0.2.3 R3). 대시보드와 같은 산출기로 바꿔 두 화면의 수치를
+    // 한 곳에서 낸다.
     const bucketWindowMs = b.windowMinutes * 60_000;
-    const burnRow = buildBurnRow(bucketHistory.get(b.windowMinutes) ?? [], b.usedPercent / 100, resetMs, bucketWindowMs);
+    const burnRow = buildCodexBucketBurnRow(bucketHistory.get(b.windowMinutes) ?? [], b.usedPercent / 100, resetMs, bucketWindowMs);
     return `
       <div class="sb-section-hdr">
         <span class="sb-section-dot" style="background:${color};"></span>

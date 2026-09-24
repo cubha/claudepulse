@@ -60,7 +60,10 @@ const SIDEBAR_IDS = ['sb-ov-bar', 'sb-fh-bar', 'sb-sd-bar', 'sb-ctx-bar'];
 // 게이지를 전혀 쓰지 않고 버킷 배열 기반 동적 id(sb-codex-bucket-N)로 그린다. 감시 목록(SIDEBAR_IDS)의
 // 고정 4개는 애초에 Codex 개념이 아니라서 전부 null이 정상이다 — 새 동적 id는 이 감시망 밖이라
 // (고정 목록 계약, assertCoverage 주석 참조) 별도 스냅샷 차원의 확인은 Extension Dev Host 캡처가 맡는다.
-// panel: panelView.ts는 아직 provider 미분기(ST6 미착수) — 그대로 0.
+// panel: panelView.ts는 v0.2.0 ST6부터 provider 분기를 한다(applyProviderVisibility) —
+// Claude 전용 카드는 display:none이 될 뿐 DOM에서 사라지지 않으므로 getElementById는
+// 계속 찾는다. 즉 "정당하게 null"인 panel id는 여전히 0이고, 이 목록이 비어 있는 것이
+// 정상이다(v0.2.3 재확인 — v0.2.2까지 이 자리에 "ST6 미착수"라고 적혀 있던 것은 낡은 문구).
 const CODEX_EXPECTED_NULL_IDS = { sidebar: ['sb-ov-bar', 'sb-fh-bar', 'sb-sd-bar', 'sb-ctx-bar'], panel: [] };
 
 // provider 축(P2, v0.2.0) — main.ts는 아직 provider를 몰라(ST6 이전) 렌더 함수는 Claude용 그대로다.

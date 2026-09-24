@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { appendCodexBucketHistory } from '../../src/webview/codexBucketHistory';
+import { appendCodexBucketHistory, flattenCodexBucketHistory, hydrateCodexBucketHistory } from '../../src/webview/codexBucketHistory';
 import { buildCodexSidebarHtml } from '../../src/webview/sidebarView';
 import type { RateLimitBucket } from '../../src/sources/codex/codexRollout';
 import type { PollPoint } from '../../src/webview/burnRate';
@@ -56,7 +56,7 @@ describe('buildCodexSidebarHtml — 버킷별 burn 행이 자기 이력으로 �
       { t: new Date(now - 10 * 60_000), v: from },
       { t: new Date(now), v: to },
     ];
-    // 5h는 10분에 +10%p(=1%/min), 7d는 10분에 +1%p(=0.1%/min) — 두 자릿수로 구분된다.
+    // 5h는 10분에 +10%p(=1%/min), 7d는 10분에 +1%p(=0.1%/min=6%/hr) — 자릿수로 구분된다.
     const history = new Map<number, PollPoint[]>();
     history.set(10080, pts(0.20, 0.21));
     history.set(300, pts(0.30, 0.40));
@@ -72,7 +72,52 @@ describe('buildCodexSidebarHtml — 버킷별 burn 행이 자기 이력으로 �
       history,
     );
 
-    const rates = [...html.matchAll(/([\d.]+)%\/min/g)].map(m => m[1]);
-    expect(rates).toEqual(['1.00', '0.10']);
+    // v0.2.3 R3에서 표기 단위가 창 길이에 따라 갈린다(pickBurnUnit) — 5h는 %/min, 7d는 %/hr.
+    // 단위까지 함께 단언해 ①버킷 키 혼선 ②단위 선택 회귀를 한 번에 잡는다.
+    const rates = [...html.matchAll(/([\d.]+)%\/(min|hr|day)/g)].map(m => [m[1], m[2]]);
+    expect(rates).toEqual([['1.00', 'min'], ['6.00', 'hr']]);
+  });
+});
+
+/**
+ * v0.2.3 — 확장이 소유한 이력을 웹뷰가 받아 출발하는 경로.
+ *
+ * 왜 필요해졌나: 웹뷰마다 이력을 따로 쌓으면 **열린 시점이 다른 만큼 쌓인 양이 다르고**,
+ * 그래서 같은 버킷의 소모율이 사이드바와 대시보드에서 다르게 보인다(사이드바는 활성화부터,
+ * 대시보드는 사용자가 열 때부터). scope-critic이 v0.2.3 구현 중 지적한 경계다.
+ * Claude는 이 문제를 snapshotHistory + GetPollHistory pre-hydrate로 이미 풀어 뒀다.
+ */
+describe('flatten/hydrate — 확장↔웹뷰 이력 전송 (v0.2.3)', () => {
+  const pt = (min: number, v: number): PollPoint => ({ t: new Date(Date.UTC(2026, 8, 23, 0, min)), v });
+
+  it('평탄화 → 복원이 원본과 같다 (버킷 키가 섞이지 않는다)', () => {
+    const src = new Map<number, PollPoint[]>([
+      [300, [pt(0, 0.1), pt(5, 0.2)]],
+      [10080, [pt(0, 0.01)]],
+    ]);
+    const restored = hydrateCodexBucketHistory(new Map(), flattenCodexBucketHistory(src), 100);
+    expect(restored.get(300)!.map(p => p.v)).toEqual([0.1, 0.2]);
+    expect(restored.get(10080)!.map(p => p.v)).toEqual([0.01]);
+  });
+
+  it('hydrate 전에 push가 먼저 도착해도 그 점이 살아남는다 (경쟁 상황)', () => {
+    // 웹뷰가 요청을 보낸 뒤 응답이 오기 전에 브로드캐스트를 먼저 받는 순서는 실제로 가능하다.
+    // 통째로 갈아치우면 방금 받은 **최신** 점이 사라진다.
+    const store = new Map<number, PollPoint[]>([[300, [pt(9, 0.9)]]]);
+    hydrateCodexBucketHistory(store, flattenCodexBucketHistory(new Map([[300, [pt(0, 0.1), pt(5, 0.5)]]])), 100);
+    expect(store.get(300)!.map(p => p.v)).toEqual([0.1, 0.5, 0.9]);   // 시각 순 병합
+  });
+
+  it('같은 (버킷, 시각)은 중복으로 쌓지 않는다', () => {
+    const wire = flattenCodexBucketHistory(new Map([[300, [pt(0, 0.1)]]]));
+    const store = new Map<number, PollPoint[]>([[300, [pt(0, 0.1)]]]);
+    hydrateCodexBucketHistory(store, wire, 100);
+    expect(store.get(300)).toHaveLength(1);
+  });
+
+  it('상한을 넘기면 오래된 점부터 버린다', () => {
+    const wire = flattenCodexBucketHistory(new Map([[300, [pt(0, 0.1), pt(1, 0.2), pt(2, 0.3)]]]));
+    const store = hydrateCodexBucketHistory(new Map(), wire, 2);
+    expect(store.get(300)!.map(p => p.v)).toEqual([0.2, 0.3]);
   });
 });

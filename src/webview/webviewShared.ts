@@ -4,7 +4,7 @@ import type { AgentProvider, UnifiedWindow } from '../types';
 import { t, getLang } from './i18n';
 import { escapeHtml, fmtCost } from './format';
 import { buildCalendarCells, heatLevel, monthLabelFlags, type CalendarDay } from './calendarView';
-import { calcSafeUntil, calcProjAtReset, deriveBurnState, type PollPoint } from './burnRate';
+import { calcSafeUntil, calcProjAtReset, deriveBurnState, pickBurnUnit, type PollPoint } from './burnRate';
 
 export const FH_WINDOW_MS = 5 * 60 * 60 * 1000; // 5h
 export const SD_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7d
@@ -59,7 +59,10 @@ export function buildBurnRow(history: PollPoint[], utilization: number, msUntilR
   const resetAt = new Date(Date.now() + msUntilReset);
   const safeUntil = calcSafeUntil(utilization, state.rate, resetAt);
   const projRemaining = calcProjAtReset(utilization, state.rate, msUntilReset);
-  const rateStr = `${(state.rate * 100).toFixed(2)}%/min${state.isEstimate ? ` (${t('est_label')})` : ''}`;
+  // 단위는 창 길이가 정한다(pickBurnUnit) — 7일 창을 %/min으로 쓰면 실제 기울기가
+  // toFixed(2)에서 0.00으로 눌려 유휴와 구분되지 않는다(v0.2.3 추가분, 마켓 캡처로 실증).
+  const unit = pickBurnUnit(windowMs);
+  const rateStr = `${(state.rate * 100 * unit.perMinFactor).toFixed(2)}${unit.suffix}${state.isEstimate ? ` (${t('est_label')})` : ''}`;
   const safeStr = safeUntil ? ` · ${t('safe_until')} ${fmtTime(safeUntil)} (${t('proj')} ${fmtPct(projRemaining)} ${t('left')})` : '';
   return `<div class="rate-burn-row">
     <span class="rate-burn-label">${t('burn')} ${rateStr}${safeStr}</span>

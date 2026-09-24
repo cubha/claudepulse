@@ -73,6 +73,17 @@ describe('panelView.ts 기간별 비용 탭 통합(v0.2.2) 회귀 잠금', () =>
     }
   });
 
+  it('탭과 pane이 일별 → 월별 → 장기 순서다(v0.2.3 사용자 지정)', () => {
+    // 순서가 사용자 지정 계약이 된 시점부터는 잠근다 — 마크업 재배치는 diff에서 눈에 잘 안 띄고,
+    // 탭 3개가 "다 있다"는 기존 단언만으로는 순서가 뒤집혀도 초록이다.
+    // 버튼 줄과 pane 줄 **둘 다** 본다(둘이 어긋나면 aria-controls가 화면 순서와 따로 논다).
+    const order = ['daily', 'monthly', 'longterm'];
+    const btnOrder = [...panelSrc.matchAll(/class="cost-tab-btn[^"]*"\s+data-period="(\w+)"/g)].map(m => m[1]);
+    expect(btnOrder).toEqual(order);
+    const paneOrder = [...panelSrc.matchAll(/class="cost-period-pane"\s+id="cost-pane-(\w+)"/g)].map(m => m[1]);
+    expect(paneOrder).toEqual(order);
+  });
+
   it('세 pane이 통합 카드 안에만 있다(옛 독립 카드 id는 소멸)', () => {
     expect(panelSrc).not.toMatch(/id="panel-longterm-card"/);
     expect(panelSrc).not.toMatch(/id="panel-monthly-card"/);

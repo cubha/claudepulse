@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { themeClassFor } from '../webview/themeClass';
 import { Messenger } from 'vscode-messenger';
 import { EXTENSION_NAME } from '../constants';
 import { WEBVIEW_BROADCAST_METHODS } from '../messaging/contracts';
@@ -64,7 +65,7 @@ export class DashboardPanel {
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <link rel="stylesheet" href="${cssUri}">
 <title>AgentVitals Dashboard</title>
-</head><body class="theme-dark" data-mode="panel">
+</head><body class="${themeClassFor(vscode.window.activeColorTheme.kind)}" data-mode="panel">
 <div id="root">Loading…</div>
 <script nonce="${nonce}" src="${jsUri}"></script>
 </body></html>`;

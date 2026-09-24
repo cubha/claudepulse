@@ -36,6 +36,10 @@
   --c-warn: #F59E0B;
   --c-danger: #F43F5E;
   --c-slate: #64748B;
+  /* 액센트 틴트 배경 위 전경(v0.2.3 R8) — styles.css `.theme-dark` 컬럼과 동일값.
+     솔리드 --c-* 를 전경으로 쓰면 같은 색 틴트 배경 위에서 대비가 무너진다(실측). */
+  --fg-sonnet: #A3CEF9;
+  --fg-warn:   #F7DA90;
 }
 
 /* Theme blocks — emulating the VS Code variable surface that an extension
@@ -222,7 +226,7 @@
   text-transform: uppercase;
 }
 .badge.opus   { background: rgba(139,92,246,0.14); color: #C4B5FD; }
-.badge.sonnet { background: rgba(59,130,246,0.14); color: #93C5FD; }
+.badge.sonnet { background: rgba(59,130,246,0.14); color: var(--fg-sonnet); }
 .badge.haiku  { background: rgba(20,184,166,0.14); color: #5EEAD4; }
 .theme-light .badge.opus   { background: rgba(139,92,246,0.10); color: #6D28D9; }
 .theme-light .badge.sonnet { background: rgba(59,130,246,0.10); color: #1D4ED8; }

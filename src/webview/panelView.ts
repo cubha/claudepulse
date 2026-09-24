@@ -3,14 +3,19 @@ import { Chart, registerables, type ChartDataset } from 'chart.js';
 import { Messenger } from 'vscode-messenger-webview';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
-  GetActiveProvider, GetCodexRateLimit, GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary,
-  PushActiveProvider, PushCodexRateLimit, PushLang, PushRateLimit, PushRetroSummary, PushUsageSummary, RequestRefresh,
+  GetActiveProvider, GetCodexPollHistory, GetCodexRateLimit, GetLang, GetPollHistory, GetRateLimit, GetRetroSummary, GetUsageSummary,
+  PushActiveProvider, PushCodexRateLimit, PushLang, PushRateLimit, PushRetroSummary, PushTheme, PushUsageSummary, RequestRefresh,
 } from '../messaging/contracts';
 import type { AgentProvider, CodexRateLimitSnapshot, RateLimitSnapshot, SessionSummary, UsageSummary } from '../types';
 import { setLang, t } from './i18n';
 import { escapeHtml, fmtCost, formatErrorHtml } from './format';
 import { renderRetro } from './retroView';
 import { calcSafeUntil, calcProjAtReset, deriveBurnState, burnStateLabelKey, type PollPoint } from './burnRate';
+import { appendCodexBucketHistory, hydrateCodexBucketHistory } from './codexBucketHistory';
+import { deriveCodexBucketBurn } from './codexBandBurn';
+import { panelPlanBadgeText } from './planBadge';
+import { buildTrendSeries, type TrendSeries } from './trendSeries';
+import { THEME_CLASSES } from './themeClass';
 import {
   median, THRESHOLD_LOW, THRESHOLD_HIGH, classifyCacheHitRate,
   filterQualifyingCostDays, calcCostAnomalyPct, calcPaceBaseline,
@@ -20,7 +25,7 @@ import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
 } from './calendarScroll';
 import {
-  fmtPct, fmtReset, fmtTime, statusLabel, fmtPlanTier, fmtTokens, modelKind, modelShortName,
+  fmtPct, fmtReset, fmtTime, statusLabel, fmtTokens, modelKind, modelShortName,
   barFillWidth, buildCalendarHtml, CALENDAR_WINDOW_DAYS, FH_WINDOW_MS,
 } from './webviewShared';
 
@@ -36,6 +41,15 @@ const root = document.getElementById('root');
 const MAX_HISTORY = 288;
 const fhHistory: PollPoint[] = [];
 const sdHistory: PollPoint[] = [];
+/**
+ * Codex 버킷별 사용률 이력(v0.2.3 R3) — key는 windowMinutes(버킷 정체성).
+ *
+ * v0.2.2까지 패널에는 이게 없었다. PushCodexRateLimit 핸들러가 스냅샷을 덮어쓰기만 해서
+ * burn이 필요로 하는 2점 이상이 영영 모이지 않았고, 그래서 대시보드에는 소모율 표시 자체를
+ * 안 걸어 놨다. 사이드바(sbCodexHistory)와 같은 누적 함수를 공유한다 — 두 표면이 서로 다른
+ * 규칙으로 이력을 쌓으면 같은 버킷의 burn이 화면마다 달라진다.
+ */
+const panelCodexHistory = new Map<number, PollPoint[]>();
 
 let trendChart: Chart | null = null;
 let dailyChart: Chart | null = null;
@@ -165,6 +179,17 @@ function rebuildPanelDom(messenger: InstanceType<typeof Messenger>): void {
   wirePanelButtons(messenger);
 }
 
+/**
+ * 셸 재빌드 뒤 이미 받은 상태를 다시 그린다(v0.2.3 ⑩). 재빌드된 셸은 provider 가시성·Codex 밴드·
+ * 배지가 전부 초기값이라, Codex 모드에서 재빌드하면 Claude 전용 카드와 Claude 배지가 되살아났다.
+ * rebuildPanelDom 호출자는 반드시 이 함수를 뒤따라 부른다 — 경로마다 손으로 적으면 한쪽이 빠진다.
+ */
+function rehydrateAfterRebuild(): void {
+  if (lastPanelSnapshot) updatePanel(lastPanelSnapshot);
+  if (panelUsage) updateUsageSection();
+  applyProviderVisibility();
+}
+
 export function initPanel(): void {
   if (!root) return;
   root.innerHTML = buildPanelShell();
@@ -196,9 +221,31 @@ export function initPanel(): void {
     applyProviderVisibility();
   });
 
+/**
+ * 테마 클래스 적용(v0.2.3 R5) — 두 클래스가 공존하면 styles.css에서 **나중 선언이 이기므로**
+ * 반대 팔레트가 나온다. 붙이기 전에 전부 지운다.
+ */
+function applyThemeClass(cls: string): void {
+  for (const c of THEME_CLASSES) document.body.classList.remove(c);
+  document.body.classList.add(cls);
+}
+
+  messenger.onNotification(PushTheme, (cls) => {
+    applyThemeClass(cls);
+    // 차트 색은 getCssVar로 **생성 시점에** 읽어 캔버스에 구워진다 — 클래스만 바꾸면
+    // 축·격자·선이 이전 테마 색 그대로 남는다(CSS가 아니라 캔버스 픽셀이라 무성 실패).
+    if (trendChart) { trendChart.destroy(); trendChart = null; }
+    if (lastPanelSnapshot) updatePanel(lastPanelSnapshot);
+    if (panelUsage) updateUsageSection();
+    updateTrendChart();
+    updateCodexBandSection();
+  });
+
   messenger.onNotification(PushCodexRateLimit, (snapshot) => {
     panelCodexSnapshot = snapshot;
+    recordPanelCodexHistory(snapshot);
     updateCodexBandSection();
+    updateTrendChart();   // Codex 시리즈는 이 스냅샷이 유일한 입력이다(R4)
   });
 
   // 회고 push 수신(주 경로). pull(updateRetroSection)은 first-paint fallback로 유지 —
@@ -211,8 +258,7 @@ export function initPanel(): void {
   messenger.onNotification(PushLang, (lang) => {
     setLang(lang as Parameters<typeof setLang>[0]);
     rebuildPanelDom(messenger);
-    if (lastPanelSnapshot) updatePanel(lastPanelSnapshot);
-    if (panelUsage) updateUsageSection();
+    rehydrateAfterRebuild();
   });
 
   try {
@@ -229,6 +275,9 @@ export function initPanel(): void {
       if (lang && lang !== 'auto') {
         setLang(lang as Parameters<typeof setLang>[0]);
         rebuildPanelDom(messenger);
+        // 초기 pull은 서로 경쟁한다 — GetActiveProvider·GetRateLimit가 먼저 끝났으면 재빌드가
+        // 그 결과를 지운다. PushLang과 같은 재수화를 거친다(v0.2.3 ⑩, 인수검증 V1).
+        rehydrateAfterRebuild();
       }
     })
     .catch(() => undefined);
@@ -243,8 +292,21 @@ export function initPanel(): void {
     .then((provider) => { activePanelProvider = provider; applyProviderVisibility(); })
     .catch(() => undefined);
 
+
+  // Codex 버킷 이력 pre-hydrate(v0.2.3) — 확장이 들고 있는 이력을 받아 출발한다. 이게 없으면
+  // 이 웹뷰가 열린 시점부터만 쌓여서, 먼저 열려 있던 다른 웹뷰와 **같은 버킷의 소모율이 다르게
+  // 보인다**. Claude의 GetPollHistory pre-hydrate와 같은 구조.
+  void messenger.sendRequest(GetCodexPollHistory, HOST_EXTENSION, undefined)
+    .then((wire) => {
+      if (!wire || wire.length === 0) return;
+      hydrateCodexBucketHistory(panelCodexHistory, wire, MAX_HISTORY);
+      updateCodexBandSection();
+      updateTrendChart();
+    })
+    .catch(() => undefined);
+
   void messenger.sendRequest(GetCodexRateLimit, HOST_EXTENSION, undefined)
-    .then((snapshot) => { panelCodexSnapshot = snapshot; updateCodexBandSection(); })
+    .then((snapshot) => { panelCodexSnapshot = snapshot; recordPanelCodexHistory(snapshot); updateCodexBandSection(); updateTrendChart(); })
     .catch(() => undefined);
 
   void messenger.sendRequest(GetPollHistory, HOST_EXTENSION, undefined)
@@ -278,7 +340,10 @@ export function initPanel(): void {
  */
 const CLAUDE_ONLY_PANEL_IDS = [
   'panel-fh-card', 'panel-sd-card', 'panel-burn-card', 'panel-safe-card',
-  'panel-util-trend-card', 'panel-skill-card', 'panel-retro-card',
+  // 'panel-util-trend-card' 제거(v0.2.3 R4) — 이 카드가 Claude 전용이었던 이유는 데이터가
+  // 없어서가 아니라 updateTrendChart가 5H/7D 데이터셋 2개를 손으로 적어 놨기 때문이다.
+  // buildTrendSeries로 N시리즈화하면서 Codex 버킷도 그릴 수 있게 됐다.
+  'panel-skill-card', 'panel-retro-card',
 ] as const;
 
 /** Codex 활성 시에만 보이는 대체 컨테이너(verify-impl B-V1/B-V2 보완) — 위 배열의 역방향. */
@@ -299,11 +364,14 @@ function applyProviderVisibility(): void {
     const el = document.getElementById(id);
     if (el) el.style.display = isCodex ? '' : 'none';
   }
-  // plan 배지는 fmtPlanTier(Claude subscriptionType/rateLimitTier 형식) 전용 포맷터라
-  // Codex plan_type 문자열을 넣으면 형식이 안 맞는다 — Codex 전용 배지는 별건(ST9).
-  const planBadgeEl = document.getElementById('panel-plan-badge');
-  if (planBadgeEl && isCodex) planBadgeEl.innerHTML = '';
+  // 전환 방향과 무관하게 배지를 다시 쓴다 — Codex→Claude 전환 시 Codex 배지가 다음 Claude
+  // 폴링까지 남던 결함(v0.2.3 ⑩). 무엇을 보일지는 panelPlanBadgeText가 정한다.
+  renderPanelPlanBadge();
   updateCodexBandSection();
+  // 프로바이더가 바뀌면 시리즈 구성 자체가 달라진다 — 기존 Chart 인스턴스를 버리고 다시 만든다.
+  // update()로 데이터만 갈아끼우면 이전 프로바이더의 범례·축 스케일이 남는다.
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  updateTrendChart();
 }
 
 /**
@@ -312,6 +380,15 @@ function applyProviderVisibility(): void {
  * 여기서 매번 다시 그린다 — sidebarView.ts의 bucketCards 루프와 동일 라벨링 원칙 재사용
  * (KNOWN_WINDOWS 매핑값을 그대로 쓰고 새 하드코딩을 만들지 않는다).
  */
+/**
+ * 버킷 이력 누적(v0.2.3 R3). 스냅샷 수신 지점이 둘(push·초기 pull)이라 함수로 모은다 —
+ * 한쪽만 누적하면 대시보드를 늦게 연 사용자에게만 burn이 안 뜨는, 재현 어려운 결함이 된다.
+ */
+function recordPanelCodexHistory(snapshot: CodexRateLimitSnapshot | null): void {
+  if (!snapshot) return;
+  appendCodexBucketHistory(panelCodexHistory, snapshot.buckets, new Date(snapshot.generatedAt), MAX_HISTORY);
+}
+
 function updateCodexBandSection(): void {
   if (activePanelProvider !== 'codex') return;
 
@@ -326,6 +403,19 @@ function updateCodexBandSection(): void {
       const color = status === 'danger' ? 'var(--c-danger)' : status === 'allowed_warning' ? 'var(--c-warn)' : 'var(--c-sonnet)';
       const label = b.labelKey ? t(b.labelKey) : `${b.windowMinutes}min`;
       const resetMs = Math.max(0, b.resetsAt * 1000 - Date.now());
+      // BURN RATE / SAFE UNTIL (R3) — Claude의 panel-burn-card/panel-safe-card는
+      // RateLimitSnapshot의 고정 fiveHour 의미론에 묶여 있어 되살리면 의미가 틀린 카드가 된다.
+      // 그래서 CLAUDE_ONLY_PANEL_IDS는 건드리지 않고, 버킷 카드 안에 버킷 자신의 수치를 넣는다.
+      const burn = deriveCodexBucketBurn(
+        panelCodexHistory.get(b.windowMinutes) ?? [],
+        b.usedPercent / 100,
+        resetMs,
+        b.windowMinutes * 60_000,
+      );
+      const burnText = burn.rateText === null
+        ? t(burn.fallbackKey)
+        : `${t('burn')} ${burn.rateText}${burn.isEstimate ? ` (${t('est_label')})` : ''}`
+          + (burn.safeText ? ` · ${t('safe_until')} ${burn.safeText}` : '');
       return `
         <div class="panel-metric-card">
           <div class="panel-metric-label">${escapeHtml(label)}</div>
@@ -334,6 +424,7 @@ function updateCodexBandSection(): void {
             <div class="rate-bar"><div class="rate-bar-fill" data-status="${status}" style="width:${barFillWidth(b.usedPercent / 100)};"></div></div>
           </div>
           <div class="panel-metric-sub">${t('resets_in')} ${fmtReset(resetMs)}</div>
+          <div class="panel-metric-sub codex-burn-sub" data-window="${b.windowMinutes}">${escapeHtml(burnText)}</div>
         </div>`;
     }).join('');
   }
@@ -361,12 +452,18 @@ function updateCodexBandSection(): void {
     extraListEl.innerHTML = rows.length > 0 ? rows.join('') : `<div class="panel-loading">${t('collecting_data')}</div>`;
   }
 
-  // 헤더 플랜 배지(Claude의 fmtPlanTier 배지와 동일 위치/클래스 — planType 원본 문자열만
-  // 대문자화, 값별 분기 없음).
+  renderPanelPlanBadge();
+}
+
+/**
+ * 헤더 플랜 배지 쓰기(v0.2.3 ⑩) — 모든 쓰기 지점이 이 함수만 부른다. 값이 없으면 **지운다**:
+ * 조건부로만 쓰면 마지막 도착자가 이겨, Codex 모드에서 늦게 온 Claude 스냅샷이 배지를 덮는다.
+ */
+function renderPanelPlanBadge(): void {
   const planBadgeEl = document.getElementById('panel-plan-badge');
-  if (planBadgeEl && snapshot?.planType) {
-    planBadgeEl.innerHTML = `<span class="plan-badge">${escapeHtml(snapshot.planType.toUpperCase())}</span>`;
-  }
+  if (!planBadgeEl) return;
+  const text = panelPlanBadgeText(activePanelProvider, lastPanelSnapshot, panelCodexSnapshot);
+  planBadgeEl.innerHTML = text ? `<span class="plan-badge">${escapeHtml(text)}</span>` : '';
 }
 
 function recordHistory(snapshot: RateLimitSnapshot): void {
@@ -451,11 +548,11 @@ function buildPanelShell(): string {
            각 pane의 canvas/빈상태/note/readout id는 **전부 그대로 유지** — update* 함수들이
            id로만 DOM을 찾으므로 렌더 로직은 무변경이다. -->
       <div class="card panel-trend-card" id="panel-cost-period-card">
-        <div class="panel-chart-header">${t('cost_by_period')}<span class="panel-chart-readout cost-period-readout" id="daily-readout"></span><span class="panel-chart-readout cost-period-readout" id="longterm-readout" style="display:none"></span><span class="panel-chart-readout cost-period-readout" id="monthly-readout" style="display:none"></span></div>
+        <div class="panel-chart-header">${t('cost_by_period')}<span class="panel-chart-readout cost-period-readout" id="daily-readout"></span><span class="panel-chart-readout cost-period-readout" id="monthly-readout" style="display:none"></span><span class="panel-chart-readout cost-period-readout" id="longterm-readout" style="display:none"></span></div>
         <div class="cost-tab-row" role="tablist" aria-label="${t('cost_by_period')}">
           <button class="cost-tab-btn active" data-period="daily" role="tab" aria-selected="true" aria-controls="cost-pane-daily">${t('period_tab_daily')}</button>
-          <button class="cost-tab-btn" data-period="longterm" role="tab" aria-selected="false" aria-controls="cost-pane-longterm">${t('period_tab_longterm')}</button>
           <button class="cost-tab-btn" data-period="monthly" role="tab" aria-selected="false" aria-controls="cost-pane-monthly">${t('period_tab_monthly')}</button>
+          <button class="cost-tab-btn" data-period="longterm" role="tab" aria-selected="false" aria-controls="cost-pane-longterm">${t('period_tab_longterm')}</button>
         </div>
 
         <div class="cost-period-pane" id="cost-pane-daily" role="tabpanel">
@@ -467,6 +564,14 @@ function buildPanelShell(): string {
             <div class="panel-loading" id="daily-empty">${t('collecting_data')}</div>
           </div>
           <div class="cost-median-legend" id="daily-median-legend"></div>
+        </div>
+
+        <div class="cost-period-pane" id="cost-pane-monthly" role="tabpanel" style="display:none">
+          <div class="panel-trend-wrap">
+            <canvas id="chart-monthly" style="display:none"></canvas>
+            <div class="panel-loading" id="monthly-empty">${t('collecting_data')}</div>
+          </div>
+          <div id="monthly-cost-note"></div>
         </div>
 
         <div class="cost-period-pane" id="cost-pane-longterm" role="tabpanel" style="display:none">
@@ -481,14 +586,6 @@ function buildPanelShell(): string {
             <div class="panel-loading" id="longterm-empty">${t('collecting_data')}</div>
           </div>
           <div id="longterm-cost-note"></div>
-        </div>
-
-        <div class="cost-period-pane" id="cost-pane-monthly" role="tabpanel" style="display:none">
-          <div class="panel-trend-wrap">
-            <canvas id="chart-monthly" style="display:none"></canvas>
-            <div class="panel-loading" id="monthly-empty">${t('collecting_data')}</div>
-          </div>
-          <div id="monthly-cost-note"></div>
         </div>
       </div>
 
@@ -1508,11 +1605,8 @@ function updatePanel(snapshot: RateLimitSnapshot): void {
     statusEl.textContent = statusLabel(snapshot.overallStatus);
   }
 
-  // Plan 배지
-  const planBadgeEl = document.getElementById('panel-plan-badge');
-  if (planBadgeEl && snapshot.plan?.subscriptionType) {
-    planBadgeEl.innerHTML = `<span class="plan-badge">${escapeHtml(fmtPlanTier(snapshot.plan.subscriptionType, snapshot.plan.rateLimitTier))}</span>`;
-  }
+  // Plan 배지 — provider를 보고 정한다(Codex 모드에서 이 경로가 Codex 배지를 덮던 결함, v0.2.3 ⑩).
+  renderPanelPlanBadge();
 
   // Fallback 배너
   const fallbackEl = document.getElementById('panel-fallback-banner');
@@ -1594,16 +1688,35 @@ function updateTrendChart(): void {
   const emptyEl = document.getElementById('trend-empty');
   if (!canvas) return;
 
-  // 스코프 필터: 최근 N분 이내 포인트만
+  // 스코프 필터 + 시리즈 선택(R4) — Claude는 5H/7D 2개, Codex는 버킷 개수만큼.
   const cutoff = Date.now() - chartScopeMin * 60000;
-  const fhSlice = fhHistory.filter(p => p.t.getTime() >= cutoff);
-  const sdSlice = sdHistory.filter(p => p.t.getTime() >= cutoff);
+  const series = buildTrendSeries({
+    provider: activePanelProvider,
+    fhHistory,
+    sdHistory,
+    codexHistory: panelCodexHistory,
+    codexBuckets: panelCodexSnapshot?.buckets ?? [],
+    cutoffMs: cutoff,
+  });
 
-  if (fhSlice.length < 2) {
+  // 기준선 시리즈 = 라벨·눈금의 시간축을 제공할 시리즈. 포인트가 가장 많은 것을 쓴다
+  // (Codex는 버킷마다 관측 시점이 같지만, 세션 도중 플랜이 바뀌면 길이가 갈릴 수 있다).
+  const primary = series.reduce<TrendSeries | null>(
+    (best, s) => (best === null || s.points.length > best.points.length ? s : best), null);
+
+  if (!primary || primary.points.length < 2) {
     canvas.style.display = 'none';
     if (emptyEl) {
       emptyEl.style.display = '';
-      emptyEl.textContent = fhHistory.length < 2 ? t('collecting_poll') : t('no_scope_data');
+      // "수집 중"과 "이 스코프에 데이터 없음"을 구분한다 — 전자는 기다리면 되고 후자는
+      // 스코프를 넓혀야 한다. 판정 기준은 필터 **이전** 이력의 유무다.
+      const rawMax = series.reduce((m, s) => {
+        const raw = s.source.kind === 'claude'
+          ? (s.source.key === 'fh' ? fhHistory.length : sdHistory.length)
+          : (panelCodexHistory.get(s.source.windowMinutes)?.length ?? 0);
+        return Math.max(m, raw);
+      }, 0);
+      emptyEl.textContent = rawMax < 2 ? t('collecting_poll') : t('no_scope_data');
     }
     if (trendChart) { trendChart.destroy(); trendChart = null; }
     return;
@@ -1611,63 +1724,60 @@ function updateTrendChart(): void {
   canvas.style.display = '';
   if (emptyEl) emptyEl.style.display = 'none';
 
+  /** 시리즈 표시명 — Claude는 고정 문구, Codex는 버킷 라벨(미지의 window는 원시 분). */
+  const seriesLabel = (s: TrendSeries): string => {
+    if (s.source.kind === 'claude') return s.source.key === 'fh' ? 'Session (5h)' : 'Weekly (7d)';
+    return s.source.labelKey ? t(s.source.labelKey) : `${s.source.windowMinutes}min`;
+  };
+
   const trendReadoutEl = document.getElementById('trend-readout');
   if (trendReadoutEl) {
-    const fhNow = fmtPct(fhSlice[fhSlice.length - 1].v);
-    const sdNow = fmtPct(sdSlice[sdSlice.length - 1]?.v ?? fhSlice[fhSlice.length - 1].v);
-    trendReadoutEl.textContent = `5H ${fhNow} · 7D ${sdNow}`;
+    // 하드코딩 "5H … · 7D …"를 시리즈에서 생성한다 — Codex 버킷 수만큼 늘어난다.
+    trendReadoutEl.textContent = series
+      .filter(s => s.points.length > 0)
+      .map(s => `${seriesLabel(s)} ${fmtPct(s.points[s.points.length - 1].v)}`)
+      .join(' · ');
   }
 
-  const labels = fhSlice.map(p => {
+  const labels = primary.points.map(p => {
     const d = new Date(p.t);
     return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
   });
 
-  const fhColor = getCssVar('--c-sonnet');
-  const sdColor = getCssVar('--c-opus');
   const axisColor = getCssVar('--vscode-descriptionForeground');
   const gridColor = getCssVar('--vscode-panel-border');
   const paceColor = getCssVar('--vscode-descriptionForeground');
 
-  const datasets: ChartDataset<'line'>[] = [
-    {
-      label: 'Session (5h)',
-      data: fhSlice.map(p => p.v * 100),
-      borderColor: fhColor,
-      backgroundColor: fhColor + '22',
+  const datasets: ChartDataset<'line'>[] = series.map((s) => {
+    const color = getCssVar(s.accentVar);
+    const n = s.points.length;
+    return {
+      label: seriesLabel(s),
+      data: s.points.map(p => p.v * 100),
+      borderColor: color,
+      backgroundColor: color + '22',
       borderWidth: 2,
       fill: true,
       tension: 0.3,
-      pointRadius: fhSlice.length <= 10
-        ? 3
-        : (ctx: { dataIndex: number }) => (ctx.dataIndex === fhSlice.length - 1 ? 4 : 0),
-      pointBackgroundColor: fhColor,
-    },
-    {
-      label: 'Weekly (7d)',
-      data: sdSlice.map(p => p.v * 100),
-      borderColor: sdColor,
-      backgroundColor: sdColor + '22',
-      borderWidth: 2,
-      fill: true,
-      tension: 0.3,
-      pointRadius: sdSlice.length <= 10
-        ? 3
-        : (ctx: { dataIndex: number }) => (ctx.dataIndex === sdSlice.length - 1 ? 4 : 0),
-      pointBackgroundColor: sdColor,
-    },
-  ];
+      pointRadius: n <= 10 ? 3 : (ctx: { dataIndex: number }) => (ctx.dataIndex === n - 1 ? 4 : 0),
+      pointBackgroundColor: color,
+    };
+  });
 
   // 게이지 밖 ④ 페이스 라인 — "기준 페이스"(창 시작→리셋 선형) vs 실제(위 fhSlice) 오버레이(C4-PaceLine 보드).
   // lastPanelSnapshot이 있을 때만(첫 렌더 전 가드). 현재 5h 윈도 밖 포인트는 null로 스킵해
   // 24h 스코프처럼 여러 리셋을 가로지르는 구간에서 단조 기준선이 100%에 눌어붙는 걸 막는다.
   const paceCaptionEl = document.getElementById('pace-caption');
-  const fh = lastPanelSnapshot?.fiveHour;
+  // 페이스 라인은 **Claude의 5시간 창 전제** 위에 서 있다(FH_WINDOW_MS 고정 + fiveHour 스냅샷).
+  // Codex에는 fiveHour가 없고 창 길이도 버킷마다 다르므로, 폴백으로 아무 창이나 끼워 넣으면
+  // "기준 페이스"라는 이름의 지어낸 선이 된다. 그럴 바엔 그리지 않는다(v0.2.3 R4) —
+  // CLAUDE_ONLY_PANEL_IDS를 두었던 것과 같은 판단이다.
+  const fh = activePanelProvider === 'claude' ? lastPanelSnapshot?.fiveHour : undefined;
   if (fh) {
     const nowMs = Date.now();
     const resetAtMs = nowMs + fh.msUntilReset;
     const windowStartMs = resetAtMs - FH_WINDOW_MS;
-    const baselineData = fhSlice.map(p => {
+    const baselineData = primary.points.map(p => {
       const t = p.t.getTime();
       return t < windowStartMs ? null : calcPaceBaseline(t, windowStartMs, resetAtMs);
     });

@@ -165,6 +165,8 @@ else
     step "사이드바 레이아웃" node scripts/verify-sidebar-layout.js
     step "목록 행 상한·가격 신호 (2폭×2로캘)" node scripts/verify-list-cap.js
     step "기간별 비용 탭 전환 (2폭×2로캘×3탭)" node scripts/verify-cost-period-tabs.mjs
+    step "Codex 버킷 소모율·Trend N시리즈 (2폭)" node scripts/verify-codex-panel-burn.mjs
+    step "테마 클래스 부착 (다크⇄라이트)" node scripts/verify-theme-attach.mjs
   fi
 
 fi
