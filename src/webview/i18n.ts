@@ -63,11 +63,7 @@ const dict: Record<string, Record<Lang, string>> = {
     en: 'Model context window size as reported by the CLI (measured). Not a usage percentage.',
     ja: 'CLIが報告したモデルのコンテキストウィンドウサイズ(実測)。使用率ではありません。',
     zh: 'CLI 报告的模型上下文窗口大小(实测)。不是使用率。' },
-  codex_variable_bucket_note: { ko: '지표 밴드도 가변입니다 — Free 플랜은 "주간" 대신 "30일" 한 칸만, rate_limits가 없으면 소모율·안전 시간만 남습니다.',
-    en: 'The metric band is variable too — Free plans show a single "30 days" slot instead of "Weekly", and without rate_limits only burn rate and safe time remain.',
-    ja: '指標バンドも可変です — Freeプランは「週間」の代わりに「30日」の1枠のみ、rate_limitsがない場合は消費率と安全時間のみ残ります。',
-    zh: '指标带也是可变的 — Free 套餐只显示"30天"一格而非"每周",没有 rate_limits 时只保留消耗率和安全时间。' },
-  codex_extra_panel_title: { ko: '대신 새로 생기는 것', en: 'New in its place', ja: '代わりに新設される項目', zh: '取而代之的新内容' },
+  codex_extra_panel_title: { ko: 'Codex 전용 지표', en: 'Codex-only metrics', ja: 'Codex専用指標', zh: 'Codex 专属指标' },
   plan_label:       { ko: '플랜',                 en: 'Plan',                  ja: 'プラン',                    zh: '套餐' },
   codex_not_installed_title:{ ko: 'Codex CLI 미설치', en: 'Codex CLI Not Installed', ja: 'Codex CLI 未インストール', zh: '未安装 Codex CLI' },
   codex_not_installed_sub:{ ko: '아래 명령으로 설치 후 로그인하세요.<br>설치돼 있지 않으면 로그인해도 소용없습니다.',
@@ -280,7 +276,7 @@ const dict: Record<string, Record<Lang, string>> = {
     en: 'Outside the normal range (60–90%) usually means sessions are fragmented or the prompt prefix keeps changing.',
     ja: '正常範囲(60~90%)を外れると、セッションが細切れになっているかプロンプト冒頭が毎回変わっている可能性があります。',
     zh: '超出正常范围（60~90%）通常意味着会话被拆得过碎，或提示词前缀每次都在变化。' },
-  // C1 보드의 핵심 주장 — "스파크라인은 이미 있다, 없는 건 이 수치가 뭘 뜻하는지다". 툴팁이 아니라 본문에 노출한다.
+  // C1 보드 — "없는 건 이 수치가 뭘 뜻하는지다". v0.2.4부터 정상/급락 마커의 호버 툴팁으로만 노출(본문 문장 제거).
   cache_band_msg_normal: {
     ko: '최근 7일 · 프롬프트 재사용이 잘 되고 있다',
     en: 'Last 7 days · prompt reuse is working well',
@@ -311,7 +307,9 @@ const dict: Record<string, Record<Lang, string>> = {
   pace_window_reset:       { ko: '리셋',                 en: 'Reset',                 ja: 'リセット',                 zh: '重置' },
   pace_exhaust_projected:  { ko: '소진 예상',             en: 'Est. exhaustion',       ja: '消耗予測',                 zh: '预计耗尽' },
   pace_safe_no_exhaust:    { ko: '리셋 전 소진 없음',       en: 'No exhaustion before reset', ja: 'リセット前の消耗なし',    zh: '重置前不会耗尽' },
-  // C4 보드의 판정 문장 — 점선(기준 페이스) 대비 실제선 위치가 곧 "리셋 전에 막히는가"의 답이다.
+  // C4 보드의 판정 — 화면에는 짧은 마커(pace_marker_*)만, 아래 문장은 호버 툴팁(v0.2.4).
+  pace_marker_over:        { ko: '과속',                 en: 'Over pace',             ja: 'ペース超過',               zh: '超速' },
+  pace_marker_under:       { ko: '여유',                 en: 'Under pace',            ja: '余裕あり',                 zh: '余量充足' },
   pace_above_baseline:     {
     ko: '실제선이 기준 페이스 위 — 이 속도면 리셋 전에 막힌다',
     en: 'Above baseline pace — at this rate you hit the limit before reset',

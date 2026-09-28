@@ -8,6 +8,7 @@
 import type { AttributionConfidence, CommitScopeInfo, RetroSummary } from '../types';
 import { t } from './i18n';
 import { escapeHtml, fmtCost } from './format';
+import { statusMarkerHtml } from './statusMarker';
 
 function confidenceLabel(c: AttributionConfidence): string {
   return c === 'high' ? t('confidence_high') : c === 'medium' ? t('confidence_medium') : t('confidence_low');
@@ -57,8 +58,8 @@ export function renderRetro(listEl: { innerHTML: string }, retro: RetroSummary |
     </div>`;
   }).join('');
 
-  listEl.innerHTML = unattRow + rows
-    + `<div class="retro-disclaimer">${scopeNote(retro.commitScopes)}${t('retro_disclaimer')}</div>`;
+  // v0.2.4: 근사 귀속 안내 문장은 본문에서 뺐다 — 카드 헤더 ≈배지 툴팁에 같은 문장이 있다.
+  listEl.innerHTML = unattRow + rows + scopeNote(retro.commitScopes);
 }
 
 /**
@@ -68,7 +69,10 @@ export function renderRetro(listEl: { innerHTML: string }, retro: RetroSummary |
 function scopeNote(scopes: CommitScopeInfo[] | undefined): string {
   if (!scopes || scopes.length === 0) return '';
   if (scopes.some(s => s.degraded)) {
-    return `<div class="retro-scope-warn">⚠ ${t('retro_scope_degraded')}</div>`;
+    // v0.2.4: 경고 문장 → 마커(⚠ 전체 커밋) + 툴팁.
+    return `<div class="retro-scope-note">${statusMarkerHtml({
+      label: `⚠ ${t('retro_scope_all')}`, tone: 'warn', tip: t('retro_scope_degraded'),
+    })}</div>`;
   }
   const label = scopes.every(s => s.applied === 'mine') ? t('retro_scope_mine') : t('retro_scope_all');
   return `<div class="retro-scope-note">${t('scope_label')}: ${label}</div>`;

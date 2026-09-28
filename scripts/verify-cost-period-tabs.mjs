@@ -55,6 +55,29 @@ try {
           els => els.filter(e => getComputedStyle(e).display !== 'none').map(e => e.id));
         if (readouts.length !== 1) problems.push(`${tag}/${period}: readout ${readouts.length}개 표시`);
 
+        // ⑤ 장기 readout은 선택 범위(기본 30일)의 **합계**다(v0.2.4). 위 개수 검사만으로는 값이
+        //    틀려도 통과했다 — 실제로 장기가 "마지막 날 비용"을 보여 일별 탭과 같은 숫자가 나간 채
+        //    v0.2.2~v0.2.3 두 릴리스를 통과했다(사용자 발견). 목업 입력에서 기대값을 직접 계산해 대조한다.
+        if (period === 'longterm') {
+          const r = await page.evaluate(() => {
+            const days = (window.MOCK_USAGE && window.MOCK_USAGE.historicalDays) || [];
+            const cutoff = new Date();
+            cutoff.setUTCDate(cutoff.getUTCDate() - 30);
+            const key = cutoff.toISOString().slice(0, 10);
+            const expected = days.filter(d => d.date >= key).reduce((a, d) => a + d.costUsd, 0);
+            const text = (document.getElementById('longterm-readout') || {}).textContent || '';
+            const daily = (document.getElementById('daily-readout') || {}).textContent || '';
+            return { expected, text, daily };
+          });
+          const shownVal = Number((r.text.match(/[\d.]+/) || ['NaN'])[0]);
+          if (!(Math.abs(shownVal - r.expected) < 0.01)) {
+            problems.push(`${tag}/longterm: readout "${r.text}" ≠ 30일 합계 $${r.expected.toFixed(2)}`);
+          }
+          if (r.text && r.text === r.daily) {
+            problems.push(`${tag}/longterm: readout이 일별 탭과 같은 값("${r.text}") — 마지막 날 값을 쓰는 징후`);
+          }
+        }
+
         // ② 캔버스가 실제 크기를 가졌는가(그려진 경우에 한해 — 데이터가 없으면 빈상태가 정상)
         const box = await page.$eval(`#${CANVAS_BY_PERIOD[period]}`, e => {
           const r = e.getBoundingClientRect();

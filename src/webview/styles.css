@@ -1330,13 +1330,6 @@ body[data-mode="sidebar"] #root { height: 100%; }
   font-family: var(--ff-mono);
 }
 .pace-caption .pace-exhaust { color: var(--c-warn); font-weight: 600; }
-/* 판정 문장 — 점선(기준 페이스) 대비 실제선 위치가 곧 "리셋 전에 막히는가"의 답(C4 보드) */
-.pace-caption .pace-verdict {
-  flex-basis: 100%;
-  font-family: var(--ff-sans);
-  color: var(--vscode-descriptionForeground);
-}
-.pace-caption .pace-verdict.warn { color: var(--c-warn); }
 .panel-empty {
   display: flex;
   align-items: center;
@@ -1732,22 +1725,8 @@ body[data-mode="sidebar"] #root { height: 100%; }
 }
 .cache-spark-wrap { margin-top: var(--sp-2); }
 
-/* ── 게이지 밖 ① 캐시 정상범위 밴드 — 히트율 KPI 옆 상태 라벨(60/90 참조선은 차트 내부에서 그림) ── */
-.cache-band-status {
-  font-size: var(--fs-label);
-  font-weight: 600;
-  margin-left: var(--sp-1);
-}
-.cache-band-status.normal { color: var(--c-success); }
-.cache-band-status.drop   { color: var(--c-danger); }
-/* 상태 설명 문장 — C1 보드가 "없는 건 이 수치가 뭘 뜻하는지다"라며 요구한 본문(툴팁 아님) */
-.cache-band-msg {
-  margin-top: var(--sp-2);
-  font-size: var(--fs-label);
-  color: var(--vscode-descriptionForeground);
-  line-height: 1.5;
-}
-.cache-band-msg.drop { color: var(--c-danger); }
+/* ── 게이지 밖 ① 캐시 정상범위 밴드 — 히트율 KPI 옆 상태 마커(설명은 툴팁, v0.2.4) ── */
+.cache-kpi-value .status-marker { margin-left: var(--sp-1); }
 
 /* ── P0: 대시보드 섹션 Y축 정렬 통일 ──
    panel-root 패딩(v0.2.3부터 sp-6) 위에 panel-metric-grid가 sp-4 좌우 패딩을 더한다.
@@ -1949,17 +1928,6 @@ body[data-mode="sidebar"] #root { height: 100%; }
 }
 .panel-mcp-row:last-child { border-bottom: none; }
 
-/* Codex 가변 버킷 안내 배너(verify-impl B-V1 보완) — Main.dc.html/Gauge-Plans.dc.html 의도 */
-.panel-codex-band-note {
-  margin: 0 var(--sp-4);
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--tint-warn-border);
-  background: var(--tint-warn);
-  border-radius: var(--r-sm);
-  font-size: var(--fs-label);
-  color: var(--vscode-descriptionForeground);
-}
-
 /* usage×git 회고 — 커밋별 비용 귀속 (v0.1.37) */
 .panel-retro-card {
   margin: 0 var(--sp-4) var(--sp-4);
@@ -2034,27 +2002,11 @@ body[data-mode="sidebar"] #root { height: 100%; }
   );
 }
 .retro-unattributed .retro-cost { color: var(--c-slate); }
-.retro-disclaimer {
-  margin-top: var(--sp-2);
-  font-size: 10px;
-  line-height: 1.4;
-  color: var(--vscode-descriptionForeground);
-  opacity: 0.85;
-}
 
 /* ── v0.1.55: 가격 신호 정직성 + 행 상한 ─────────────────────────────── */
 
 /* 계측되지 않은 값을 계측된 것처럼 보이지 않게 하는 표기들. */
-.panel-warn-note {
-  margin-bottom: var(--sp-2);
-  padding: var(--sp-1) var(--sp-2);
-  font-size: var(--fs-label);
-  line-height: 1.4;
-  color: var(--c-warn);
-  border-left: 2px solid var(--c-warn);
-  background: var(--tint-warn);
-  border-radius: var(--r-sm);
-}
+.panel-marker-row { margin-bottom: var(--sp-2); }
 .panel-basis-note {
   font-size: 10px;
   color: var(--vscode-descriptionForeground);
@@ -2090,12 +2042,20 @@ body[data-mode="sidebar"] #root { height: 100%; }
 }
 .list-more-btn:hover { background: var(--vscode-list-hoverBackground); }
 .retro-scope-note {
+  margin-top: var(--sp-2);
   font-size: 10px;
   color: var(--vscode-descriptionForeground);
-  margin-bottom: var(--sp-1);
 }
-.retro-scope-warn {
+
+/* ── v0.2.4 상태 마커 — 서술형 문구 대체(신호는 항상 보이고, 상세는 호버/포커스 툴팁) ── */
+.status-marker {
   font-size: var(--fs-label);
-  color: var(--c-warn);
-  margin-bottom: var(--sp-1);
+  font-weight: 600;
+  cursor: help;
+  white-space: nowrap;
 }
+.status-marker:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
+.status-marker.ok     { color: var(--c-success); }
+.status-marker.warn   { color: var(--c-warn); }
+.status-marker.danger { color: var(--c-danger); }
+.status-marker.muted  { color: var(--vscode-descriptionForeground); }

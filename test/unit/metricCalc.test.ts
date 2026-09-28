@@ -7,6 +7,7 @@ import {
   filterQualifyingCostDays,
   calcCostAnomalyPct,
   calcPaceBaseline,
+  sumPeriodCost,
 } from '../../src/webview/metricCalc';
 import type { DailyUsage } from '../../src/types';
 
@@ -89,5 +90,17 @@ describe('calcPaceBaseline — 0..100 clamp', () => {
   });
   it('윈도 이후면 100으로 clamp', () => {
     expect(calcPaceBaseline(2500, start, reset)).toBe(100);
+  });
+});
+
+// v0.2.4 — 기간별 비용 카드의 장기 탭 readout이 "마지막 날 비용"을 써서 일별 탭(오늘 비용)과
+// 같은 숫자를 보였다. 일별=오늘 · 월별=이번 달 합계처럼 장기도 **선택 범위의 합계**여야 한다.
+describe('sumPeriodCost', () => {
+  it('범위 안 모든 날의 비용을 더한다 — 마지막 날 값이 아니다', () => {
+    const days = [day('2026-09-01', 10, 1.5), day('2026-09-02', 10, 2.25), day('2026-09-03', 10, 0.25)];
+    expect(sumPeriodCost(days)).toBeCloseTo(4.0, 10);
+  });
+  it('빈 범위는 0', () => {
+    expect(sumPeriodCost([])).toBe(0);
   });
 });

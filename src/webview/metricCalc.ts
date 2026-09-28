@@ -48,3 +48,12 @@ export function calcPaceBaseline(nowMs: number, windowStartMs: number, resetAtMs
   const ratio = (nowMs - windowStartMs) / (resetAtMs - windowStartMs);
   return Math.min(100, Math.max(0, ratio * 100));
 }
+
+/**
+ * 기간별 비용 카드 장기 탭의 readout — 선택 범위(30/90/180일) 안 비용의 합계(v0.2.4).
+ * 이전에는 범위의 마지막 날(=오늘) 비용을 보여 일별 탭과 같은 숫자가 나왔다. 일별=오늘,
+ * 월별=이번 달 합계와 나란히 읽히려면 장기는 범위 합계여야 한다.
+ */
+export function sumPeriodCost(days: DailyUsage[]): number {
+  return days.reduce((acc, d) => acc + d.costUsd, 0);
+}

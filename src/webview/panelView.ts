@@ -14,11 +14,12 @@ import { calcSafeUntil, calcProjAtReset, deriveBurnState, burnStateLabelKey, typ
 import { appendCodexBucketHistory, hydrateCodexBucketHistory } from './codexBucketHistory';
 import { deriveCodexBucketBurn } from './codexBandBurn';
 import { panelPlanBadgeText } from './planBadge';
+import { statusMarkerHtml } from './statusMarker';
 import { buildTrendSeries, type TrendSeries } from './trendSeries';
 import { THEME_CLASSES } from './themeClass';
 import {
   median, THRESHOLD_LOW, THRESHOLD_HIGH, classifyCacheHitRate,
-  filterQualifyingCostDays, calcCostAnomalyPct, calcPaceBaseline,
+  filterQualifyingCostDays, calcCostAnomalyPct, calcPaceBaseline, sumPeriodCost,
 } from './metricCalc';
 import { vsApi } from './webviewApi';
 import {
@@ -348,7 +349,7 @@ const CLAUDE_ONLY_PANEL_IDS = [
 
 /** Codex 활성 시에만 보이는 대체 컨테이너(verify-impl B-V1/B-V2 보완) — 위 배열의 역방향. */
 const CODEX_ONLY_PANEL_IDS = [
-  'panel-codex-band-grid', 'panel-codex-band-note', 'panel-codex-extra-card',
+  'panel-codex-band-grid', 'panel-codex-extra-card',
 ] as const;
 
 function applyProviderVisibility(): void {
@@ -428,11 +429,6 @@ function updateCodexBandSection(): void {
         </div>`;
     }).join('');
   }
-
-  // "지표 밴드도 가변" 안내(Main/Gauge-Plans.dc.html 의도) — 버킷이 실제로 있을 때만 의미가
-  // 있다(스냅샷 자체가 없으면 §6 no_records 분기가 이미 화면 전체를 대체한다).
-  const noteEl = document.getElementById('panel-codex-band-note');
-  if (noteEl) noteEl.textContent = buckets.length > 0 ? t('codex_variable_bucket_note') : '';
 
   // 신규 패널 3행 — 빈 값과 0 값을 같게 그리지 않는다: 컨텍스트창은 null이면 행 자체를 숨기고,
   // 추론 토큰은 오늘 활동이 있으면 0이어도 측정값으로 보여준다(panelUsage 유무로 "오늘 활동
@@ -524,7 +520,6 @@ function buildPanelShell(): string {
            JS가 채운다(updateCodexBandSection). burn-rate/trend 차트 같은 이력 의존 위젯이 아니라
            panel-fh-card류와 동형인 값+bar+sub 카드라 ST6이 보류한 범위(§7) 밖이다. -->
       <div class="panel-metric-grid" id="panel-codex-band-grid" style="display:none;"></div>
-      <div class="panel-codex-band-note" id="panel-codex-band-note" style="display:none;"></div>
 
       <!-- 추세 차트 -->
       <div class="panel-trend-card panel-flush" id="panel-util-trend-card">
@@ -977,8 +972,9 @@ function updateModelBreakdown(): void {
   }).join('');
 
   const unpriced = panelUsage?.unpricedModels ?? [];
+  // 가격 미상 경고 — 배너 문장 대신 마커, 문장과 해당 모델 목록은 툴팁(v0.2.4).
   const noteHtml = unpriced.length > 0
-    ? `<div class="panel-warn-note" title="${escapeHtml(unpriced.join(', '))}">⚠ ${escapeHtml(t('pricing_unknown_note'))}</div>`
+    ? `<div class="panel-marker-row">${statusMarkerHtml({ label: `⚠ ${t('pricing_unknown')}`, tone: 'warn', tip: `${t('pricing_unknown_note')}\n${unpriced.join(', ')}` })}</div>`
     : '';
   const basisHtml = byTokens
     ? `<div class="panel-basis-note">${escapeHtml(t('share_by_tokens'))}</div>`
@@ -1057,13 +1053,14 @@ function updateCacheSection(): void {
     : fmtCost(cache.savedUsd);
 
   // 게이지 밖 ① 캐시 정상범위 밴드 — C1-Cache 보드(60/90 밴드, 78.4%=정상·31.2%=급락).
-  // 보드의 주장은 "스파크라인은 이미 있다, 없는 건 이 수치가 뭘 뜻하는지다" — 설명 문장을
-  // 툴팁이 아니라 본문에 노출한다(툴팁은 화면에서 안 보이므로 보드 요구를 충족하지 못한다).
+  // 수치의 뜻은 상태 마커(정상/급락)가 항상 보여 주고, 설명 문장은 호버 툴팁으로만 간다(v0.2.4 —
+  // 이전엔 본문 한 줄로 늘어놨는데 사용자가 불필요한 문구로 지적. 보드의 "신호가 보여야 한다"는 마커가 유지한다).
   const bandKind = classifyCacheHitRate(hitPctNum);
-  const bandLabelKey = bandKind === 'normal' ? 'cache_band_normal' : 'cache_band_drop';
-  const bandMsgKey = bandKind === 'normal' ? 'cache_band_msg_normal' : 'cache_band_msg_drop';
-  const bandBadgeHtml = `<span class="cache-band-status ${bandKind}" title="${escapeHtml(t('cache_band_note'))}">${t(bandLabelKey)}</span>`;
-  const bandMsgHtml = `<div class="cache-band-msg ${bandKind}">${escapeHtml(t(bandMsgKey))}</div>`;
+  const bandMarkerHtml = statusMarkerHtml({
+    label: t(bandKind === 'normal' ? 'cache_band_normal' : 'cache_band_drop'),
+    tip: `${t(bandKind === 'normal' ? 'cache_band_msg_normal' : 'cache_band_msg_drop')}\n${t('cache_band_note')}`,
+    tone: bandKind === 'normal' ? 'ok' : 'danger',
+  });
 
   // 일별 캐시 히트율 스파크라인 데이터
   const sparkLabels = last7.map(d => d.date.slice(5));
@@ -1074,7 +1071,7 @@ function updateCacheSection(): void {
     <div class="cache-kpi-row">
       <div class="cache-kpi-item">
         <div class="cache-kpi-label">${t('hit_rate_today')}</div>
-        <div class="cache-kpi-value mono">${hitPct}%${bandBadgeHtml}</div>
+        <div class="cache-kpi-value mono">${hitPct}%${bandMarkerHtml}</div>
       </div>
       <div class="cache-kpi-item">
         <div class="cache-kpi-label">${t('saved_today')}</div>
@@ -1087,8 +1084,7 @@ function updateCacheSection(): void {
       <div style="height:76px;position:relative;">
         <canvas id="chart-cache-spark"></canvas>
       </div>
-      ${bandMsgHtml}
-    </div>` : bandMsgHtml}`;
+    </div>` : ''}`;
 
   if (hasSparkData) {
     const canvas = document.getElementById('chart-cache-spark') as HTMLCanvasElement | null;
@@ -1433,7 +1429,7 @@ function updateLongTermSection(): void {
   const noteEl = document.getElementById('longterm-cost-note');
   if (noteEl) {
     noteEl.innerHTML = costUnknownDays > 0
-      ? `<div class="panel-basis-note">⚠ ${escapeHtml(t('cost_unknown_days'))} (${costUnknownDays}d)</div>`
+      ? `<div class="panel-marker-row">${statusMarkerHtml({ label: `⚠ ${t('pricing_unknown')} ${costUnknownDays}d`, tone: 'warn', tip: t('cost_unknown_days') })}</div>`
       : '';
   }
 
@@ -1447,7 +1443,8 @@ function updateLongTermSection(): void {
   if (emptyEl) emptyEl.style.display = 'none';
 
   const readoutEl = document.getElementById('longterm-readout');
-  if (readoutEl) readoutEl.textContent = fmtCost(filtered[filtered.length - 1].costUsd);
+  // 범위 합계 — 마지막 날 값을 쓰면 일별 탭(오늘)과 같은 숫자가 된다(v0.2.4).
+  if (readoutEl) readoutEl.textContent = fmtCost(sumPeriodCost(filtered));
 
   const labels = filtered.map(d => d.date.slice(5));
   const data = filtered.map(d => Number(d.costUsd.toFixed(4)));
@@ -1524,7 +1521,7 @@ function updateMonthlyChart(): void {
   const monthlyNoteEl = document.getElementById('monthly-cost-note');
   if (monthlyNoteEl) {
     monthlyNoteEl.innerHTML = costUnknownDays > 0
-      ? `<div class="panel-basis-note">⚠ ${escapeHtml(t('cost_unknown_days'))} (${costUnknownDays}d)</div>`
+      ? `<div class="panel-marker-row">${statusMarkerHtml({ label: `⚠ ${t('pricing_unknown')} ${costUnknownDays}d`, tone: 'warn', tip: t('cost_unknown_days') })}</div>`
       : '';
   }
 
@@ -1801,12 +1798,16 @@ function updateTrendChart(): void {
       const exhaustText = safeUntil
         ? `<span class="pace-exhaust">${t('pace_exhaust_projected')} ${fmtTime(safeUntil)}</span>`
         : `<span>${t('pace_safe_no_exhaust')}</span>`;
-      // C4 보드의 판정 문장 — 점선(기준) 대비 실제선 위치가 곧 "리셋 전에 막히는가"의 답이다.
-      // 현재 시점 기준선과 실제 사용률을 직접 비교한다(차트 끝점 = 지금).
+      // C4 보드의 판정 — 점선(기준) 대비 실제선 위치가 곧 "리셋 전에 막히는가"의 답이다.
+      // 현재 시점 기준선과 실제 사용률을 직접 비교한다(차트 끝점 = 지금). 판정은 짧은 마커로,
+      // 풀어 쓴 문장은 툴팁으로만 둔다(v0.2.4 — 본문 문장은 사용자 지적으로 제거).
       const baselineNow = calcPaceBaseline(nowMs, windowStartMs, resetAtMs);
       const aboveBaseline = fh.utilization * 100 > baselineNow;
-      const verdictHtml = `<span class="pace-verdict${aboveBaseline ? ' warn' : ''}">`
-        + `${escapeHtml(t(aboveBaseline ? 'pace_above_baseline' : 'pace_below_baseline'))}</span>`;
+      const verdictHtml = statusMarkerHtml({
+        label: t(aboveBaseline ? 'pace_marker_over' : 'pace_marker_under'),
+        tip: t(aboveBaseline ? 'pace_above_baseline' : 'pace_below_baseline'),
+        tone: aboveBaseline ? 'warn' : 'ok',
+      });
       paceCaptionEl.innerHTML = `<span>${t('pace_window_start')} ${fmtTime(windowStart)}</span>` +
         `<span>${t('pace_window_reset')} ${fmtTime(resetAt)}</span>${exhaustText}${verdictHtml}`;
     }
