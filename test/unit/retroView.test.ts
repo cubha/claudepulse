@@ -82,3 +82,33 @@ describe('renderRetro — placeholder replace 계약', () => {
     expect(el.innerHTML).toContain('&lt;img');
   });
 });
+
+describe('renderRetro — v0.2.4 본문 서술 제거', () => {
+  it('근사 귀속 안내 문장을 본문에 렌더하지 않는다(카드 헤더 ≈배지 툴팁이 담당)', () => {
+    const el = fakeEl('');
+    renderRetro(el, summary());
+    expect(el.innerHTML).not.toContain(t('retro_disclaimer'));
+    expect(el.innerHTML).not.toContain('retro-disclaimer');
+  });
+
+  it('user.email 강등 → 본문 문장 없이 경고 마커, 문장은 title 툴팁', () => {
+    const el = fakeEl('');
+    renderRetro(el, summary({
+      commitScopes: [{ requested: 'mine', applied: 'all', authorEmail: null, degraded: true }],
+    }));
+    expect(el.innerHTML).toContain('status-marker warn');
+    const tip = t('retro_scope_degraded');
+    // 문장은 title 속성 안에만 있다 — 태그 사이 텍스트 노드로는 없다.
+    const textOnly = el.innerHTML.replace(/<[^>]*>/g, '');
+    expect(textOnly).not.toContain(tip.slice(0, 20));
+    expect(el.innerHTML).toMatch(/title="[^"]*user\.email/);
+  });
+
+  it('강등 없는 스코프는 짧은 라벨 한 줄로 남는다', () => {
+    const el = fakeEl('');
+    renderRetro(el, summary({
+      commitScopes: [{ requested: 'mine', applied: 'mine', authorEmail: 'a@b.c', degraded: false }],
+    }));
+    expect(el.innerHTML).toContain(`${t('scope_label')}: ${t('retro_scope_mine')}`);
+  });
+});

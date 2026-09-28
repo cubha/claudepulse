@@ -18,7 +18,12 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.2.3
+## What's New in v0.2.4
+
+- **The dashboard reads with fewer sentences.** The explanatory lines under the cache hit rate and the Utilization Trend chart, and the warning banners for models missing from the price table, are now short status markers — **Normal / Drop**, **Under pace / Over pace**, **⚠ price unknown** — with the full explanation on hover or keyboard focus. The Codex-only note about variable windows is gone (the window labels already show it), the Codex extra panel is now titled "Codex-only metrics", and the Git ROI card's footer note moved into the ≈ badge's tooltip.
+- **Fixed: the Long-term tab of Cost by Period showed today's cost.** Its header figure took the last day of the selected range, so it always matched the Daily tab. It now shows the total for the selected range (30, 90 or 180 days).
+
+<details><summary>v0.2.3</summary>
 
 - **Fixed: the status bar ignored the Claude/Codex switch.** It kept polling and showing Claude's 5h/7d figures while Codex was selected — every other surface followed the switch, but the one always on screen did not. Under Codex the two items now hide rather than relabel: Codex reports a variable number of windows (one 30-day window on Free, 5h+7d on paid), which two fixed slots can't show without making up a label.
 - **Fixed: burn rate showed "0.00%/min" on long windows**, which looks exactly like being idle. The rate was always per-minute, so 12% of a 30-day quota came out as zero. The unit now follows the window length — per minute, per hour or per day.
@@ -29,6 +34,8 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 - **The Utilization Trend chart works under Codex now**, one line per reported window instead of two hardcoded ones. The dashed "expected pace" line stays Claude-only, since it is derived from a five-hour window Codex has no equivalent of.
 - The **Cost by Period** tabs are ordered Daily → Monthly → Long-term, so the two everyday views sit next to each other.
 - **Light themes are applied.** The webviews had the dark palette hardcoded, so the light tokens shipped since v0.1.53 were unreachable. Both views now follow VS Code's theme — including high contrast — and switch live.
+
+</details>
 
 <details><summary>v0.2.2</summary>
 

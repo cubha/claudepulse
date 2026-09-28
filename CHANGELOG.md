@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.4] - 2026-09-28
+
+### Changed
+- **The dashboard reads with fewer sentences.** Explanatory lines under the cache hit rate and the
+  Utilization Trend chart, and the warning banners for models missing from the price table, are now
+  short status markers — Normal / Drop, Under pace / Over pace, ⚠ price unknown — with the full
+  explanation on hover (or keyboard focus). The Codex-only note about variable windows is gone; the
+  window labels already show it. The Codex extra panel is now titled "Codex-only metrics". In the Git ROI
+  card, the footer note about approximate attribution is gone (the ≈ badge's tooltip already says it),
+  and the missing-`user.email` warning is a "⚠ all commits" marker with the explanation on hover.
+
+### Fixed
+- **The Long-term tab of Cost by Period showed today's cost instead of the period's total.** Its
+  header figure took the last day of the selected range, so it always matched the Daily tab. It now
+  shows the total for the selected range (30, 90 or 180 days), alongside Daily (today) and Monthly
+  (this month).
 
 ## [0.2.3] - 2026-09-24
 

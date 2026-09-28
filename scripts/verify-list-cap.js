@@ -120,7 +120,8 @@ async function run(page, width, lang) {
     const body = document.getElementById('panel-model-body');
     if (!body) return { missing: true };
     return {
-      warn: !!body.querySelector('.panel-warn-note'),
+      // v0.2.4: 배너 문장 → 마커(⚠ 가격 미상, 상세는 title 툴팁). 경고 신호가 보이는지는 그대로 단언한다.
+      warn: !!body.querySelector('.status-marker.warn[title]'),
       basis: !!body.querySelector('.panel-basis-note'),
       unknownCells: body.querySelectorAll('.model-bar-cost--unknown').length,
       hasZeroCost: /\$0\.00/.test(body.textContent),
