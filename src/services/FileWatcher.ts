@@ -6,6 +6,23 @@ import { DEFAULT_USAGE_REFRESH_INTERVAL_MS } from '../constants';
 
 export type FileWatcherEvent = 'change';
 
+/**
+ * Claude 감시 깊이 — `projects/<p>/<session>/subagents/<file>.jsonl`에 닿는 3(v0.2.5).
+ * 기본값 2는 `<session>/` 폴더까지만 봐서 서브에이전트 transcript 변경을 영영 감지하지 못했다.
+ */
+export const CLAUDE_WATCH_DEPTH = 3;
+
+/**
+ * 폴링 제외 규칙. 깊이를 3으로 늘리면 `<session>/tool-results/*`(도구 출력 덤프)와
+ * `subagents/*.meta.json`까지 매 주기 stat 대상이 된다 — 둘 다 사용량과 무관하다(실측: +876개).
+ */
+export function isIgnoredWatchPath(p: string): boolean {
+  const base = path.basename(p);
+  if (base.startsWith('.') && base !== '.claude') return true;
+  if (base === 'tool-results') return true;
+  return base.endsWith('.meta.json');
+}
+
 export class FileWatcher extends EventEmitter {
   private watcher: chokidar.FSWatcher | null = null;
   private readonly watchPath: string;
@@ -44,10 +61,7 @@ export class FileWatcher extends EventEmitter {
       interval: 3000,
       ignoreInitial: true,
       persistent: true,
-      ignored: (p: string) => {
-        const base = path.basename(p);
-        return base.startsWith('.') && base !== '.claude';
-      },
+      ignored: isIgnoredWatchPath,
     });
 
     this.watcher.on('add', (p: string) => this.schedule(p));

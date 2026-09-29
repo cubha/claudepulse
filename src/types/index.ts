@@ -152,6 +152,7 @@ export interface SessionRecord {
   attributionSkill?: string;  // jsonl entry.attributionSkill (스킬 귀속, 없으면 미정의)
   isSidechain: boolean;       // jsonl entry.isSidechain (서브에이전트 소비 여부)
   agentId?: string;           // jsonl entry.agentId (서브에이전트 식별자)
+  attributionAgent?: string;  // jsonl entry.attributionAgent (서브에이전트 타입 — 사이드체인에만 의미, v0.2.5b)
   mcpServerCounts?: Record<string, number>;  // mcp__<server>__<tool> 서버별 호출수 (MCP 호출 없으면 미정의)
   /**
    * Codex 전용 추론 토큰(v0.2.0, verify-impl B-V2 보완) — `usage.reasoning_output_tokens`,
@@ -297,6 +298,27 @@ export interface SubagentStats {
 }
 
 /**
+ * 서브에이전트 타입별 사용량(v0.2.5b) — 사이드체인 레코드만, `attributionAgent` 기준, 비용 내림차순.
+ * share 분모 = 사이드체인 총비용(타입 합계 + 타입 미상 버킷 = SubagentStats.subagentCostUsd).
+ */
+export interface SubagentTypeUsage {
+  agentType: string;
+  costUsd: number;
+  totalTokens: number;
+  runCount: number;      // 이 타입의 고유 agentId 수
+  share: number;         // 0.0 ~ 1.0
+  hasUnpricedRecords: boolean;
+}
+
+/** attributionAgent가 없는 사이드체인 — 숨기면 거짓 정밀도라 1급 버킷으로 노출한다. */
+export interface SubagentTypeUnattributed {
+  costUsd: number;
+  totalTokens: number;
+  runCount: number;
+  hasUnpricedRecords: boolean;
+}
+
+/**
  * MCP 서버별 호출수 집계. 비용이 아닌 **호출 수** 기반 share다(v0.1.48 확정) —
  * 한 assistant 메시지에 MCP·비MCP 도구가 혼재하면 서버별 비용 분해가 원천적으로 불가능하기 때문.
  */
@@ -311,6 +333,8 @@ export interface AttributionScope {
   skillBreakdown: SkillUsage[];
   skillUnattributed: SkillUnattributed;
   subagentStats: SubagentStats;
+  subagentTypeBreakdown: SubagentTypeUsage[];
+  subagentTypeUnattributed: SubagentTypeUnattributed;
   mcpServerBreakdown: McpServerUsage[];
 }
 
@@ -365,6 +389,13 @@ export interface UsageSummary {
    * 찍히는데도 화면은 정상으로 보였다.
    */
   unpricedModels: string[];
+  /**
+   * 벤더(Claude Code CLI)가 cost-state에 기록한 비용이 우리 가격표 밴드와 어긋나는 모델(v0.2.5).
+   * 비어있지 않으면 해당 모델의 표시 비용이 틀렸다는 뜻이다 — unpricedModels(키 없음)와 달리
+   * **키는 있는데 값이 틀린** 부류(v0.2.5 D-A: fable-5-1이 fable-5 단가로 +30~90% 과대계상)를 잡는다.
+   * extension이 refresh마다 채운다(집계기는 cost-state를 보지 않는다). 없으면 미검사.
+   */
+  priceDriftModels?: string[];
   modelShareBasis: ModelShareBasis;
   /**
    * 오늘 추론 토큰 합계(Codex 전용, v0.2.0). Claude 레코드는 `reasoningTokens` 미정의라 항상
@@ -379,6 +410,8 @@ export interface UsageSummary {
   skillBreakdown: SkillUsage[];      // 스킬별 비용 집계 (비용 내림차순, 전체 스코프)
   skillUnattributed: SkillUnattributed;  // "스킬 외 작업" 1급 버킷 (!isSidechain && !attributionSkill, 전체 스코프)
   subagentStats: SubagentStats;      // 서브에이전트 vs 메인 소비 분리 (전체 스코프)
+  subagentTypeBreakdown: SubagentTypeUsage[];          // 서브에이전트 타입별 (전체 스코프, v0.2.5b)
+  subagentTypeUnattributed: SubagentTypeUnattributed;  // 타입 미상 사이드체인 버킷
   mcpServerBreakdown: McpServerUsage[];  // MCP 서버별 호출수 집계 (전체 스코프)
   attributionScopes: {
     last24h: AttributionScope;
@@ -476,4 +509,15 @@ export interface PollHistoryPoint {
   t: string;   // ISO8601
   fh: number;  // fiveHour.utilization (0.0~1.0)
   sd: number;  // sevenDay.utilization (0.0~1.0)
+}
+
+/** jsonl `type=cost-state`의 modelUsage 한 행 — 벤더 자신의 과금 정답지(v0.2.5 D-C). */
+export interface VendorCostSnapshot {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  webSearchRequests: number;
+  costUSD: number;
 }

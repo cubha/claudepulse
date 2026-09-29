@@ -22,7 +22,7 @@ const SESSION_COUNT = 20;
 const BRANCH_COUNT = 12;
 const WIDTHS = [700, 1600]; // 대시보드 좁은/넓은 2점
 const LANGS = ['ko', 'en'];
-const MIN_CHECKS = 40;      // D-0류 바닥 — 검사가 조용히 사라지면 실패시킨다
+const MIN_CHECKS = 60;      // D-0류 바닥 — 검사가 조용히 사라지면 실패시킨다
 
 const results = [];
 const check = (ok, label) => results.push([!!ok, label]);
@@ -137,6 +137,66 @@ async function run(page, width, lang) {
   check(model.firstLabel.toLowerCase().includes('nextgen'),
     `[${tag}] 토큰 지배 모델이 1위 (실제 "${model.firstLabel}")`);
   check(model.firstPct === '97%', `[${tag}] 1위 share 97% (실제 "${model.firstPct}")`);
+
+  // v0.2.5 D-C — 가격 불일치(벤더 cost-state ≠ 가격표). 없으면 마커 1개(가격 미상)만, 있으면 2개째가
+  // 모델명을 툴팁에 담고 뜬다. 키가 있어 '가격 미상'엔 안 걸리는 부류라 별도 신호가 필요하다.
+  const readDrift = () => {
+    const ms = [...document.querySelectorAll('#panel-model-body .status-marker.warn[title]')];
+    return { count: ms.length, titles: ms.map(m => m.getAttribute('title') || '') };
+  };
+  const noDrift = await page.evaluate(readDrift);
+  check(noDrift.count === 1, `[${tag}] 드리프트 없으면 경고 마커 1개 (실제 ${noDrift.count})`);
+  await push(page, { ...payload(), priceDriftModels: ['claude-opus-5'] });
+  const withDrift = await page.evaluate(readDrift);
+  check(withDrift.count === 2, `[${tag}] 가격 불일치 마커 노출 (경고 마커 ${withDrift.count}개)`);
+  check(withDrift.titles.some(tt => tt.includes('claude-opus-5')), `[${tag}] 불일치 모델명이 툴팁에 있음`);
+
+  // v0.2.5b — 서브에이전트 타입별 비용. 타입 행 + '타입 미상' 1급 버킷(마지막·muted), 상세는 툴팁,
+  // 미가격이라 $0이어도 토큰이 있으면 버킷을 숨기지 않고 $0.00을 계측값처럼 찍지 않는다.
+  const readTypes = () => {
+    const el = document.getElementById('panel-subagent-list');
+    if (!el) return { missing: true };
+    const rows = [...el.querySelectorAll('.skill-row')];
+    return {
+      names: rows.map(r => r.querySelector('.skill-name')?.textContent?.trim() ?? ''),
+      lastIsOther: rows.length > 0 && rows[rows.length - 1].classList.contains('skill-row-other'),
+      titles: rows.map(r => r.getAttribute('title') || ''),
+      empty: !!el.querySelector('.panel-empty'),
+      hasZero: /\$0\.00/.test(el.textContent || ''),
+    };
+  };
+  const typePayload = (types, unattr) => ({ ...payload(), subagentTypeBreakdown: types, subagentTypeUnattributed: unattr });
+  const T = (agentType, costUsd, extra = {}) => ({ agentType, costUsd, totalTokens: 1000, runCount: 2, share: costUsd / 4, hasUnpricedRecords: false, ...extra });
+  await push(page, typePayload([T('general-purpose', 2), T('scope-critic', 1)], { costUsd: 1, totalTokens: 500, runCount: 1, hasUnpricedRecords: false }));
+  const ty = await page.evaluate(readTypes);
+  check(!ty.missing, `[${tag}] 서브에이전트 타입 목록 컨테이너 존재`);
+  check(ty.names.length === 3 && ty.names[0] === 'general-purpose', `[${tag}] 타입 2행 + 미상 버킷 1행, 비용순 (실제 ${JSON.stringify(ty.names)})`);
+  check(ty.lastIsOther, `[${tag}] 타입 미상 버킷이 마지막·muted`);
+  check((ty.titles[0] || '').includes('2') && (ty.titles[0] || '').includes('general-purpose'), `[${tag}] 타입 행 툴팁에 실행수·이름`);
+  // 타입이 상한(CAP)을 넘으면 조용히 자르지 않고 +N 더보기, 미상 버킷은 접힘과 무관하게 보인다.
+  const many = Array.from({ length: 9 }, (_, i) => T(`agent-${i}`, 9 - i));
+  await push(page, typePayload(many, { costUsd: 1, totalTokens: 500, runCount: 1, hasUnpricedRecords: false }));
+  const capped = await page.evaluate(() => {
+    const el = document.getElementById('panel-subagent-list');
+    const btn = el?.querySelector('.js-list-more');
+    return { rows: el?.querySelectorAll('.skill-row:not(.skill-row-other)').length ?? -1,
+      other: el?.querySelectorAll('.skill-row-other').length ?? -1, btn: btn ? btn.textContent.trim() : '' };
+  });
+  check(capped.rows === CAP && capped.btn.includes(`+${9 - CAP}`), `[${tag}] 타입 9개 → 접힘 ${CAP}행 + "+${9 - CAP}" (실제 ${capped.rows}행 "${capped.btn}")`);
+  check(capped.other === 1, `[${tag}] 접힘 상태에서도 미상 버킷 노출`);
+  await page.click('#panel-subagent-list .js-list-more');
+  await page.waitForTimeout(120);
+  const expandedTypes = await page.evaluate(() => document.querySelectorAll('#panel-subagent-list .skill-row:not(.skill-row-other)').length);
+  check(expandedTypes === 9, `[${tag}] 펼치면 타입 9행 (실제 ${expandedTypes})`);
+  await page.click('#panel-subagent-list .js-list-more');
+  await page.waitForTimeout(120);
+  await push(page, typePayload([T('fork', 0, { hasUnpricedRecords: true })], { costUsd: 0, totalTokens: 800, runCount: 1, hasUnpricedRecords: true }));
+  const unpriced = await page.evaluate(readTypes);
+  check(unpriced.names.length === 2 && unpriced.lastIsOther, `[${tag}] 미가격 $0 버킷도 숨기지 않음 (실제 ${unpriced.names.length}행)`);
+  check(!unpriced.hasZero, `[${tag}] 미가격 타입을 $0.00으로 찍지 않음`);
+  await push(page, typePayload([], { costUsd: 0, totalTokens: 0, runCount: 0, hasUnpricedRecords: false }));
+  const none = await page.evaluate(readTypes);
+  check(none.empty && none.names.length === 0, `[${tag}] 서브에이전트 없으면 빈 상태`);
 }
 
 async function main() {

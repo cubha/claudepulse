@@ -45,7 +45,7 @@ const PANEL_IDS = [
   'panel-session-card', 'panel-session-list',
   'panel-branch-card', 'panel-branch-list',
   'panel-retro-card', 'panel-retro-list',
-  'panel-skill-card', 'panel-skill-list', 'panel-mcp-list',
+  'panel-skill-card', 'panel-skill-list', 'panel-subagent-list', 'panel-mcp-list',
   'chart-longterm', 'longterm-empty',
   'chart-monthly', 'monthly-empty',
   'chart-trend', 'trend-empty',

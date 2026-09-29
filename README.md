@@ -18,10 +18,19 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.2.4
+## What's New in v0.2.5
+
+- **Fixed: Claude Fable 5.1 and Opus 5.5 cost was overstated.** Neither had its own price, so each borrowed its predecessor's — and because that counted as a match, no "price unknown" warning appeared. Fable 5.1 reads cache at a quarter of Fable 5's rate, so heavy cache use overstated it by roughly 30–90%. Both now have their own prices, derived from the costs Claude Code records in its logs.
+- **Fixed: subagent usage was missing.** Claude Code writes each subagent's transcript to a separate file under the session folder, which was never read. Subagent cost is now in every total and in the dashboard's subagent breakdown. Responses copied from the parent session are still counted once, and stay attributed to the main session.
+- **New: cost by subagent type.** The cost attribution card now shows what each kind of subagent spent — general-purpose, planner, reviewers and so on — with run counts and tokens on hover, following the 24h / 7d / All toggle. Untyped subagent work gets its own row, so the list always adds up to the subagent total.
+- **New: "⚠ price mismatch" marker.** The dashboard's model breakdown now compares the extension's cost calculation against the cost Claude Code itself records, and flags models where the two disagree (details on hover). It catches a wrong price, not just a missing one.
+
+<details><summary>v0.2.4</summary>
 
 - **The dashboard reads with fewer sentences.** The explanatory lines under the cache hit rate and the Utilization Trend chart, and the warning banners for models missing from the price table, are now short status markers — **Normal / Drop**, **Under pace / Over pace**, **⚠ price unknown** — with the full explanation on hover or keyboard focus. The Codex-only note about variable windows is gone (the window labels already show it), the Codex extra panel is now titled "Codex-only metrics", and the Git ROI card's footer note moved into the ≈ badge's tooltip.
 - **Fixed: the Long-term tab of Cost by Period showed today's cost.** Its header figure took the last day of the selected range, so it always matched the Daily tab. It now shows the total for the selected range (30, 90 or 180 days).
+
+</details>
 
 <details><summary>v0.2.3</summary>
 
@@ -194,7 +203,7 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 - **Model breakdown**: Doughnut chart + bar list showing per-model cost share for today
 - **Cache efficiency**: Hit rate KPI, cumulative saved cost, and 7-day sparkline in the dashboard
 - **Session history**: Up to 20 recent sessions with start time, working directory, token count, and estimated cost
-- **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (fable-5 / opus-4.5–4.8 / sonnet-4.5–4.6 / haiku-4.5, with legacy fallbacks)
+- **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (fable-5 / fable-5.1 / opus-5 / opus-5.5 / sonnet-5 / opus-4.5–4.8 / sonnet-4.5–4.6 / haiku-4.5, with legacy fallbacks), cross-checked against the costs Claude Code records
 
 ### Language Support
 - **4-language UI**: Switch between 한국어 / English / 日本語 / 中文 via the compact dropdown in the sidebar header — all labels, section names, error messages, and burn-rate strings update instantly
@@ -212,7 +221,7 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ### Cost Attribution — *where the cost went* (local `.jsonl`)
 - **Cost by Skill** (dashboard): Ranked bar list of cost per `attributionSkill` (sh-dev-loop, ship, plan, research, …) — see which Claude Code skills drive your spend. Because Claude Code only stamps a skill on main-chain turns *while a skill is actively loaded* (~⅓ of cost-bearing turns), everything else — plain requests and work before/after a skill loads — is shown as a first-class **"Outside skills"** bucket rather than hidden, with a `≈ Partial` badge. Subagent-delegated cost is surfaced separately below
-- **Subagent vs. main split** (dashboard): Subagent consumption share, cost, and unique-agent count from `isSidechain`/`agentId` — separate background subagent usage from your main session
+- **Subagent vs. main split** (dashboard): Subagent consumption share, cost, and unique-agent count from `isSidechain`/`agentId` — separate background subagent usage from your main session, broken down by subagent type (`attributionAgent`)
 - **MCP server breakdown** (dashboard): Ranked list of MCP servers by call count, parsed from `mcp__<server>__<tool>` tool names. Share is call-count based on purpose — one assistant turn can mix MCP and non-MCP tools, so a per-server *cost* split would be false precision
 - **24h / 7d / All scope toggle** (dashboard): Re-scope the whole attribution section — skills, subagents, and MCP servers — to the last day or week instead of all time, to see what's driving spend right now
 

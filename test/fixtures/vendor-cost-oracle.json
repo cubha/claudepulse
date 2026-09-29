@@ -384,6 +384,107 @@
       "cacheCreationInputTokens": 1788379,
       "webSearchRequests": 0,
       "vendorCostUSD": 14.146110400000005
+    },
+    {
+      "sample": "F51-1",
+      "model": "claude-fable-5-1",
+      "inputTokens": 29497,
+      "outputTokens": 194314,
+      "cacheReadInputTokens": 32709399,
+      "cacheCreationInputTokens": 1493203,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 47.517465
+    },
+    {
+      "sample": "F51-2",
+      "model": "claude-fable-5-1",
+      "inputTokens": 6404,
+      "outputTokens": 110045,
+      "cacheReadInputTokens": 13265219,
+      "cacheCreationInputTokens": 1201591,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 32.914415
+    },
+    {
+      "sample": "F51-3",
+      "model": "claude-fable-5-1",
+      "inputTokens": 68545,
+      "outputTokens": 270915,
+      "cacheReadInputTokens": 38564457,
+      "cacheCreationInputTokens": 585399,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 34.931499
+    },
+    {
+      "sample": "F51-4",
+      "model": "claude-fable-5-1",
+      "inputTokens": 586,
+      "outputTokens": 888,
+      "cacheReadInputTokens": 302622,
+      "cacheCreationInputTokens": 44396,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 1.013836
+    },
+    {
+      "sample": "F51-5",
+      "model": "claude-fable-5-1",
+      "inputTokens": 244752,
+      "outputTokens": 156051,
+      "cacheReadInputTokens": 21792640,
+      "cacheCreationInputTokens": 550326,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 23.845593
+    },
+    {
+      "sample": "F51-6",
+      "model": "claude-fable-5-1",
+      "inputTokens": 32400,
+      "outputTokens": 565288,
+      "cacheReadInputTokens": 150563811,
+      "cacheCreationInputTokens": 4539986,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 157.029073
+    },
+    {
+      "sample": "F51-7",
+      "model": "claude-fable-5-1",
+      "inputTokens": 1584,
+      "outputTokens": 16675,
+      "cacheReadInputTokens": 7154389,
+      "cacheCreationInputTokens": 338490,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 9.407987
+    },
+    {
+      "sample": "F51-8",
+      "model": "claude-fable-5-1",
+      "inputTokens": 32456,
+      "outputTokens": 251420,
+      "cacheReadInputTokens": 127534222,
+      "cacheCreationInputTokens": 3761994,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 120.018996
+    },
+    {
+      "sample": "F51-9",
+      "model": "claude-fable-5-1",
+      "inputTokens": 768548,
+      "outputTokens": 1078432,
+      "cacheReadInputTokens": 244197684,
+      "cacheCreationInputTokens": 5324815,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 217.746366
+    },
+    {
+      "sample": "O55-1",
+      "model": "claude-opus-5-5[1m]",
+      "inputTokens": 2,
+      "outputTokens": 4,
+      "cacheReadInputTokens": 10343,
+      "cacheCreationInputTokens": 31290,
+      "webSearchRequests": 0,
+      "vendorCostUSD": 0.252477
     }
-  ]
+  ],
+  "_v025": "v0.2.5: claude-fable-5-1(9)·claude-opus-5-5[1m](1) 표본 추가(2026-09-28 캡처). 5.1/5.5 세대는 cache read가 input×0.1 관례가 아니다(×0.025/×0.05) — 관례 복사 시 fable-5-1이 +30~90% 과대계상됐다."
 }

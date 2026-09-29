@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5] - 2026-09-29
+
+### Fixed
+- **Claude Fable 5.1 and Opus 5.5 were costed at the prices of Fable 5 and Opus 5.** Neither model
+  had its own entry in the price table, so each fell back to the closest older name. Because that
+  fallback counts as a match, the "⚠ price unknown" marker never appeared. The cache-read price is
+  where they differ most — Fable 5.1 reads cache at a quarter of Fable 5's rate — so heavy cache
+  users saw Fable 5.1 cost overstated by roughly 30–90%. Both models now have their own prices, taken
+  from the costs Claude Code itself records in its session logs.
+- **Subagent usage was not counted at all.** Claude Code writes each subagent's transcript to a
+  separate file under the session folder (`<session>/subagents/`), and only the top-level session
+  files were read. These files are now included in every total, and the subagent breakdown on the
+  dashboard is populated. A subagent transcript starts with a copy of its parent's history, so the
+  same response can appear in two files; each response is still counted once, and it stays attributed
+  to the main session it came from. The file watcher now also sees these files, while ignoring
+  tool-output folders and metadata files that carry no usage.
+- **A response could be dropped if its log line was read while Claude Code was still writing it.**
+  The reader remembered the end of the file as its next starting point even when the last line was
+  only half written, so the rest of that line — and that response's cost — was never read. It now
+  stops at the last complete line and picks up the unfinished one on the next refresh. It also
+  checks the file size as well as the modification time, so lines appended within the same
+  millisecond are not missed.
+- A model name that happens to match a built-in JavaScript property (e.g. `constructor`) is now
+  treated as unpriced instead of producing a cost of NaN.
+
+### Added
+- **A "⚠ price mismatch" marker on the dashboard's model breakdown.** Claude Code records its own cost
+  figure per model in the session log. When the extension's calculation for the same tokens falls
+  outside the range those figures allow, the marker appears, and its tooltip lists the models
+  affected. This catches the kind of mistake above — a model whose name matches an older price entry —
+  which the "price unknown" marker cannot see.
+- **Cost by subagent type.** The dashboard's cost attribution card now lists what each kind of
+  subagent spent — general-purpose, planner, a code reviewer, and so on — with its share of subagent
+  cost; the tooltip adds how many times it ran and its token total. It follows the 24h / 7d / All
+  toggle like the rest of the card. Subagent work that carries no type is shown as its own
+  "Unknown type" row rather than dropped, so the rows always add up to the subagent total. Longer
+  lists collapse to six rows with a "+N" button.
+
 ## [0.2.4] - 2026-09-28
 
 ### Changed

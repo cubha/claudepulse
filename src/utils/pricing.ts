@@ -20,6 +20,13 @@ export interface ModelPrice {
 export const WEB_SEARCH_USD_PER_REQUEST = 0.01;
 
 export const PRICING: Record<string, ModelPrice> = {
+  // Claude 5.1/5.5 세대 — 벤더 오라클 역산(v0.2.5, fable-5-1 9/9 · opus-5-5 1/1 샘플).
+  // ⚠️ cache read가 input×0.1 관례가 **아니다**(fable-5-1 ×0.025, opus-5-5 ×0.05). 키가 없으면
+  //    최장접두사가 `claude-fable-5`·`claude-opus-5`를 집어 source='exact'로 조용히 과대계상한다
+  //    (fable-5-1 +30~90% — 가격 미상 마커도 안 뜬다). 5m 캐시 생성 요율은 표본이 전부 1h라
+  //    관측되지 않았다 — 표준 관례(input×1.25)를 따른다.
+  'claude-fable-5-1':  { input: 10.0,  output: 50.0, cache_creation: 12.5,  cache_creation_1h: 20.0, cache_read: 0.25 },
+  'claude-opus-5-5':   { input:  4.0,  output: 20.0, cache_creation:  5.0,  cache_creation_1h:  8.0, cache_read: 0.2  },
   // 최상위 티어 (Opus 위 신규 모델)
   'claude-fable-5':    { input: 10.0,  output: 50.0, cache_creation: 12.5,  cache_creation_1h: 20.0, cache_read: 1.0  },
   // Claude 5 세대 — 벤더 오라클(cost-state.modelUsage[].costUSD) 역산으로 확정.
@@ -91,7 +98,9 @@ function newerThan(a: number[], b: number[]): boolean {
  * 표에 키를 추가하는 위치만으로 과금이 바뀐다(sonnet은 세대가 올라가며 싸졌으므로 실제 위험).
  */
 export function resolvePricing(model: string): ResolvedPricing {
-  const exact = PRICING[model];
+  // 모델명은 jsonl에서 온 외부 문자열 — 'constructor' 같은 상속 프로퍼티가 가격으로 잡히면 비용이
+  // 조용히 NaN이 된다(/ship 보안검토 W1). 자기 키만 본다.
+  const exact = Object.prototype.hasOwnProperty.call(PRICING, model) ? PRICING[model] : undefined;
   if (exact) return { price: exact, source: 'exact' };
 
   const lm = model.toLowerCase();
