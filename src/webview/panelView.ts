@@ -655,6 +655,8 @@ function buildPanelShell(): string {
           <button class="attr-scope-btn" data-scope="7d">${t('attr_scope_7d')}</button>
         </div>
         <div id="panel-skill-list"><div class="panel-loading">${t('collecting_data')}</div></div>
+        <div class="panel-mcp-header">${t('subagent_type_attribution')}</div>
+        <div id="panel-subagent-list"><div class="panel-loading">${t('collecting_data')}</div></div>
         <div class="panel-mcp-header">${t('mcp_attribution')}</div>
         <div id="panel-mcp-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
@@ -973,9 +975,13 @@ function updateModelBreakdown(): void {
 
   const unpriced = panelUsage?.unpricedModels ?? [];
   // 가격 미상 경고 — 배너 문장 대신 마커, 문장과 해당 모델 목록은 툴팁(v0.2.4).
-  const noteHtml = unpriced.length > 0
-    ? `<div class="panel-marker-row">${statusMarkerHtml({ label: `⚠ ${t('pricing_unknown')}`, tone: 'warn', tip: `${t('pricing_unknown_note')}\n${unpriced.join(', ')}` })}</div>`
-    : '';
+  // 가격 불일치(v0.2.5 D-C) — 벤더 cost-state와 가격표가 어긋나는 모델. 키가 있어 위 '가격 미상'엔 안 걸린다.
+  const drift = panelUsage?.priceDriftModels ?? [];
+  const markers = [
+    unpriced.length > 0 ? statusMarkerHtml({ label: `⚠ ${t('pricing_unknown')}`, tone: 'warn', tip: `${t('pricing_unknown_note')}\n${unpriced.join(', ')}` }) : '',
+    drift.length > 0 ? statusMarkerHtml({ label: `⚠ ${t('price_mismatch')}`, tone: 'warn', tip: `${t('price_mismatch_note')}\n${drift.join(', ')}` }) : '',
+  ].filter(Boolean);
+  const noteHtml = markers.length > 0 ? `<div class="panel-marker-row">${markers.join(' ')}</div>` : '';
   const basisHtml = byTokens
     ? `<div class="panel-basis-note">${escapeHtml(t('share_by_tokens'))}</div>`
     : '';
@@ -1335,6 +1341,7 @@ function updateBranchSection(): void {
   listEl.innerHTML = headerRow + cappedListHtml(rows, 'branches');
 }
 LIST_UPDATERS['branches'] = updateBranchSection;
+LIST_UPDATERS['subagentTypes'] = updateSkillSection;
 
 function updateSkillSection(): void {
   const listEl = document.getElementById('panel-skill-list');
@@ -1362,6 +1369,40 @@ function updateSkillSection(): void {
           <span class="skill-cost mono">${m.callCount}</span>
         </div>`;
       }).join('');
+    }
+  }
+
+  // 서브에이전트 타입별(v0.2.5b) — 사이드체인만, attributionAgent 기준. 타입 미상 버킷은 1급(마지막·muted),
+  // 미가격이라 0이어도 토큰이 있으면 숨기지 않는다(스킬 외 작업과 같은 원칙). 상세는 title 툴팁.
+  const subListEl = document.getElementById('panel-subagent-list');
+  if (subListEl) {
+    const types = scoped?.subagentTypeBreakdown ?? panelUsage?.subagentTypeBreakdown ?? [];
+    const typeUnattr = scoped?.subagentTypeUnattributed ?? panelUsage?.subagentTypeUnattributed;
+    const hasTypeBucket = !!typeUnattr && (typeUnattr.costUsd > 0 || typeUnattr.totalTokens > 0);
+    if (types.length === 0 && !hasTypeBucket) {
+      subListEl.innerHTML = `<div class="panel-empty">${t('no_subagent_data')}</div>`;
+    } else {
+      const subTotal = types.reduce((s, x) => s + x.costUsd, 0) + (hasTypeBucket ? typeUnattr!.costUsd : 0);
+      const typeBucketShare = hasTypeBucket && subTotal > 0 ? typeUnattr!.costUsd / subTotal : 0;
+      const maxTypeShare = Math.max(types[0]?.share || 0, typeBucketShare) || 1;
+      const typeTip = (name: string, share: number, runs: number, tokens: number) =>
+        `${name} · ${(share * 100).toFixed(1)}% · ${runs} ${t('subagent_runs')} · ${fmtTokens(tokens)} ${t('tokens')}`;
+      // 타입 수는 에이전트 정의만큼 늘어난다(실측 15종) — 조용히 자르지 않고 목록 상한 컨벤션(+N 더보기,
+      // v0.1.55)을 따른다. 미상 버킷은 접힘과 무관하게 항상 보인다(1급).
+      const typeRows = types.map(a => {
+        const w = Math.max(2, (a.share / maxTypeShare) * 100);
+        return `<div class="skill-row" title="${escapeHtml(typeTip(a.agentType, a.share, a.runCount, a.totalTokens))}">
+          <span class="skill-name">${escapeHtml(a.agentType)}</span>
+          <span class="skill-bar-wrap"><span class="skill-bar" style="width:${w}%"></span></span>
+          ${costCellHtml(a.costUsd, a.hasUnpricedRecords, 'skill-cost mono')}
+        </div>`;
+      });
+      const typeBucketRow = hasTypeBucket ? `<div class="skill-row skill-row-other" title="${escapeHtml(`${t('subagent_type_unattributed_tip')}\n${typeTip(t('subagent_type_unattributed'), typeBucketShare, typeUnattr!.runCount, typeUnattr!.totalTokens)}`)}">
+          <span class="skill-name">${t('subagent_type_unattributed')}</span>
+          <span class="skill-bar-wrap"><span class="skill-bar skill-bar-other" style="width:${Math.max(2, (typeBucketShare / maxTypeShare) * 100)}%"></span></span>
+          ${costCellHtml(typeUnattr!.costUsd, typeUnattr!.hasUnpricedRecords, 'skill-cost mono')}
+        </div>` : '';
+      subListEl.innerHTML = cappedListHtml(typeRows, 'subagentTypes') + typeBucketRow;
     }
   }
 

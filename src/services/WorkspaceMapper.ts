@@ -38,7 +38,17 @@ export class WorkspaceMapper {
     return cwdMatchesWorkspace(cwd, workspacePath);
   }
 
-  /** ~/.claude/projects 하위 모든 jsonl 파일 경로를 반환. */
+  private async subagentFiles(sessionDir: string): Promise<string[]> {
+    const dir = path.join(sessionDir, 'subagents');
+    try {
+      const names = await fs.promises.readdir(dir, { withFileTypes: true });
+      return names.filter(n => n.isFile() && n.name.endsWith('.jsonl')).map(n => path.join(dir, n.name));
+    } catch {
+      return []; // subagents 없는 세션 폴더(tool-results만 있는 경우 등)
+    }
+  }
+
+  /** ~/.claude/projects 하위 모든 jsonl 파일 경로를 반환(세션별 subagents/*.jsonl 포함). */
   async getAllJsonlFiles(): Promise<string[]> {
     const results: string[] = [];
     try {
@@ -47,10 +57,16 @@ export class WorkspaceMapper {
         if (!entry.isDirectory() && !entry.isFile()) continue;
         const projectPath = path.join(this.projectsDir, entry.name);
         try {
-          const files = await fs.promises.readdir(projectPath);
-          for (const f of files) {
-            if (f.endsWith('.jsonl')) {
-              results.push(path.join(projectPath, f));
+          const entries = await fs.promises.readdir(projectPath, { withFileTypes: true });
+          for (const e of entries) {
+            // 최상위는 기존 판정(이름만) 보존 — 심볼릭 링크 jsonl도 계속 수집한다.
+            if (!e.isDirectory() && e.name.endsWith('.jsonl')) {
+              results.push(path.join(projectPath, e.name));
+            } else if (e.isDirectory()) {
+              // v0.2.5: 서브에이전트 transcript는 `<session>/subagents/*.jsonl`에만 기록된다 —
+              // 1단계만 읽으면 사이드체인 비용이 통째로 빠진다. 파일 간 중복은 호출부의
+              // mergeRecordsAcrossFiles가 제거한다(부모 이력 사본이 섞여 있다).
+              results.push(...await this.subagentFiles(path.join(projectPath, e.name)));
             }
           }
         } catch {

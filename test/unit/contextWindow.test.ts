@@ -89,3 +89,19 @@ describe('calcContextUsageRatio — forceOneMillion 전파', () => {
     expect(r).toBeLessThan(1); // 기존 버그: 200K 분모면 1.0(100%)로 클램프됨
   });
 });
+
+describe('v0.2.5 X1 — 5세대 1M은 테이블이 아니라 증거로 판정한다 (고정 키 추가 금지 잠금)', () => {
+  it('증거 없는 opus-5-5 / opus-5 / sonnet-5는 보수적 기본값(200K) — [1m]은 선택형 변종이다', () => {
+    expect(findContextWindow('claude-opus-5-5')).toBe(DEFAULT_CONTEXT_WINDOW);
+    expect(findContextWindow('claude-opus-5')).toBe(DEFAULT_CONTEXT_WINDOW);
+    expect(findContextWindow('claude-sonnet-5')).toBe(DEFAULT_CONTEXT_WINDOW);
+  });
+
+  it('증거가 있으면(호출부 forceOneMillion) opus-5-5도 1M', () => {
+    expect(findContextWindow('claude-opus-5-5', true)).toBe(1_000_000);
+  });
+
+  it('fable-5-1은 fable-5 행(1M)을 접두사로 물려받는다', () => {
+    expect(findContextWindow('claude-fable-5-1')).toBe(1_000_000);
+  });
+});

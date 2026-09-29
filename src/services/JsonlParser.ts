@@ -1,6 +1,5 @@
 import * as fs from 'node:fs';
-import * as readline from 'node:readline';
-import type { JournalUsage, SessionRecord, ToolUseCounts } from '../types';
+import type { JournalUsage, SessionRecord, ToolUseCounts, VendorCostSnapshot } from '../types';
 import { calcCost } from '../utils/pricing';
 
 /** mtime+offset 캐시 엔트리 */
@@ -8,6 +7,30 @@ interface ParseCache {
   mtime: number;
   offset: number;
   records: SessionRecord[];
+  /** 파일의 마지막 cost-state 행(v0.2.5 D-C). 세션 도중 누적 갱신되므로 마지막 것만 의미가 있다. */
+  costSnapshots: VendorCostSnapshot[];
+}
+
+/** cost-state.modelUsage → 스냅샷 행. 형식이 어긋난 행은 버린다(외부 입력). */
+function toCostSnapshots(modelUsage: unknown): VendorCostSnapshot[] {
+  if (!modelUsage || typeof modelUsage !== 'object' || Array.isArray(modelUsage)) return [];
+  const out: VendorCostSnapshot[] = [];
+  for (const [model, raw] of Object.entries(modelUsage as Record<string, unknown>)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const u = raw as Record<string, unknown>;
+    const costUSD = Number(u['costUSD']);
+    if (!Number.isFinite(costUSD)) continue;
+    out.push({
+      model,
+      inputTokens: Number(u['inputTokens'] ?? 0),
+      outputTokens: Number(u['outputTokens'] ?? 0),
+      cacheReadInputTokens: Number(u['cacheReadInputTokens'] ?? 0),
+      cacheCreationInputTokens: Number(u['cacheCreationInputTokens'] ?? 0),
+      webSearchRequests: Number(u['webSearchRequests'] ?? 0),
+      costUSD,
+    });
+  }
+  return out;
 }
 
 const SKIP_TYPES = new Set(['progress', 'file-history-snapshot', 'attachment', 'permission-mode']);
@@ -37,6 +60,33 @@ export function mcpServerName(name: string): string | undefined {
   return parts.length >= 2 ? parts[1] : undefined;
 }
 
+/**
+ * 파일별 레코드를 합치며 **파일 간** message.id 중복을 제거한다(CLAUDE.md §3#1, v0.2.5).
+ *
+ * 파일 안 dedup(`dedup`)은 파일마다 독립이라 여기서 다시 해야 한다. 서브에이전트 transcript
+ * (`<session>/subagents/*.jsonl`)는 부모 대화 이력을 복사해 시작하므로, 같은 message.id가 부모
+ * 파일(메인 체인)과 subagents 파일(사이드체인)에 함께 나온다(실측 약 45건).
+ *
+ * ⚠️ 우선순위는 "최신 timestamp"가 아니라 **메인 체인 원본 우선**이다. 최신 우선이면 사본이
+ * 이겨 부모 턴의 비용이 서브에이전트 비용으로 재분류된다(`subagentStats`·스킬 집계가 `isSidechain`
+ * 으로 갈린다). 둘 다 사이드체인일 때만 최신을 남긴다.
+ */
+export function mergeRecordsAcrossFiles(perFile: SessionRecord[][]): SessionRecord[] {
+  const seen = new Map<string, SessionRecord>();
+  for (const records of perFile) {
+    for (const r of records) {
+      const existing = seen.get(r.messageId);
+      if (!existing) { seen.set(r.messageId, r); continue; }
+      if (existing.isSidechain !== r.isSidechain) {
+        if (!r.isSidechain) seen.set(r.messageId, r);
+        continue;
+      }
+      if (r.timestamp > existing.timestamp) seen.set(r.messageId, r);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+}
+
 export class JsonlParser {
   private readonly cache = new Map<string, ParseCache>();
 
@@ -54,7 +104,8 @@ export class JsonlParser {
     }
 
     const cached = this.cache.get(filePath);
-    if (cached && cached.mtime === stat.mtimeMs) {
+    // mtime만 보면 같은 밀리초 안의 append를 놓친다(파일시스템 mtime 해상도) — 크기도 함께 본다.
+    if (cached && cached.mtime === stat.mtimeMs && cached.offset === stat.size) {
       return cached.records;
     }
 
@@ -63,20 +114,27 @@ export class JsonlParser {
     const startOffset = canIncrement ? cached.offset : 0;
     const existingRecords: SessionRecord[] = canIncrement ? [...cached.records] : [];
 
-    const newRecords = await this.readFrom(filePath, startOffset);
+    const { records: newRecords, lastCostSnapshots, consumedBytes } = await this.readFrom(filePath, startOffset);
     const merged = this.dedup([...existingRecords, ...newRecords]);
 
     this.cache.set(filePath, {
       mtime: stat.mtimeMs,
-      offset: stat.size,
+      // 완결된 줄까지만 전진 — 쓰는 중인 마지막 줄은 다음 파싱에서 다시 읽는다(W2).
+      offset: startOffset + consumedBytes,
       records: merged,
+      // 이번 구간에 cost-state가 없으면 이전 스냅샷을 유지한다(증분 파싱).
+      costSnapshots: lastCostSnapshots ?? (canIncrement ? cached.costSnapshots : []),
     });
 
     return merged;
   }
 
-  private async readFrom(filePath: string, offset: number): Promise<SessionRecord[]> {
+  private async readFrom(
+    filePath: string,
+    offset: number,
+  ): Promise<{ records: SessionRecord[]; lastCostSnapshots: VendorCostSnapshot[] | null; consumedBytes: number }> {
     const records: SessionRecord[] = [];
+    let lastCostSnapshots: VendorCostSnapshot[] | null = null;
 
     // requestId 기준 마지막 엔트리만 보존 (스트리밍 중복)
     const byRequestId = new Map<string, SessionRecord>();
@@ -84,16 +142,45 @@ export class JsonlParser {
     return new Promise((resolve) => {
       let stream: fs.ReadStream;
       try {
-        stream = fs.createReadStream(filePath, { start: offset, encoding: 'utf8' });
+        stream = fs.createReadStream(filePath, { start: offset });
       } catch {
-        resolve([]);
+        resolve({ records: [], lastCostSnapshots: null, consumedBytes: 0 });
         return;
       }
 
-      const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+      // Claude Code가 이 파일에 append하는 도중에 읽힐 수 있다. 마지막 개행 뒤의 미완결 바이트는
+      // 처리하지도, offset을 전진시키지도 않는다 — 다음 파싱이 그 줄을 처음부터 다시 읽는다
+      // (/ship 보안검토 W2. 전엔 offset=stat.size라 반쪽 줄이 버려진 뒤 영영 다시 안 읽혔다).
+      // 개행(0x0A)은 UTF-8 멀티바이트의 연속 바이트로 나타나지 않으므로 바이트 단위로 잘라도
+      // 문자가 깨지지 않는다(CodexSource.splitCompleteLines와 같은 원리).
+      let pending: Buffer = Buffer.alloc(0);
+      let consumedBytes = 0;
+      let settled = false;
+      const finish = (ok: boolean) => {
+        if (settled) return;
+        settled = true;
+        if (!ok) { resolve({ records: [], lastCostSnapshots: null, consumedBytes: 0 }); return; }
+        records.push(...byRequestId.values());
+        resolve({ records, lastCostSnapshots, consumedBytes });
+      };
+      stream.on('data', (chunk: string | Buffer) => {
+        const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
+        const buf = pending.length > 0 ? Buffer.concat([pending, bytes]) : bytes;
+        let start = 0;
+        let nl: number;
+        while ((nl = buf.indexOf(0x0a, start)) !== -1) {
+          handleLine(buf.toString('utf8', start, nl));
+          start = nl + 1;
+        }
+        consumedBytes += start;
+        pending = buf.subarray(start);
+      });
+      stream.on('end', () => finish(true));
+      // 읽기 실패 시 이번 구간을 통째로 버리고 offset을 전진시키지 않는다(다음 refresh가 재시도).
+      stream.on('error', () => finish(false));
 
-      rl.on('line', (line) => {
-        line = line.trim();
+      function handleLine(rawLine: string): void {
+        const line = rawLine.trim();
         if (!line) return;
 
         let entry: Record<string, unknown>;
@@ -104,6 +191,10 @@ export class JsonlParser {
         }
 
         if (SKIP_TYPES.has(String(entry['type'] ?? ''))) return;
+        if (entry['type'] === 'cost-state') {
+          lastCostSnapshots = toCostSnapshots(entry['modelUsage']);
+          return;
+        }
         if (entry['type'] !== 'assistant') return;
 
         const msg = entry['message'] as Record<string, unknown> | undefined;
@@ -200,20 +291,15 @@ export class JsonlParser {
           attributionSkill: entry['attributionSkill'] !== undefined ? String(entry['attributionSkill']) : undefined,
           isSidechain: entry['isSidechain'] === true,
           agentId: entry['agentId'] !== undefined ? String(entry['agentId']) : undefined,
+          // null·빈 문자열을 'null'/'' 타입으로 만들지 않는다 — 미상 버킷으로 간다(v0.2.5b /verify V1).
+          attributionAgent: typeof entry['attributionAgent'] === 'string' && entry['attributionAgent'] !== '' ? entry['attributionAgent'] : undefined,
           mcpServerCounts: Object.keys(mcpServerCounts).length > 0 ? mcpServerCounts : undefined,
           contextTokens,
         };
 
         // 같은 requestId → 마지막 엔트리로 교체 (스트리밍 중복 처리)
         byRequestId.set(requestId, record);
-      });
-
-      rl.on('close', () => {
-        records.push(...byRequestId.values());
-        resolve(records);
-      });
-
-      rl.on('error', () => resolve(records));
+      }
     });
   }
 
@@ -228,6 +314,11 @@ export class JsonlParser {
       }
     }
     return [...seen.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }
+
+  /** 파일의 마지막 cost-state 스냅샷(parseFile 이후 유효). 없으면 빈 배열. */
+  getCostSnapshots(filePath: string): VendorCostSnapshot[] {
+    return this.cache.get(filePath)?.costSnapshots ?? [];
   }
 
   clearCache(): void {

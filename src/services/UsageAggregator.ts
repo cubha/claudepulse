@@ -5,7 +5,7 @@ import { findCodexPricing } from '../sources/codex/codexPricing';
 import { calcContextUsageRatio, findContextWindow } from '../utils/contextWindow';
 import { cwdMatchesWorkspace } from '../utils/workspaceMatch';
 import { emptyToolCounts } from './JsonlParser';
-import type { AttributionScope, BranchUsage, CacheStats, ContextSessionSummary, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, ModelShareBasis, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, ToolUseCounts, UsageSummary } from '../types';
+import type { AttributionScope, BranchUsage, CacheStats, ContextSessionSummary, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, ModelShareBasis, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, SubagentTypeUsage, ToolUseCounts, UsageSummary } from '../types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -35,6 +35,9 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
   let mainHasUnpriced = false;
   let subagentHasUnpriced = false;
   const subagentIds = new Set<string>();
+  // 서브에이전트 타입별(v0.2.5b) — 사이드체인만. runIds는 타입별 고유 agentId(실행 수).
+  const byAgentType = new Map<string, { costUsd: number; totalTokens: number; runIds: Set<string>; hasUnpricedRecords: boolean }>();
+  const agentTypeUnattr = { costUsd: 0, totalTokens: 0, runIds: new Set<string>(), hasUnpricedRecords: false };
   const byMcpServer = new Map<string, number>();
 
   for (const r of records) {
@@ -64,6 +67,14 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
       subagentCostUsd += r.costUsd;
       if (r.agentId) subagentIds.add(r.agentId);
       if (recUnpriced) subagentHasUnpriced = true;
+      const bucket = r.attributionAgent
+        ? (byAgentType.get(r.attributionAgent) ?? { costUsd: 0, totalTokens: 0, runIds: new Set<string>(), hasUnpricedRecords: false })
+        : agentTypeUnattr;
+      bucket.costUsd += r.costUsd;
+      bucket.totalTokens += tokens;
+      if (r.agentId) bucket.runIds.add(r.agentId);
+      if (recUnpriced) bucket.hasUnpricedRecords = true;
+      if (r.attributionAgent) byAgentType.set(r.attributionAgent, bucket);
     } else {
       mainCostUsd += r.costUsd;
       if (recUnpriced) mainHasUnpriced = true;
@@ -108,7 +119,24 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
     }))
     .sort((a, b) => b.callCount - a.callCount);
 
-  return { skillBreakdown, skillUnattributed, subagentStats, mcpServerBreakdown };
+  // share 분모 = 사이드체인 총비용(타입 합계 + 미상 버킷) — subagentCostUsd와 같은 모집단.
+  const subagentTypeBreakdown: SubagentTypeUsage[] = [...byAgentType.entries()]
+    .map(([agentType, v]) => ({
+      agentType,
+      costUsd: v.costUsd,
+      totalTokens: v.totalTokens,
+      runCount: v.runIds.size,
+      share: subagentCostUsd > 0 ? v.costUsd / subagentCostUsd : 0,
+      hasUnpricedRecords: v.hasUnpricedRecords,
+    }))
+    .sort((a, b) => b.costUsd - a.costUsd || b.totalTokens - a.totalTokens);
+  const subagentTypeUnattributed = {
+    costUsd: agentTypeUnattr.costUsd,
+    totalTokens: agentTypeUnattr.totalTokens,
+    runCount: agentTypeUnattr.runIds.size,
+    hasUnpricedRecords: agentTypeUnattr.hasUnpricedRecords,
+  };
+  return { skillBreakdown, skillUnattributed, subagentStats, subagentTypeBreakdown, subagentTypeUnattributed, mcpServerBreakdown };
 }
 
 /**
@@ -519,6 +547,8 @@ export class UsageAggregator {
       skillBreakdown: allAttribution.skillBreakdown,
       skillUnattributed: allAttribution.skillUnattributed,
       subagentStats: allAttribution.subagentStats,
+      subagentTypeBreakdown: allAttribution.subagentTypeBreakdown,
+      subagentTypeUnattributed: allAttribution.subagentTypeUnattributed,
       mcpServerBreakdown: allAttribution.mcpServerBreakdown,
       attributionScopes,
       activeBranch,

@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-09-21T02:14:59.691Z",
-  "reason": "v0.2.2 기간별 비용 통합: 일별/장기/월별 3섹션이 단일 panel-cost-period-card + 탭 3개(cost-pane-*)로 합쳐지면서 감시 id가 바뀐다 — panel-daily-card→panel-cost-period-card, panel-longterm-card/panel-monthly-card는 id 소멸(pane으로 대체), cost-pane-daily/longterm/monthly 3건 신규. 차트 canvas 3종(chart-daily/longterm/monthly)과 빈상태 3종은 전부 존치하므로 섹션 소실이 아니다. 비활성 탭의 차트는 의도적으로 전환 시점에 생성되므로(0x0 캔버스 회피) monthly/longterm의 hasText/childElementCount가 초기 로드 시점 기준으로 바뀔 수 있다.",
+  "capturedAt": "2026-09-29T02:25:15.479Z",
+  "reason": "v0.2.5b: 비용 귀속 카드에 서브에이전트 타입별 서브섹션(#panel-subagent-list) 추가 — 의도된 DOM 추가",
   "digests": {
     "panel@700px@ko@claude": {
       "bySelector": {
@@ -201,12 +201,17 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
           "tag": "div",
           "childElementCount": 9,
+          "hasText": true
+        },
+        "panel-subagent-list": {
+          "tag": "div",
+          "childElementCount": 5,
           "hasText": true
         },
         "panel-mcp-list": {
@@ -246,9 +251,9 @@
         }
       },
       "counts": {
-        "totalElements": 710,
+        "totalElements": 736,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "panel@700px@en@claude": {
@@ -450,12 +455,17 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
           "tag": "div",
           "childElementCount": 9,
+          "hasText": true
+        },
+        "panel-subagent-list": {
+          "tag": "div",
+          "childElementCount": 5,
           "hasText": true
         },
         "panel-mcp-list": {
@@ -495,9 +505,9 @@
         }
       },
       "counts": {
-        "totalElements": 710,
+        "totalElements": 736,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "panel@1600px@ko@claude": {
@@ -699,12 +709,17 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
           "tag": "div",
           "childElementCount": 9,
+          "hasText": true
+        },
+        "panel-subagent-list": {
+          "tag": "div",
+          "childElementCount": 5,
           "hasText": true
         },
         "panel-mcp-list": {
@@ -744,9 +759,9 @@
         }
       },
       "counts": {
-        "totalElements": 710,
+        "totalElements": 736,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "panel@1600px@en@claude": {
@@ -948,12 +963,17 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
           "tag": "div",
           "childElementCount": 9,
+          "hasText": true
+        },
+        "panel-subagent-list": {
+          "tag": "div",
+          "childElementCount": 5,
           "hasText": true
         },
         "panel-mcp-list": {
@@ -993,9 +1013,9 @@
         }
       },
       "counts": {
-        "totalElements": 710,
+        "totalElements": 736,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "sidebar@700px@ko@claude": {
@@ -1022,9 +1042,9 @@
         }
       },
       "counts": {
-        "totalElements": 221,
+        "totalElements": 222,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     },
     "sidebar@700px@en@claude": {
@@ -1051,9 +1071,9 @@
         }
       },
       "counts": {
-        "totalElements": 221,
+        "totalElements": 222,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     },
     "sidebar@1600px@ko@claude": {
@@ -1080,9 +1100,9 @@
         }
       },
       "counts": {
-        "totalElements": 221,
+        "totalElements": 222,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     },
     "sidebar@1600px@en@claude": {
@@ -1109,9 +1129,9 @@
         }
       },
       "counts": {
-        "totalElements": 221,
+        "totalElements": 222,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     },
     "panel@700px@ko@codex": {
@@ -1313,10 +1333,15 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-subagent-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -1358,9 +1383,9 @@
         }
       },
       "counts": {
-        "totalElements": 638,
+        "totalElements": 642,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "panel@700px@en@codex": {
@@ -1562,10 +1587,15 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-subagent-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -1607,9 +1637,9 @@
         }
       },
       "counts": {
-        "totalElements": 638,
+        "totalElements": 642,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "panel@1600px@ko@codex": {
@@ -1811,10 +1841,15 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-subagent-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -1856,9 +1891,9 @@
         }
       },
       "counts": {
-        "totalElements": 638,
+        "totalElements": 642,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "panel@1600px@en@codex": {
@@ -2060,10 +2095,15 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 5,
+          "childElementCount": 7,
           "hasText": true
         },
         "panel-skill-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-subagent-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -2105,9 +2145,9 @@
         }
       },
       "counts": {
-        "totalElements": 638,
+        "totalElements": 642,
         "canvases": 7,
-        "heatCells": 377
+        "heatCells": 378
       }
     },
     "sidebar@700px@ko@codex": {
@@ -2118,9 +2158,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 179,
+        "totalElements": 180,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     },
     "sidebar@700px@en@codex": {
@@ -2131,9 +2171,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 179,
+        "totalElements": 180,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     },
     "sidebar@1600px@ko@codex": {
@@ -2144,9 +2184,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 179,
+        "totalElements": 180,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     },
     "sidebar@1600px@en@codex": {
@@ -2157,9 +2197,9 @@
         "sb-ctx-bar": null
       },
       "counts": {
-        "totalElements": 179,
+        "totalElements": 180,
         "canvases": 0,
-        "heatCells": 92
+        "heatCells": 93
       }
     }
   }

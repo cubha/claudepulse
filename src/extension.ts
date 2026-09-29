@@ -20,8 +20,9 @@ import { DashboardPanel } from './panel/DashboardPanel';
 import { CredentialsReader } from './services/CredentialsReader';
 import { RateLimitPoller } from './services/RateLimitPoller';
 import { CredentialsWatcher } from './services/CredentialsWatcher';
-import { FileWatcher } from './services/FileWatcher';
-import { JsonlParser } from './services/JsonlParser';
+import { CLAUDE_WATCH_DEPTH, FileWatcher } from './services/FileWatcher';
+import { JsonlParser, mergeRecordsAcrossFiles } from './services/JsonlParser';
+import { detectPriceDrift } from './utils/vendorCostCheck';
 import { UsageAggregator } from './services/UsageAggregator';
 import { WorkspaceMapper } from './services/WorkspaceMapper';
 import { CacheStore } from './services/CacheStore';
@@ -225,7 +226,7 @@ export function activate(context: vscode.ExtensionContext): void {
   async function doRefreshUsage(): Promise<void> {
     const files = await workspaceMapper.getAllJsonlFiles();
     const perFile = await Promise.all(files.map(f => jsonlParser.parseFile(f)));
-    allRecords = perFile.flat();
+    allRecords = mergeRecordsAcrossFiles(perFile);
     retroDirty = true; // 레코드 변경 → 다음 회고 요청에 1회 재빌드(매-푸시 재빌드 아님)
     // 열린 워크스페이스 폴더 전체를 sessionContext 후보 풀로 스코핑한다(v0.1.51, 멀티루트 실사용
     // 재현 수정 — 이전엔 첫 폴더 1개만 써서 다른 폴더의 활성 세션이 게이지에 아예 안 잡혔다).
@@ -237,6 +238,10 @@ export function activate(context: vscode.ExtensionContext): void {
     const knownOneMillionModels = await readOneMillionModelsFromClaudeJson();
     const pinnedSessionId = getPinnedSessionId();
     lastUsageSummary = aggregator.aggregate(allRecords, workspaceRoots, knownOneMillionModels, pinnedSessionId);
+    // 벤더 비용 대조(v0.2.5 D-C) — CLI가 쓴 cost-state와 가격표가 어긋나는 모델. 키는 있는데
+    // 값이 틀린 부류라 unpricedModels로는 안 잡힌다(D-A: fable-5-1 과대계상이 화면상 정상이었다).
+    lastUsageSummary.priceDriftModels = detectPriceDrift(files.flatMap(f => jsonlParser.getCostSnapshots(f)))
+      .map(d => d.model);
     // 고정한 세션이 후보 풀에서 사라졌다(세션 종료·워크스페이스 밖) — 죽은 pin을 정리해 다음
     // refresh부터 자동 모드로 조용히 복귀한다(SessionContextUsage.pinMissing, UsageAggregator).
     if (lastUsageSummary.sessionContext?.pinMissing) {
@@ -312,7 +317,7 @@ export function activate(context: vscode.ExtensionContext): void {
   function startFileWatcher(): void {
     // minIntervalMs가 생성자 주입이라 설정 변경 시에는 재생성해야 한다.
     fileWatcher?.stop();
-    fileWatcher = new FileWatcher(undefined, getConfig().usageRefreshIntervalMs);
+    fileWatcher = new FileWatcher(undefined, getConfig().usageRefreshIntervalMs, 'projects', CLAUDE_WATCH_DEPTH);
     fileWatcher.on('change', () => { void refreshUsage(); });
     fileWatcher.start();
   }

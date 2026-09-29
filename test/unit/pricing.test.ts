@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PRICING, findPricing, calcCost } from '../../src/utils/pricing';
+import { PRICING, findPricing, calcCost, resolvePricing } from '../../src/utils/pricing';
 
 describe('findPricing', () => {
   it('fable-5 정확 매칭', () => {
@@ -106,5 +106,25 @@ describe('calcCost — 캐시 TTL 분리 + service_tier', () => {
 
   it('미지의 모델은 비용 0', () => {
     expect(calcCost('gpt-4o', { ...zeroTokens, input_tokens: 1_000_000 })).toBe(0);
+  });
+});
+
+describe('v0.2.5 — Claude 5.1/5.5 세대 가격 (벤더 cost-state 역산)', () => {
+  it('fable-5-1은 fable-5와 다른 단가다 — cache read $0.25 (fable-5 $1.0를 접두사로 물려받으면 과대계상)', () => {
+    const r = resolvePricing('claude-fable-5-1');
+    expect(r.source).toBe('exact');
+    expect(r.price).toEqual({ input: 10.0, output: 50.0, cache_creation: 12.5, cache_creation_1h: 20.0, cache_read: 0.25 });
+  });
+
+  it('opus-5-5는 $4/$20 · cache read $0.20 — [1m] 접미사도 같은 키로 해석', () => {
+    const want = { input: 4.0, output: 20.0, cache_creation: 5.0, cache_creation_1h: 8.0, cache_read: 0.2 };
+    expect(resolvePricing('claude-opus-5-5').price).toEqual(want);
+    expect(resolvePricing('claude-opus-5-5[1m]').price).toEqual(want);
+  });
+
+  it('기존 5세대 키는 그대로다 (fable-5 · opus-5)', () => {
+    expect(resolvePricing('claude-fable-5').price?.cache_read).toBe(1.0);
+    expect(resolvePricing('claude-opus-5').price?.input).toBe(5.0);
+    expect(resolvePricing('claude-opus-5[1m]').price?.input).toBe(5.0);
   });
 });

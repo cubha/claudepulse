@@ -83,6 +83,41 @@ window.MOCK_USAGE = {
   ],
   skillUnattributed: { costUsd: 21.00, totalTokens: 4200000 },
   subagentStats: { mainCostUsd: 7.31, subagentCostUsd: 3.19, subagentShare: 0.304, subagentCount: 12 },
+  // v0.2.5b — 서브에이전트 타입별(합계 + 미상 버킷 = subagentCostUsd 3.19)
+  subagentTypeBreakdown: [
+    { agentType: 'general-purpose',  costUsd: 1.12, totalTokens: 1840000, runCount: 4, share: 0.351, hasUnpricedRecords: false },
+    { agentType: 'scope-critic',     costUsd: 0.86, totalTokens: 1310000, runCount: 3, share: 0.270, hasUnpricedRecords: false },
+    { agentType: 'acceptance-critic', costUsd: 0.64, totalTokens: 1020000, runCount: 2, share: 0.201, hasUnpricedRecords: false },
+    { agentType: 'planner',          costUsd: 0.41, totalTokens: 590000,  runCount: 2, share: 0.129, hasUnpricedRecords: false },
+  ],
+  subagentTypeUnattributed: { costUsd: 0.16, totalTokens: 240000, runCount: 1, hasUnpricedRecords: false },
+  // 24h/7d 스코프 — 실제 확장(UsageAggregator)은 항상 채운다. 목업에 없으면 데모에서 스코프 토글이
+  // 예외를 던져 비용 귀속 카드가 무갱신으로 굳는다(v0.2.5b /verify-impl 축B V1).
+  attributionScopes: {
+    last24h: {
+      skillBreakdown: [{ skill: 'sh-dev-loop', costUsd: 1.20, totalTokens: 240000, share: 0.6 }],
+      skillUnattributed: { costUsd: 0.80, totalTokens: 160000 },
+      subagentStats: { mainCostUsd: 2.00, subagentCostUsd: 0.70, subagentShare: 0.259, subagentCount: 3 },
+      subagentTypeBreakdown: [
+        { agentType: 'scope-critic', costUsd: 0.45, totalTokens: 700000, runCount: 2, share: 0.643, hasUnpricedRecords: false },
+        { agentType: 'planner',      costUsd: 0.25, totalTokens: 360000, runCount: 1, share: 0.357, hasUnpricedRecords: false },
+      ],
+      subagentTypeUnattributed: { costUsd: 0, totalTokens: 0, runCount: 0, hasUnpricedRecords: false },
+      mcpServerBreakdown: [],
+    },
+    last7d: {
+      skillBreakdown: [{ skill: 'sh-dev-loop', costUsd: 6.10, totalTokens: 1220000, share: 0.5 }],
+      skillUnattributed: { costUsd: 6.10, totalTokens: 1220000 },
+      subagentStats: { mainCostUsd: 5.40, subagentCostUsd: 2.30, subagentShare: 0.299, subagentCount: 8 },
+      subagentTypeBreakdown: [
+        { agentType: 'general-purpose', costUsd: 0.90, totalTokens: 1500000, runCount: 3, share: 0.391, hasUnpricedRecords: false },
+        { agentType: 'scope-critic',    costUsd: 0.80, totalTokens: 1200000, runCount: 3, share: 0.348, hasUnpricedRecords: false },
+        { agentType: 'planner',         costUsd: 0.60, totalTokens: 860000,  runCount: 2, share: 0.261, hasUnpricedRecords: false },
+      ],
+      subagentTypeUnattributed: { costUsd: 0, totalTokens: 0, runCount: 0, hasUnpricedRecords: false },
+      mcpServerBreakdown: [],
+    },
+  },
   branchBreakdown: [],
   activeBranch: 'main',
   // v0.1.54 ST4(웹뷰 전면 DOM digest 골든) — Usage Calendar/컨텍스트 게이지가 실제로 셀·바를 그리도록
