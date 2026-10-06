@@ -57,13 +57,13 @@ describe('사이드바 칩', () => {
 
 describe('대시보드 섹션', () => {
   it('캐시 미스 — 0건이면 빈 문자열, 토큰 미상이 있으면 합계를 하한(≥)으로 표기', () => {
-    expect(cacheMissHtml({ reasons: [], missCount: 0, recordCount: 10, estCostUsd: 0, hasUnknownTokens: false })).toBe('');
+    expect(cacheMissHtml({ reasons: [], missCount: 0, recordCount: 10, estCostUsd: 0, hasUnknownTokens: false, hasUnpricedRecords: false })).toBe('');
     const html = cacheMissHtml({
       reasons: [
         { reason: 'previous_message_not_found', count: 3, missedTokens: null, estCostUsd: null, hasUnpricedRecords: false },
         { reason: 'new_reason_<x>', count: 1, missedTokens: 10, estCostUsd: 0.5, hasUnpricedRecords: false },
       ],
-      missCount: 4, recordCount: 100, estCostUsd: 0.5, hasUnknownTokens: true,
+      missCount: 4, recordCount: 100, estCostUsd: 0.5, hasUnknownTokens: true, hasUnpricedRecords: false,
     });
     expect(html).toContain('≥');
     expect(html).toContain('skill-row-other'); // 토큰 미상 행은 muted

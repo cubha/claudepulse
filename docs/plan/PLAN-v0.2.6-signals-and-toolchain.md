@@ -27,7 +27,7 @@
 - 빈 값과 0을 같게 그리지 않는다(v0.1.55 거짓초록) — 데이터 없음은 숨김 또는 "미상".
 - 외부 문자열(훅 command, PR repo, agent role, 에이전트 타입)은 전부 `escapeHtml`.
 - i18n 4로캘(ko/en/ja/zh) 동시 추가.
-- 카드 수 불변식(`panelDesign.invariants` card=7): 신규 섹션은 **`panel-flush`**(카드 아님)로 둔다 → 7 유지.
+- 카드 수 불변식(`panelDesign.invariants` `class="card ` = **6**곳 — 초안의 "7"은 낡은 수치, acceptance-critic 정정): 신규 섹션은 **`panel-flush`**(카드 아님)로 둔다 → 6 유지.
 - 골든 digest(`test/golden/webview-surface.json`)는 의도된 DOM 추가로 재기준선 — 재기준선 사유를 커밋 메시지에 남긴다.
 
 ### 2-2. Phase 0 — R4 (단독 커밋, 도구별 1커밋)
@@ -78,7 +78,7 @@
 ### Phase 2 — Claude 신호 집계(순수 함수)
 | ID | 태그 | 내용 | 파일 |
 |---|---|---|---|
-| ST2 | [TDD] | #1 캐시 미스 원인 분해(원인별 건수·토큰(미상 구분)·추정 비용) — today/24h/7d | `src/services/signals/cacheMiss.ts`, test |
+| ST2 | [TDD] | #1 캐시 미스 원인 분해(원인별 건수·토큰(미상 구분)·추정 비용) — ~~today/24h/7d~~ **최근 7일 단일 창**(구현 중 축소: 하루 미스 ≈12건이라 today/24h는 표본이 거의 없다 — VERIFY-SPEC ST2) | `src/services/signals/cacheMiss.ts`, test |
 | ST3 | [TDD] | #5 thinking 비중(오늘) | `src/services/UsageAggregator.ts`, test |
 | ST4 | [TDD] | #4 차단 에피소드(유형·resetsAt·최초/최종 시각·재시도 행 수·overage 사유) + 5xx 서버 오류 수 | `src/services/signals/rateLimitBlocks.ts`, test |
 | ST5 | [TDD] | #6 PR 단위 비용(pr-link ↔ 세션 레코드 정확 조인, 여러 PR에 걸친 세션은 `shared` 표시·합계 이중계산 금지) | `src/services/signals/prCost.ts`, test |
@@ -102,7 +102,7 @@
 | ST15 | — | 릴리스 메타: version 0.2.6, CHANGELOG, README What's New | `package.json`, `CHANGELOG.md`, `README.md` |
 
 ## 4. UI 설계 (Ground Truth `src/webview/styles.css`, 분기 A — 기존 화면 내 추가, `/frontend-design` 생략)
-- 사이드바(단일 숫자): thinking 비중은 기존 모델/캐시 칩 줄에 칩 1개(Codex reasoning 칩과 대칭). 차단은 데이터 있을 때만 `.panel-mcp-row`형 1줄("최근 차단 5h · N일 전"), compaction은 컨텍스트 게이지 아래 보조줄(현재 세션 압축 있을 때만).
+- 사이드바(단일 숫자): thinking 비중은 기존 모델/캐시 칩 줄에 칩 1개(Codex reasoning 칩과 대칭). 차단은 데이터 있을 때만 칩 1개(`.sb-chip--warn`, "⛔ 5h 차단 · N일 전"), compaction은 컨텍스트 게이지 칩 줄에 칩 1개(현재 세션 압축 있을 때만). (구현 중 변경: 초안의 "1줄/보조줄" → 칩 — 기존 칩 문법 재사용으로 새 클래스 0, 좁은 폭에서 줄 수 절약)
 - 대시보드(목록·분해): 신규 섹션은 `panel-flush` + `.panel-chart-header`, 행은 `.skill-row` 3열(이름·바·값) 또는 `.panel-mcp-row` 2열. 상태는 `statusMarker.ts` 마커 + 툴팁.
 - 빈 상태: 데이터 0건 섹션은 숨김(차단 이력 없음 = 섹션 숨김, 훅 0개 = 훅 목록 숨김).
 - 검증: 실빌드 + fake postMessage + Playwright 2폭×2로캘(feedback_webview_ui_verification).

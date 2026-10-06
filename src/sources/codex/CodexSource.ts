@@ -54,6 +54,8 @@ interface RolloutParseState {
   seen: Set<string>;
   /** 서브에이전트 스레드 id → agent_role(null=기본 역할). 이 파일의 `session_meta.source`에서 모은다(v0.2.6 ST11). */
   subagentRoles: Map<string, string | null>;
+  /** 이 파일의 주인 스레드 — **첫** session_meta의 id. 자식 파일 뒤쪽의 부모 meta 사본은 주인이 아니다. */
+  ownThreadId: string;
 }
 
 /**
@@ -67,6 +69,7 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
 
   let { cwd, branch, sessionId } = state;
   const { turnModel, seen, subagentRoles } = state;
+  let { ownThreadId } = state;
   const out: SessionRecord[] = [];
   // 서브에이전트 판별(v0.2.6 ST11) — 레코드 자신의 `session_id`(루트 세션)와 `thread_id`(이 응답을 만든
   // 스레드)가 다르면 사이드체인이다(실물 0.160.1). 파일 단위 문맥으로 판정하지 않는 이유: 자식 파일은
@@ -77,6 +80,7 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
   for (const line of lines) {
     if (line.type === 'session_meta') {
       if (line.subagent && line.sessionId) subagentRoles.set(line.sessionId, line.subagent.agentRole);
+      if (!ownThreadId && line.sessionId) ownThreadId = line.sessionId;
       cwd = line.cwd ?? '';
       branch = line.git?.branch ?? '';
       sessionId = line.sessionId ?? '';
@@ -127,7 +131,7 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
     });
   }
 
-  return { records: out, state: { cwd, branch, sessionId, turnModel, seen, subagentRoles } };
+  return { records: out, state: { cwd, branch, sessionId, turnModel, seen, subagentRoles, ownThreadId } };
 }
 
 /**
@@ -144,7 +148,7 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
  * 공개해둔다.
  */
 export function rolloutLinesToSessionRecords(rawLines: string[], seen: Set<string> = new Set()): SessionRecord[] {
-  return parseRolloutIntoState(rawLines, { cwd: '', branch: '', sessionId: '', turnModel: new Map(), seen, subagentRoles: new Map() }).records;
+  return parseRolloutIntoState(rawLines, { cwd: '', branch: '', sessionId: '', turnModel: new Map(), seen, subagentRoles: new Map(), ownThreadId: '' }).records;
 }
 
 /**
@@ -196,6 +200,7 @@ interface RolloutFileCache {
   seen: Set<string>;
   /** 서브에이전트 스레드 → agent_role(v0.2.6 ST11). 자식의 자기 meta는 파일 첫 청크에 오지만 증분에서도 이어쓴다. */
   subagentRoles: Map<string, string | null>;
+  ownThreadId: string;
 }
 
 /** getFileLines(ST2)의 원시 줄 캐시 엔트리 — SessionRecord 파싱 문맥 없이 누적 줄만 보관한다. */
@@ -268,6 +273,25 @@ function splitCompleteLines(buf: Buffer): { lines: string[]; consumedBytes: numb
   return { lines, consumedBytes: complete.length };
 }
 
+/**
+ * 파일별 레코드를 messageId로 합친다(크로스파일 dedup, v0.2.1 ST1). 같은 응답이 여러 파일에 있으면
+ * **그 응답의 스레드를 소유한 파일**의 것을 남긴다(v0.2.6 VERIFY scope-critic 적발). 이전엔 먼저 읽힌 쪽이
+ * 이겼는데 `listRolloutFiles`는 readdir 순서(미정렬)라, 자식 파일의 부모 응답 사본이 이기면 cwd·branch·
+ * model이 자식 파일 문맥에서 왔다. 소유 판정: 레코드의 스레드(서브에이전트면 agentId, 아니면 루트 세션) ===
+ * 그 파일의 주인 스레드(첫 session_meta). 둘 다 주인이 아니면 먼저 읽힌 쪽(종전 동작).
+ */
+export function mergeCodexFileRecords(perFile: Array<{ ownThreadId: string; records: SessionRecord[] }>): SessionRecord[] {
+  const byId = new Map<string, { record: SessionRecord; owned: boolean }>();
+  for (const { ownThreadId, records } of perFile) {
+    for (const record of records) {
+      const owned = ownThreadId !== '' && (record.agentId ?? record.sessionId) === ownThreadId;
+      const existing = byId.get(record.messageId);
+      if (!existing || (!existing.owned && owned)) byId.set(record.messageId, { record, owned });
+    }
+  }
+  return [...byId.values()].map(v => v.record);
+}
+
 export class CodexSource implements AgentSource {
   readonly provider = 'codex' as const;
   readonly capabilities = CODEX_CAPABILITIES;
@@ -324,8 +348,8 @@ export class CodexSource implements AgentSource {
     // 다음 refresh가 그 줄 전체를 처음부터 다시 읽게 한다.
     const { lines: newLines, consumedBytes } = splitCompleteLines(buf);
     const state = canIncrement
-      ? { cwd: cached!.cwd, branch: cached!.branch, sessionId: cached!.sessionId, turnModel: cached!.turnModel, seen: cached!.seen, subagentRoles: cached!.subagentRoles }
-      : { cwd: '', branch: '', sessionId: '', turnModel: new Map<string, string>(), seen: new Set<string>(), subagentRoles: new Map<string, string | null>() };
+      ? { cwd: cached!.cwd, branch: cached!.branch, sessionId: cached!.sessionId, turnModel: cached!.turnModel, seen: cached!.seen, subagentRoles: cached!.subagentRoles, ownThreadId: cached!.ownThreadId }
+      : { cwd: '', branch: '', sessionId: '', turnModel: new Map<string, string>(), seen: new Set<string>(), subagentRoles: new Map<string, string | null>(), ownThreadId: '' };
 
     const { records: newRecords, state: nextState } = parseRolloutIntoState(newLines, state);
     const records = canIncrement ? [...cached!.records, ...newRecords] : newRecords;
@@ -427,22 +451,17 @@ export class CodexSource implements AgentSource {
    * 파일별 mtime+offset 캐시로 증분 파싱한다(ST2). 그 뒤 messageId 기준 **전역 1패스 dedup**을
    * 한 번 더 돈다(ST1, ANALYSIS 🔴#1) — 서브에이전트(thread_spawn)가 자기 rollout 파일에 부모의
    * response_id를 재생하면, 파일 내부 dedup(seen Set)은 파일마다 독립이라 못 잡지만 messageId는
-   * response_id의 결정적 함수(`makeRecordKey`)라 여기서 걸러진다.
+   * response_id의 결정적 함수(`makeRecordKey`)라 여기서 걸러진다 — 남는 쪽은 소유 파일의 원본이다
+   * (`mergeCodexFileRecords`).
    */
   async loadAllSessionRecords(): Promise<SessionRecord[]> {
     const files = await listRolloutFiles(path.join(this.homeDir, 'sessions'));
-    const all: SessionRecord[] = [];
+    const perFile: Array<{ ownThreadId: string; records: SessionRecord[] }> = [];
     for (const file of files) {
-      all.push(...(await this.parseFileIncremental(file)));
+      const records = await this.parseFileIncremental(file);
+      perFile.push({ ownThreadId: this.fileCache.get(file)?.ownThreadId ?? '', records });
     }
-    const seenMessageIds = new Set<string>();
-    const out: SessionRecord[] = [];
-    for (const record of all) {
-      if (seenMessageIds.has(record.messageId)) continue;
-      seenMessageIds.add(record.messageId);
-      out.push(record);
-    }
-    return out;
+    return mergeCodexFileRecords(perFile);
   }
 
   /**
@@ -497,5 +516,3 @@ export class CodexSource implements AgentSource {
     };
   }
 }
-
-export function mergeCodexFileRecords(_perFile: Array<{ ownThreadId: string; records: SessionRecord[] }>): SessionRecord[] { throw new Error('not implemented'); }

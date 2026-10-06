@@ -880,7 +880,7 @@ export function buildCodexSidebarHtml(
       ${header}
       ${buildUsageRowHtml(usage, activeProvider)}
       ${bucketCards}
-      ${hasMeaningfulCodexLimits(snapshot?.extras) ? codexLimitsRowsHtml(snapshot?.extras) : ''}
+      ${hasMeaningfulCodexLimits(snapshot?.extras) ? codexLimitsRowsHtml(snapshot?.extras, buckets, Date.now()) : ''}
       ${codexContextRow}
       ${codexReasoningRow}
       ${buildSidebarCalendarHtml(usage)}

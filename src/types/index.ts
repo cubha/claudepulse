@@ -236,6 +236,8 @@ export interface CacheMissBreakdown {
   estCostUsd: number;
   /** 토큰을 기록하지 않는 원인이 하나라도 있으면 true — 합계가 하한값이라는 뜻 */
   hasUnknownTokens: boolean;
+  /** 토큰은 아는데 가격표에 없는 모델의 미스가 하나라도 있으면 true — estCostUsd가 그만큼 빠져 있다 */
+  hasUnpricedRecords: boolean;
 }
 
 /** 오늘 thinking 비중(v0.2.6 ST3). 분모 = thinking 필드가 있는 레코드의 output. */

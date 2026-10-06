@@ -3,7 +3,7 @@
 // 새 색·새 클래스 없음: .sb-chip·.skill-row·.panel-mcp-row·.cache-kpi-*·.status-marker 문법 재사용(§3#5·#6).
 // 설명 문장은 본문이 아니라 title 툴팁으로만 간다(v0.2.4 규약).
 import type {
-  CacheMissBreakdown, CodexLimitExtras, CompactionInfo, EffortUnattributed, EffortUsage,
+  CacheMissBreakdown, CodexLimitExtras, CompactionInfo, RateLimitBucket, EffortUnattributed, EffortUsage,
   PrCostRow, RateLimitBlockHistory, SubagentStats, ThinkingShare, TurnHookStats,
 } from '../types';
 import { escapeHtml, fmtCost } from './format';
@@ -89,9 +89,14 @@ export function compactionChipHtml(c: CompactionInfo | null | undefined): string
   return `<span class="sb-chip" title="${escapeHtml(tip)}">🗜 ${escapeHtml(t('compaction_chip'))} ${c.count}</span>`;
 }
 
-/** Codex 크레딧·지출통제·차단 사유(ST9). 의미 있는 값만 행으로 — 판정은 호출측 hasMeaningfulCodexLimits. */
-export function codexLimitsRowsHtml(x: CodexLimitExtras | null | undefined): string {
+/**
+ * Codex 크레딧·지출통제·차단 사유(ST9). 의미 있는 값만 행으로 — 판정은 호출측 hasMeaningfulCodexLimits.
+ * 차단 사유·지출 한도 도달은 **그 창이 아직 안 풀렸을 때만** 그린다. extras는 마지막 스냅샷 값이라, 차단 뒤
+ * Codex를 다시 안 쓰면 리셋 후에도 "차단"이 남는다(VERIFY scope-critic 적발 — 거짓 경보).
+ */
+export function codexLimitsRowsHtml(x: CodexLimitExtras | null | undefined, buckets: RateLimitBucket[], nowMs: number): string {
   if (!x) return '';
+  const windowLive = buckets.some(b => b.resetsAt * 1000 > nowMs);
   const row = (label: string, value: string, tip?: string) => `<div class="sb-section-hdr">
       <span class="sb-section-label">${escapeHtml(label)}</span>
       <span class="sb-section-right"><span class="mono"${tip ? ` title="${escapeHtml(tip)}"` : ''}>${value}</span></span>
@@ -106,10 +111,10 @@ export function codexLimitsRowsHtml(x: CodexLimitExtras | null | undefined): str
     const il = x.individualLimit;
     rows.push(row(t('codex_spend_limit'), `${escapeHtml(il.used)} / ${escapeHtml(il.limit)} · ${il.remainingPercent}% ${escapeHtml(t('left'))}`));
   }
-  if (x.spendControlReached === true) {
+  if (x.spendControlReached === true && (!x.individualLimit || x.individualLimit.resetsAt * 1000 > nowMs)) {
     rows.push(row(t('codex_spend_limit'), statusMarkerHtml({ label: t('codex_spend_reached'), tip: t('codex_spend_reached_tip'), tone: 'danger' })));
   }
-  if (x.rateLimitReachedType) {
+  if (x.rateLimitReachedType && windowLive) {
     const known = ['rate_limit_reached', 'workspace_owner_credits_depleted', 'workspace_member_credits_depleted',
       'workspace_owner_usage_limit_reached', 'workspace_member_usage_limit_reached'].includes(x.rateLimitReachedType);
     const label = known ? t(`codex_reached_${x.rateLimitReachedType}`) : x.rateLimitReachedType;
@@ -138,8 +143,13 @@ export function cacheMissHtml(cm: CacheMissBreakdown | null | undefined): string
     </div>`;
   }).join('');
   const rate = cm.recordCount > 0 ? cm.missCount / cm.recordCount : 0;
-  const costLabel = `${cm.hasUnknownTokens ? '≥' : '≈'}${fmtCost(cm.estCostUsd)}`;
-  const tip = `${t('cache_miss_est_tip')}${cm.hasUnknownTokens ? `\n${t('cache_miss_tokens_unknown_tip')}` : ''}`;
+  // 비용을 하나도 못 셌는데(전량 미가격·토큰 미상) 0을 그리면 "추가 비용 없음"으로 읽힌다(v0.1.55 거짓초록,
+  // VERIFY scope-critic 적발). 일부라도 셌으면 하한(≥)으로, 하나도 못 셌으면 '가격 미상'으로 낸다.
+  const anyUncounted = cm.hasUnknownTokens || cm.hasUnpricedRecords;
+  const costLabel = cm.estCostUsd === 0 && anyUncounted
+    ? t('pricing_unknown')
+    : `${anyUncounted ? '≥' : '≈'}${fmtCost(cm.estCostUsd)}`;
+  const tip = `${t('cache_miss_est_tip')}${cm.hasUnknownTokens ? `\n${t('cache_miss_tokens_unknown_tip')}` : ''}${cm.hasUnpricedRecords ? `\n${t('pricing_unknown_note')}` : ''}`;
   return `<div class="panel-mcp-header" id="cache-miss-header">${escapeHtml(t('cache_miss_header'))}
       <span class="panel-chart-readout mono" title="${escapeHtml(tip)}">${cm.missCount}/${cm.recordCount} · ${(rate * 100).toFixed(1)}% · ${costLabel}</span>
     </div>

@@ -152,7 +152,7 @@ window.MOCK_USAGE = {
         { reason: 'model_changed', count: 2, missedTokens: 185207, estCostUsd: 3.66, hasUnpricedRecords: false },
         { reason: 'unavailable', count: 2, missedTokens: null, estCostUsd: null, hasUnpricedRecords: false },
       ],
-      missCount: 86, recordCount: 7962, estCostUsd: 8.27, hasUnknownTokens: true,
+      missCount: 86, recordCount: 7962, estCostUsd: 8.27, hasUnknownTokens: true, hasUnpricedRecords: false,
     },
     rateLimitBlocks: {
       episodes: [

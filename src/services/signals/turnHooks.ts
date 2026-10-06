@@ -5,20 +5,31 @@ const DAY_MS = 86_400_000;
 /** 앞에 오는 인터프리터는 이름에서 뺀다 — 무엇을 실행했는지가 정보다. */
 const INTERPRETERS = new Set(['node', 'bash', 'sh', 'zsh', 'python', 'python3', 'deno', 'bun', 'npx', 'tsx', 'pwsh', 'powershell']);
 
-function stripQuotes(t: string): string {
-  return t.replace(/^["']|["']$/g, '');
+/** 셸 비슷한 토큰화 — 따옴표 안의 공백은 자르지 않는다(`"C:\\Users\\Jane Doe\\h.js"`가 한 토큰). */
+function tokenize(command: string): string[] {
+  const out: string[] = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(command)) !== null) out.push(m[1] ?? m[2] ?? m[3]);
+  return out.filter(t => t !== '');
+}
+
+function basenameOf(token: string): string {
+  return token.split(/[/\\]/).filter(Boolean).pop() ?? token;
 }
 
 /**
  * 훅 command → 표시명(v0.2.6 ST8). command는 로컬 경로를 담고 있어 그대로 그리면 대시보드
  * 스크린샷(마켓 이미지 포함)에 사용자 디렉토리가 노출된다 — 경로 토큰은 basename만 남긴다.
- * 인자는 최대 3개까지 둔다(`cli.js hook stop`처럼 서브커맨드가 구분 정보다).
+ * 앞의 환경변수 할당(`HOME=/home/x`)과 인터프리터는 떼고, 인자는 최대 3개까지 둔다
+ * (`cli.js hook stop`처럼 서브커맨드가 구분 정보다).
+ * ⚠️ 따옴표 인식이 필수다 — 공백으로 먼저 자르면 `"…\Jane Doe\…"`의 `Jane`이 남는다(VERIFY scope-critic 적발).
  */
 export function hookDisplayName(command: string): string {
-  const tokens = command.trim().split(/\s+/).map(stripQuotes).filter(Boolean);
-  if (tokens.length > 1 && INTERPRETERS.has(tokens[0])) tokens.shift();
-  const shown = tokens.slice(0, 4).map(t => (t.includes('/') || t.includes('\\')) ? (t.split(/[/\\]/).filter(Boolean).pop() ?? t) : t);
-  return shown.join(' ');
+  const tokens = tokenize(command.trim());
+  while (tokens.length > 1 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[0])) tokens.shift();
+  if (tokens.length > 1 && INTERPRETERS.has(basenameOf(tokens[0]))) tokens.shift();
+  return tokens.slice(0, 4).map(t => (t.includes('/') || t.includes('\\')) ? basenameOf(t) : t).join(' ');
 }
 
 function quantile(sorted: number[], q: number): number | null {

@@ -18,6 +18,7 @@ export function computeCacheMiss(records: SessionRecord[], sinceIso: string): Ca
   let missCount = 0;
   let estCostUsd = 0;
   let hasUnknownTokens = false;
+  let hasUnpricedRecords = false;
 
   for (const r of records) {
     // Codex는 이 진단 필드가 원천적으로 없다 — 분모에 넣으면 미스율이 희석된다.
@@ -45,6 +46,7 @@ export function computeCacheMiss(records: SessionRecord[], sinceIso: string): Ca
     const { price, source } = resolvePricing(r.model);
     if (!price || source === 'none') {
       row.hasUnpricedRecords = true;
+      hasUnpricedRecords = true;
       continue;
     }
     const cc5m = r.usage.cache_creation_5m_input_tokens;
@@ -62,5 +64,5 @@ export function computeCacheMiss(records: SessionRecord[], sinceIso: string): Ca
     .sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason))
     .map(({ tokenRows: _t, pricedRows: _p, ...row }) => row);
 
-  return { reasons, missCount, recordCount, estCostUsd, hasUnknownTokens };
+  return { reasons, missCount, recordCount, estCostUsd, hasUnknownTokens, hasUnpricedRecords };
 }
