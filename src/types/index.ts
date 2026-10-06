@@ -169,6 +169,44 @@ export interface SessionRecord {
    * usage 합계로 폴백(UsageAggregator 소비부)한다 — 기존 테스트 파일 대량 수정 회피.
    */
   contextTokens?: number;
+  /**
+   * 프롬프트 캐시 미스 원인(v0.2.6) — `message.diagnostics.cache_miss_reason`. `missedTokens`는
+   * messages/model/system_changed에만 기록되고 previous_message_not_found·unavailable에는 없다
+   * (실측 78%) — 그때는 **null(미상)**이지 0이 아니다(v0.1.55 거짓초록).
+   */
+  cacheMiss?: CacheMissInfo;
+  /** `usage.output_tokens_details.thinking_tokens`(v0.2.6) — output_tokens에 **포함된** 값. 별도 과금 금지. */
+  thinkingTokens?: number;
+  /** top-level `effort`(v0.2.6) — 유효 effort. `perTurnEffort`는 턴 오버라이드라 대부분 null이어서 쓰지 않는다. */
+  effort?: string;
+}
+
+/** 캐시 미스 원인 1건(v0.2.6). */
+export interface CacheMissInfo {
+  reason: string;
+  /** 놓친 캐시 토큰. 원인이 토큰을 기록하지 않으면 null(미상). */
+  missedTokens: number | null;
+}
+
+/**
+ * jsonl의 비-assistant 이벤트(v0.2.6 ST1) — 사용량 레코드(SessionRecord)와 별개 채널.
+ * `eventKey`는 파일 간 dedup 키: uuid가 있으면 uuid, pr-link는 uuid가 없어 `pr:<repo>#<n>@<session>`.
+ */
+export type JournalEvent =
+  | { kind: 'turn_duration'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; durationMs: number; messageCount: number }
+  | { kind: 'stop_hooks'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; hooks: Array<{ command: string; durationMs: number }>; errorCount: number; preventedContinuation: boolean }
+  | { kind: 'compact'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; trigger: string; preTokens: number; postTokens: number; durationMs: number }
+  | { kind: 'pr_link'; eventKey: string; sessionId: string; timestamp: string; prNumber: number; prUrl: string; prRepository: string }
+  | { kind: 'api_error'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; status: number; error: string; quota?: QuotaRejection };
+
+/** 429 레코드의 `quotaLimits`(v0.2.6) — 어떤 창이 언제 풀리는지. */
+export interface QuotaRejection {
+  status: string;
+  rateLimitType: string;
+  /** unix 초 */
+  resetsAt: number;
+  overageStatus?: string;
+  overageDisabledReason?: string;
 }
 
 /** 하루 집계 (UTC 날짜 기준). */
