@@ -385,6 +385,7 @@ const dict: Record<string, Record<Lang, string>> = {
   turn_hooks_header: { ko: '턴 지연 · 훅 (7일)', en: 'Turn latency · hooks (7d)', ja: 'ターン遅延 · フック (7日)', zh: '轮次延迟 · 钩子 (7天)' },
   turn_count: { ko: '턴', en: 'Turns', ja: 'ターン', zh: '轮次' },
   turn_median: { ko: '중앙값', en: 'Median', ja: '中央値', zh: '中位数' },
+  turn_max: { ko: '최장', en: 'Max', ja: '最長', zh: '最长' },
   turn_daily_median: { ko: '일별 중앙값', en: 'Daily median', ja: '日別中央値', zh: '每日中位数' },
   hooks_label: { ko: '훅', en: 'Hooks', ja: 'フック', zh: '钩子' },
   hooks_avg_header: { ko: '훅별 평균 시간', en: 'Average time per hook', ja: 'フック別平均時間', zh: '各钩子平均耗时' },

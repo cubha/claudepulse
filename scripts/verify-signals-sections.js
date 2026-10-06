@@ -85,7 +85,7 @@ async function panelClaude(browser, width, lang) {
   }
   check(s.blockRows === 3 && s.blockDanger === 2 && s.blockMuted === 1, `[${tag}] 차단 2에피소드(danger) + 서버오류 1행(muted) (실제 ${s.blockRows}/${s.blockDanger}/${s.blockMuted})`);
   check(s.prRows === 3 && s.prShared === 1, `[${tag}] PR 3행, 공유 마커 1개 (실제 ${s.prRows}/${s.prShared})`);
-  check(s.turnKpis === 3 && s.turnDays === 7, `[${tag}] 턴 KPI 3 + 일별 7행 (실제 ${s.turnKpis}/${s.turnDays})`);
+  check(s.turnKpis === 4 && s.turnDays === 7, `[${tag}] 턴 KPI 4(건수·중앙값·p90·최장) + 일별 7행 (실제 ${s.turnKpis}/${s.turnDays})`);
   check(s.hooks.length === 4 && s.hooks[0] === 'session-metrics.js', `[${tag}] 훅 4행, 경로 없는 표시명 (실제 ${JSON.stringify(s.hooks)})`);
   check(!/\/(home|mnt|Users)\//.test(s.allText), `[${tag}] 신호 섹션 본문에 로컬 경로 없음`);
   check(s.hookShareMarker, `[${tag}] 훅 비율 마커 존재`);

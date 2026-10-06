@@ -240,6 +240,7 @@ export function turnHooksHtml(s: TurnHookStats | null | undefined): string {
       ${kpi(t('turn_count'), String(s.turnCount))}
       ${kpi(t('turn_median'), `${fmtDuration(s.medianMs ?? 0)}${shareMarker}`)}
       ${kpi('p90', fmtDuration(s.p90Ms ?? 0))}
+      ${kpi(t('turn_max'), fmtDuration(s.maxMs ?? 0))}
     </div>`;
 
   const dayMax = Math.max(...s.daily.map(d => d.medianMs ?? 0)) || 1;

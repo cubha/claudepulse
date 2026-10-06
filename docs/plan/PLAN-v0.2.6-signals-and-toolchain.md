@@ -49,7 +49,7 @@
 - **#6 PR**: `type:'pr-link'` `{sessionId, prNumber, prUrl, prRepository, timestamp}`, uuid 없음 → 키 `(prRepository, prNumber, sessionId)`.
 - **#9 compaction**: `system/compact_boundary.compactMetadata{trigger:auto|manual, preTokens, postTokens, durationMs}` 30일 93건(manual 72·auto 21).
 - **#11 effort**: 유효값은 **`effort`**(high 60k·medium 17k·xhigh 745). `perTurnEffort`는 턴 단위 오버라이드라 34k행이 null — 권위 필드는 `effort`, 없으면 "미상" 버킷.
-- **#12 턴·훅**: `system/turn_duration{durationMs,messageCount}` 1,855건(중앙값 93s), `system/stop_hook_summary{hookInfos[{command,durationMs}],hookErrors,preventedContinuation}` 1,851건. 30일 훅 합계 2,560s / 턴 합계 1,235,624s = **0.21%**, 턴당 평균 훅 1.38s / 턴 중앙값 94s = **1.5%**(비율은 중앙값 기준으로 낸다 — 최장 턴 33시간 이상치. 계획 초안의 "2.1%"는 최장값을 합계로 오독한 오계산). 훅 command는 로컬 경로를 포함 → **스크립트 basename만 표시**(마켓 스크린샷 노출 방지), escape 필수.
+- **#12 턴·훅**: `system/turn_duration{durationMs,messageCount}` 1,855건(중앙값 93s), `system/stop_hook_summary{hookInfos[{command,durationMs}],hookErrors,preventedContinuation}` 1,851건. 30일 훅 합계 2,560s / 턴 합계 1,235,624s = **0.21%**, 턴당 평균 훅 1.38s / 턴 중앙값 94s = **1.5%**(비율은 중앙값 기준으로 낸다 — 최장 턴 33시간 이상치. 계획 초안의 "2.1%"는 최장값을 합계로 오독한 오계산). 훅 command는 로컬 경로를 포함 → **스크립트 basename만 표시**(마켓 스크린샷 노출 방지), escape 필수. (구현 중 변경 — verify-impl 축A V2: 경로 토큰만 basename으로 줄이고, 경로 아닌 인자는 최대 3개 유지. 실측 훅 4종 중 `node ".../cli.js" hook stop`은 서브커맨드가 훅을 구분하는 유일한 정보라 basename만 남기면 서로 다른 훅이 한 줄로 합쳐진다. 노출 방지 목표(사용자 디렉토리·이름)는 따옴표 인식 토큰화·`VAR=` 제거·경로 basename으로 충족 — `test/unit/signals.test.ts` 'ST8 — 훅 표시명' 표가 명세.)
 - **비-assistant 이벤트 중복**: `subagents/*.jsonl`은 부모 이력을 복사 → system 이벤트도 파일 간 중복 가능 → **uuid로 파일 간 dedup**.
 
 ### 2-4. Codex (openai/codex `ade17c6`, 2026-10-05 소스)
@@ -104,7 +104,7 @@
 ## 4. UI 설계 (Ground Truth `src/webview/styles.css`, 분기 A — 기존 화면 내 추가, `/frontend-design` 생략)
 - 사이드바(단일 숫자): thinking 비중은 기존 모델/캐시 칩 줄에 칩 1개(Codex reasoning 칩과 대칭). 차단은 데이터 있을 때만 칩 1개(`.sb-chip--warn`, "⛔ 5h 차단 · N일 전"), compaction은 컨텍스트 게이지 칩 줄에 칩 1개(현재 세션 압축 있을 때만). (구현 중 변경: 초안의 "1줄/보조줄" → 칩 — 기존 칩 문법 재사용으로 새 클래스 0, 좁은 폭에서 줄 수 절약)
 - 대시보드(목록·분해): 신규 섹션은 `panel-flush` + `.panel-chart-header`, 행은 `.skill-row` 3열(이름·바·값) 또는 `.panel-mcp-row` 2열. 상태는 `statusMarker.ts` 마커 + 툴팁.
-- 빈 상태: 데이터 0건 섹션은 숨김(차단 이력 없음 = 섹션 숨김, 훅 0개 = 훅 목록 숨김).
+- 빈 상태: 데이터 0건 섹션은 숨김(차단 이력 없음 = 섹션 숨김, 훅 0개 = 훅 목록 숨김). 예외: 귀속 카드 안 effort 목록은 숨기지 않고 `no_effort_data`("effort 기록 없음")를 표시한다 — 카드 안 하위 목록이라 숨기면 `collecting_data` 자리표시자가 남아 v0.1.40식 "수집중" 고착처럼 보인다(구현 중 변경, verify-impl 축A V11).
 - 검증: 실빌드 + fake postMessage + Playwright 2폭×2로캘(feedback_webview_ui_verification).
 
 ## 5. 라우팅

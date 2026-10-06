@@ -120,6 +120,14 @@ describe('대시보드 섹션', () => {
     expect(turnHooksHtml({ ...base, hookShare: 0.2 })).toContain('status-marker danger');
   });
 
+  it('턴/훅 — PLAN ST8의 최장 지연을 KPI로 보인다 (verify-impl 축A V1)', () => {
+    const s: TurnHookStats = {
+      turnCount: 3, totalTurnMs: 7_700_000, medianMs: 100_000, p90Ms: 150_000, maxMs: 7_500_000,
+      daily: [], hooks: [], hookTotalMs: 0, avgHookMsPerTurn: 0, hookShare: 0, hookErrorCount: 0,
+    };
+    expect(turnHooksHtml(s)).toContain('2h 5m');
+  });
+
   it('Codex 서브에이전트 행 — 0개면 빈 문자열, 미가격이면 비용 대신 미상', () => {
     expect(codexSubagentRowHtml({ mainCostUsd: 0, subagentCostUsd: 0, subagentShare: 0, subagentCount: 0, mainHasUnpriced: false, subagentHasUnpriced: false })).toBe('');
     const html = codexSubagentRowHtml({ mainCostUsd: 0, subagentCostUsd: 0, subagentShare: 0, subagentCount: 1, mainHasUnpriced: true, subagentHasUnpriced: true });
