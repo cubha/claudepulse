@@ -497,3 +497,5 @@ export class CodexSource implements AgentSource {
     };
   }
 }
+
+export function mergeCodexFileRecords(_perFile: Array<{ ownThreadId: string; records: SessionRecord[] }>): SessionRecord[] { throw new Error('not implemented'); }

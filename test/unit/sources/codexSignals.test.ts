@@ -3,7 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it, expect, afterEach } from 'vitest';
 import { parseRolloutLines, hasMeaningfulCodexLimits } from '../../../src/sources/codex/codexRollout';
-import { CodexSource, rolloutLinesToSessionRecords } from '../../../src/sources/codex/CodexSource';
+import { CodexSource, rolloutLinesToSessionRecords, mergeCodexFileRecords } from '../../../src/sources/codex/CodexSource';
+import type { SessionRecord } from '../../../src/types';
 import { UsageAggregator } from '../../../src/services/UsageAggregator';
 import { CODEX_CAPABILITIES } from '../../../src/sources/AgentSource';
 
@@ -141,6 +142,23 @@ describe('ST11 — Codex 서브에이전트(실물 fixture)', () => {
       expect(s.subagentTypeBreakdown).toEqual([]);
       expect(s.subagentTypeUnattributed.runCount).toBe(1);
     });
+  });
+
+  it('크로스파일 dedup은 파일 순서와 무관하게 그 스레드를 소유한 파일의 원본을 남긴다 (scope-critic 적발)', () => {
+    // 자식 파일이 부모 응답을 사본으로 품은 경우 — readdir 순서는 보장되지 않는다(listRolloutFiles 미정렬).
+    const base = (cwd: string): SessionRecord => ({
+      provider: 'codex', messageId: 'codex:resp_1', requestId: 'codex:resp_1', sessionId: PARENT_ID, model: 'm',
+      timestamp: '2026-10-06T00:00:00Z', cwd, gitBranch: '', costUsd: 0, toolCounts: { edit: 0, write: 0, bash: 0, read: 0, grep: 0, webSearch: 0, webFetch: 0, mcp: 0, other: 0 },
+      editedFiles: [], isSidechain: false,
+      usage: { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_creation_5m_input_tokens: 0, cache_creation_1h_input_tokens: 0, cache_read_input_tokens: 0 },
+    });
+    const parentFile = { ownThreadId: PARENT_ID, records: [base('/from-parent')] };
+    const childFile = { ownThreadId: CHILD_ID, records: [base('/from-child-copy')] };
+    for (const order of [[parentFile, childFile], [childFile, parentFile]]) {
+      const out = mergeCodexFileRecords(order);
+      expect(out).toHaveLength(1);
+      expect(out[0].cwd).toBe('/from-parent');
+    }
   });
 
   it('capability: Codex도 서브에이전트 귀속을 지원한다', () => {

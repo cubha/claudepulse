@@ -85,6 +85,14 @@ describe('ST2 — 캐시 미스 원인 분해', () => {
     expect(r.estCostUsd).toBe(0);
   });
 
+  it('토큰을 아는 미스가 전부 가격 미상이면 합계 비용도 미상 플래그를 단다 — $0을 측정값처럼 내지 않는다', () => {
+    // scope-critic 적발(v0.2.6 VERIFY): estCostUsd=0·hasUnknownTokens=false라 "≈$0.00"으로 렌더됐다.
+    const r = computeCacheMiss([rec({ model: 'mystery-model-9', cacheMiss: { reason: 'model_changed', missedTokens: 500 } })], since);
+    expect(r.hasUnpricedRecords).toBe(true);
+    const priced = computeCacheMiss([rec({ cacheMiss: { reason: 'model_changed', missedTokens: 500 } })], since);
+    expect(priced.hasUnpricedRecords).toBe(false);
+  });
+
   it('Codex 레코드는 분모에서 뺀다(캐시 미스 진단 필드가 원천적으로 없다)', () => {
     const r = computeCacheMiss([rec({ provider: 'codex' }), rec()], since);
     expect(r.recordCount).toBe(1);
@@ -231,6 +239,11 @@ describe('ST8 — 훅 표시명은 경로를 드러내지 않는다', () => {
     ['bash "${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.sh"', 'stop-hook.sh'],
     ['python3 /home/u/x/check.py --dir /home/u/secret', 'check.py --dir secret'],
     ['my-hook', 'my-hook'],
+    // scope-critic 적발(v0.2.6 VERIFY): 공백 든 따옴표 경로·환경변수 할당이 사용자 이름을 흘렸다
+    ['node "C:\\Users\\Jane Doe\\.claude\\hooks\\stop.js"', 'stop.js'],
+    ['HOME=/home/jdoe node a.js', 'a.js'],
+    ["bash '/path/To My Code/stop.sh' --flag", 'stop.sh --flag'],
+    ['FOO=1 BAR=/x/y python3 /opt/h/run.py', 'run.py'],
   ])('%s → %s', (cmd, want) => {
     expect(hookDisplayName(cmd)).toBe(want);
   });

@@ -35,9 +35,20 @@ describe('사이드바 칩', () => {
     expect(compactionChipHtml({ count: 2, autoCount: 1, last: { at: '2026-10-06T00:00:00Z', trigger: 'auto', preTokens: 786256, postTokens: 34714 } })).toContain('2');
   });
 
+  it('Codex 차단 사유·지출 한도 도달은 창이 리셋되면 숨긴다 — 오래된 스냅샷의 거짓 "차단" 금지 (scope-critic 적발)', () => {
+    const now = Date.parse('2026-10-06T12:00:00Z');
+    const x = { credits: null, individualLimit: { limit: '1', used: '1', remainingPercent: 0, resetsAt: now / 1000 - 60 }, spendControlReached: true, rateLimitReachedType: 'rate_limit_reached' };
+    const expired = [{ windowMinutes: 300, usedPercent: 100, resetsAt: now / 1000 - 60, labelKey: null }];
+    const live = [{ windowMinutes: 300, usedPercent: 100, resetsAt: now / 1000 + 600, labelKey: null }];
+    const gone = codexLimitsRowsHtml(x, expired, now);
+    expect(gone).not.toContain('status-marker danger');
+    const shown = codexLimitsRowsHtml({ ...x, individualLimit: { ...x.individualLimit, resetsAt: now / 1000 + 600 } }, live, now);
+    expect((shown.match(/status-marker danger/g) ?? []).length).toBe(2);
+  });
+
   it('Codex extras — 빈 free credits는 행을 만들지 않고, 값은 escape한다', () => {
-    expect(codexLimitsRowsHtml({ credits: { hasCredits: false, unlimited: false, balance: null }, individualLimit: null, spendControlReached: null, rateLimitReachedType: null })).toBe('');
-    const html = codexLimitsRowsHtml({ credits: { hasCredits: true, unlimited: false, balance: '<b>12</b>' }, individualLimit: null, spendControlReached: true, rateLimitReachedType: 'future_reason' });
+    expect(codexLimitsRowsHtml({ credits: { hasCredits: false, unlimited: false, balance: null }, individualLimit: null, spendControlReached: null, rateLimitReachedType: null }, [], NOW)).toBe('');
+    const html = codexLimitsRowsHtml({ credits: { hasCredits: true, unlimited: false, balance: '<b>12</b>' }, individualLimit: null, spendControlReached: true, rateLimitReachedType: 'future_reason' }, [{ windowMinutes: 300, usedPercent: 1, resetsAt: NOW / 1000 + 600, labelKey: null }], NOW);
     expect(html).toContain('&lt;b&gt;12&lt;/b&gt;');
     expect(html).not.toContain('<b>12</b>');
     expect(html).toContain('future_reason'); // 모르는 사유는 원문
@@ -57,6 +68,16 @@ describe('대시보드 섹션', () => {
     expect(html).toContain('≥');
     expect(html).toContain('skill-row-other'); // 토큰 미상 행은 muted
     expect(html).toContain('new_reason_&lt;x&gt;');
+  });
+
+  it('캐시 미스 합계가 가격 미상뿐이면 $0 대신 가격 미상 표기', () => {
+    const html = cacheMissHtml({
+      reasons: [{ reason: 'model_changed', count: 1, missedTokens: 500, estCostUsd: null, hasUnpricedRecords: true }],
+      missCount: 1, recordCount: 10, estCostUsd: 0, hasUnknownTokens: false, hasUnpricedRecords: true,
+    });
+    const readout = html.slice(html.indexOf('panel-chart-readout'), html.indexOf('</span>', html.indexOf('panel-chart-readout')));
+    expect(readout).not.toMatch(/\$0\.00|<\$0\.01|&lt;\$0\.01/);
+    expect(readout).toContain('price unknown');
   });
 
   it('차단 이력 — 에피소드와 서버 오류를 다른 마커로, 둘 다 없으면 빈 배열', () => {
