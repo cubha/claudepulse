@@ -151,7 +151,7 @@
     "@vscode/test-electron": "^2.3.9",
     "@vscode/vsce": "^2.24.0",
     "chokidar": "^3.6.0",
-    "esbuild": "^0.20.0",
+    "esbuild": "^0.28.2",
     "eslint": "^10.12.0",
     "gifenc": "^1.0.3",
     "globals": "^17.13.0",
