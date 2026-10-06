@@ -127,7 +127,7 @@
   "scripts": {
     "build": "node esbuild.config.mjs && tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
     "watch": "node esbuild.config.mjs --watch",
-    "lint": "eslint src --ext ts",
+    "lint": "eslint src",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json",
     "test": "vitest run",
     "test:unit": "vitest run",
@@ -144,23 +144,24 @@
     "vscode-messenger-webview": "^0.6.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.11.0",
     "@types/vscode": "^1.85.0",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
     "@vscode/test-electron": "^2.3.9",
     "@vscode/vsce": "^2.24.0",
     "chokidar": "^3.6.0",
     "esbuild": "^0.20.0",
-    "eslint": "^8.57.0",
+    "eslint": "^10.12.0",
     "gifenc": "^1.0.3",
+    "globals": "^17.13.0",
     "ovsx": "^0.9.0",
     "playwright-core": "^1.61.1",
     "pngjs": "^7.0.0",
     "prettier": "^3.2.0",
     "sharp": "^0.34.5",
     "typescript": "^5.4.0",
+    "typescript-eslint": "^8.71.1",
     "vitest": "^1.4.0"
   }
 }

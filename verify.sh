@@ -138,8 +138,8 @@ step "검증 자산 실행가능 스모크" test -z "$DEAD"
 
 [[ "$VERIFY_MODE" == "ts-only" ]] && finish
 
-# 3. ESLint — .eslintrc.cjs의 src/webview/** ignore를 해제(v0.1.54 ST2b)해 이 한 스텝이 webview도 포함한다
-step "ESLint" npx eslint src --ext ts
+# 3. ESLint — (구 .eslintrc.cjs, v0.2.6부터 eslint.config.mjs)의 src/webview/** ignore를 해제(v0.1.54 ST2b)해 이 한 스텝이 webview도 포함한다
+step "ESLint" npx eslint src
 
 # 4~5. esbuild 빌드 + dist 산출물 확인 (--no-build 시 스킵)
 if [[ "$VERIFY_MODE" == "no-build" ]]; then
