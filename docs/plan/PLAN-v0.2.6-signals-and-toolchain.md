@@ -49,7 +49,7 @@
 - **#6 PR**: `type:'pr-link'` `{sessionId, prNumber, prUrl, prRepository, timestamp}`, uuid 없음 → 키 `(prRepository, prNumber, sessionId)`.
 - **#9 compaction**: `system/compact_boundary.compactMetadata{trigger:auto|manual, preTokens, postTokens, durationMs}` 30일 93건(manual 72·auto 21).
 - **#11 effort**: 유효값은 **`effort`**(high 60k·medium 17k·xhigh 745). `perTurnEffort`는 턴 단위 오버라이드라 34k행이 null — 권위 필드는 `effort`, 없으면 "미상" 버킷.
-- **#12 턴·훅**: `system/turn_duration{durationMs,messageCount}` 1,855건(중앙값 93s), `system/stop_hook_summary{hookInfos[{command,durationMs}],hookErrors,preventedContinuation}` 1,851건. 30일 훅 합계 ≈2,556s / 턴 합계 ≈119,112s ≈ **2.1%** (사용자에게 말한 "0.3%"는 표본 1개 기준 — 정정 보고 대상). 훅 command는 로컬 경로를 포함 → **스크립트 basename만 표시**(마켓 스크린샷 노출 방지), escape 필수.
+- **#12 턴·훅**: `system/turn_duration{durationMs,messageCount}` 1,855건(중앙값 93s), `system/stop_hook_summary{hookInfos[{command,durationMs}],hookErrors,preventedContinuation}` 1,851건. 30일 훅 합계 2,560s / 턴 합계 1,235,624s = **0.21%**, 턴당 평균 훅 1.38s / 턴 중앙값 94s = **1.5%**(비율은 중앙값 기준으로 낸다 — 최장 턴 33시간 이상치. 계획 초안의 "2.1%"는 최장값을 합계로 오독한 오계산). 훅 command는 로컬 경로를 포함 → **스크립트 basename만 표시**(마켓 스크린샷 노출 방지), escape 필수.
 - **비-assistant 이벤트 중복**: `subagents/*.jsonl`은 부모 이력을 복사 → system 이벤트도 파일 간 중복 가능 → **uuid로 파일 간 dedup**.
 
 ### 2-4. Codex (openai/codex `ade17c6`, 2026-10-05 소스)

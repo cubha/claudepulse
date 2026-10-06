@@ -196,7 +196,7 @@ describe('ST8 — 턴 지연·훅 오버헤드', () => {
     expect(r.daily[0]).toEqual({ date: '2026-09-30', count: 0, medianMs: null });
   });
 
-  it('훅은 스크립트 이름별로 합산하고 턴 시간 대비 비율을 낸다', () => {
+  it('훅은 스크립트 이름별로 합산하고, 비율 = 턴당 평균 훅 시간 / 턴 중앙값(벽시계 이상치에 강건)', () => {
     const r = computeTurnHooks([
       ev.turn('t1', '2026-10-06T00:00:00.000Z', 100_000),
       ev.hooks('h1', '2026-10-06T00:00:01.000Z', [
@@ -210,11 +210,13 @@ describe('ST8 — 턴 지연·훅 오버헤드', () => {
       { name: 'stop-hook.sh', totalMs: 100, count: 1, avgMs: 100 },
     ]);
     expect(r.hookTotalMs).toBe(1100);
-    expect(r.hookShare).toBeCloseTo(0.011, 6);
+    expect(r.avgHookMsPerTurn).toBe(550);          // 훅 실행 2회
+    expect(r.hookShare).toBeCloseTo(550 / 100_000, 9);
     expect(r.hookErrorCount).toBe(1);
   });
 
   it('턴이 없으면 비율은 null(0으로 나누지 않는다), 사이드체인 턴은 제외', () => {
+    // (v0.2.6 구현 중 명세 변경: 비율 분모를 벽시계 합 → 중앙값. 실측 최장 턴 33시간이 합을 지배했다.)
     const r = computeTurnHooks([ev.turn('s', '2026-10-06T00:00:00.000Z', 5000, { isSidechain: true })], now);
     expect(r.turnCount).toBe(0);
     expect(r.medianMs).toBeNull();

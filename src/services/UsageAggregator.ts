@@ -5,7 +5,7 @@ import { findCodexPricing } from '../sources/codex/codexPricing';
 import { calcContextUsageRatio, findContextWindow } from '../utils/contextWindow';
 import { cwdMatchesWorkspace } from '../utils/workspaceMatch';
 import { emptyToolCounts } from './JsonlParser';
-import type { AttributionScope, BranchUsage, CacheStats, ContextSessionSummary, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, ModelShareBasis, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, SubagentTypeUsage, ToolUseCounts, UsageSummary } from '../types';
+import type { AttributionScope, BranchUsage, EffortUsage, CacheStats, ContextSessionSummary, DailyToolStats, DailyUsage, McpServerUsage, ModelBreakdown, ModelShareBasis, SessionContextUsage, SessionRecord, SessionSummary, SkillUsage, SubagentStats, SubagentTypeUsage, ToolUseCounts, UsageSummary } from '../types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -39,6 +39,9 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
   const byAgentType = new Map<string, { costUsd: number; totalTokens: number; runIds: Set<string>; hasUnpricedRecords: boolean }>();
   const agentTypeUnattr = { costUsd: 0, totalTokens: 0, runIds: new Set<string>(), hasUnpricedRecords: false };
   const byMcpServer = new Map<string, number>();
+  // effort별(v0.2.6 ST7) — 메인·사이드체인 모두(effort는 체인 유형과 무관한 요청 속성). 분모 = 스코프 총비용.
+  const byEffort = new Map<string, { costUsd: number; totalTokens: number; hasUnpricedRecords: boolean }>();
+  const effortUnattr = { costUsd: 0, totalTokens: 0, hasUnpricedRecords: false };
 
   for (const r of records) {
     const tokens = r.usage.input_tokens + r.usage.output_tokens
@@ -79,6 +82,14 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
       mainCostUsd += r.costUsd;
       if (recUnpriced) mainHasUnpriced = true;
     }
+
+    const effortBucket = r.effort
+      ? (byEffort.get(r.effort) ?? { costUsd: 0, totalTokens: 0, hasUnpricedRecords: false })
+      : effortUnattr;
+    effortBucket.costUsd += r.costUsd;
+    effortBucket.totalTokens += tokens;
+    if (recUnpriced) effortBucket.hasUnpricedRecords = true;
+    if (r.effort) byEffort.set(r.effort, effortBucket);
 
     // MCP 서버별 호출수 (v0.1.48) — 메인/서브 구분 없이 전부 집계(도구 사용은 체인 유형과 무관)
     if (r.mcpServerCounts) {
@@ -136,7 +147,21 @@ function computeAttribution(records: SessionRecord[]): AttributionScope {
     runCount: agentTypeUnattr.runIds.size,
     hasUnpricedRecords: agentTypeUnattr.hasUnpricedRecords,
   };
-  return { skillBreakdown, skillUnattributed, subagentStats, subagentTypeBreakdown, subagentTypeUnattributed, mcpServerBreakdown };
+  const effortTotalCost = [...byEffort.values()].reduce((sum, v) => sum + v.costUsd, 0) + effortUnattr.costUsd;
+  const effortBreakdown: EffortUsage[] = [...byEffort.entries()]
+    .map(([effort, v]) => ({
+      effort,
+      costUsd: v.costUsd,
+      totalTokens: v.totalTokens,
+      share: effortTotalCost > 0 ? v.costUsd / effortTotalCost : 0,
+      hasUnpricedRecords: v.hasUnpricedRecords,
+    }))
+    .sort((a, b) => b.costUsd - a.costUsd || b.totalTokens - a.totalTokens);
+  const effortUnattributed = {
+    ...effortUnattr,
+    share: effortTotalCost > 0 ? effortUnattr.costUsd / effortTotalCost : 0,
+  };
+  return { skillBreakdown, skillUnattributed, subagentStats, subagentTypeBreakdown, subagentTypeUnattributed, mcpServerBreakdown, effortBreakdown, effortUnattributed };
 }
 
 /**
@@ -165,6 +190,11 @@ export class UsageAggregator {
     let todayInput = 0;
     let todaySavedUsd = 0;
     let todayReasoningTokens = 0;
+    // thinking 비중(v0.2.6 ST3) — 분모는 thinking 필드가 **있는** 레코드의 output만. 필드가 없는
+    // 구버전 CLI 레코드까지 분모에 넣으면 비중이 희석된다. 하나도 없으면 null(0%가 아니다).
+    let todayThinkingTokens = 0;
+    let todayThinkingOutput = 0;
+    let todayHasThinking = false;
     const todayTools: ToolUseCounts = emptyToolCounts();
 
     // 편집 파일 최근순 수집 (파일 경로 → 최근 timestamp)
@@ -301,6 +331,11 @@ export class UsageAggregator {
         todayCacheCreation += r.usage.cache_creation_input_tokens;
         todayInput += r.usage.input_tokens;
         todayReasoningTokens += r.reasoningTokens ?? 0;
+        if (r.thinkingTokens !== undefined) {
+          todayHasThinking = true;
+          todayThinkingTokens += r.thinkingTokens;
+          todayThinkingOutput += r.usage.output_tokens;
+        }
 
         // 캐시 절약 비용 (provider별 가격표 — Codex를 Claude 표로 조회하면 항상 미상 취급된다)
         const { price: pricing } = resolvePriceFor(r);
@@ -539,6 +574,9 @@ export class UsageAggregator {
       unpricedModels,
       modelShareBasis,
       todayReasoningTokens,
+      todayThinking: todayHasThinking
+        ? { thinkingTokens: todayThinkingTokens, outputTokens: todayThinkingOutput, share: todayThinkingOutput > 0 ? todayThinkingTokens / todayThinkingOutput : 0 }
+        : null,
       cacheStats,
       todayToolCounts: todayTools,
       last7DaysTools,
@@ -550,6 +588,8 @@ export class UsageAggregator {
       subagentTypeBreakdown: allAttribution.subagentTypeBreakdown,
       subagentTypeUnattributed: allAttribution.subagentTypeUnattributed,
       mcpServerBreakdown: allAttribution.mcpServerBreakdown,
+      effortBreakdown: allAttribution.effortBreakdown,
+      effortUnattributed: allAttribution.effortUnattributed,
       attributionScopes,
       activeBranch,
       sessionContext,

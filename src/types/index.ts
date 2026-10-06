@@ -295,7 +295,13 @@ export interface TurnHookStats {
   /** 스크립트 표시명별(경로 제거), totalMs 내림차순 */
   hooks: Array<{ name: string; totalMs: number; count: number; avgMs: number }>;
   hookTotalMs: number;
-  /** hookTotalMs / totalTurnMs. 턴이 없으면 null */
+  /** 턴(Stop 훅 실행) 1회당 평균 훅 시간. 훅 실행이 없으면 null */
+  avgHookMsPerTurn: number | null;
+  /**
+   * avgHookMsPerTurn / medianMs — "보통 턴"에서 훅이 차지하는 비율. 벽시계 합계 대비(hookTotalMs/
+   * totalTurnMs)로 재지 않는 이유: 턴 시간은 승인 대기 등을 포함한 벽시계라 33시간짜리 이상치가 있다
+   * (30일 실측 — 합계 대비 0.21%, 중앙값 기준 1.5%). 둘 중 하나라도 없으면 null.
+   */
   hookShare: number | null;
   hookErrorCount: number;
 }
@@ -491,6 +497,8 @@ export interface AttributionScope {
   subagentTypeBreakdown: SubagentTypeUsage[];
   subagentTypeUnattributed: SubagentTypeUnattributed;
   mcpServerBreakdown: McpServerUsage[];
+  effortBreakdown: EffortUsage[];
+  effortUnattributed: EffortUnattributed;
 }
 
 /**
@@ -557,6 +565,8 @@ export interface UsageSummary {
    * 0으로 합산돼 기존 Claude 화면에는 영향이 없다(그 필드를 렌더하는 곳이 아직 없다).
    */
   todayReasoningTokens: number;
+  /** 오늘 Claude thinking 비중(v0.2.6 ST3). thinking 필드가 하나도 없으면 null. */
+  todayThinking: ThinkingShare | null;
   cacheStats: CacheStats;            // 오늘 캐시 효율
   todayToolCounts: ToolUseCounts;    // 오늘 도구 사용 집계
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
@@ -568,6 +578,8 @@ export interface UsageSummary {
   subagentTypeBreakdown: SubagentTypeUsage[];          // 서브에이전트 타입별 (전체 스코프, v0.2.5b)
   subagentTypeUnattributed: SubagentTypeUnattributed;  // 타입 미상 사이드체인 버킷
   mcpServerBreakdown: McpServerUsage[];  // MCP 서버별 호출수 집계 (전체 스코프)
+  effortBreakdown: EffortUsage[];        // effort별 비용 (전체 스코프, v0.2.6 ST7)
+  effortUnattributed: EffortUnattributed;  // effort 필드 없는 레코드 버킷
   attributionScopes: {
     last24h: AttributionScope;
     last7d: AttributionScope;
@@ -583,6 +595,8 @@ export interface UsageSummary {
   contextSessions: ContextSessionSummary[];
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601
+  /** Claude 전용 신호 묶음(v0.2.6) — extension이 refresh마다 붙인다. Codex 요약·구버전 픽스처는 없다. */
+  signals?: ClaudeSignals;
 }
 
 // ─────────────────────────────────────────────────────────────
