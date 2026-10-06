@@ -171,6 +171,9 @@ else
     step "기간별 비용 탭 전환 (2폭×2로캘×3탭)" node scripts/verify-cost-period-tabs.mjs
     step "Codex 버킷 소모율·Trend N시리즈 (2폭)" node scripts/verify-codex-panel-burn.mjs
     step "테마 클래스 부착 (다크⇄라이트)" node scripts/verify-theme-attach.mjs
+    # v0.2.6 — 신호 섹션 실렌더(차단·PR·턴/훅·캐시미스·effort·사이드바 칩·Codex extras), 2폭×2로캘.
+    # 오배선(항상 표시) 주입으로 RED 12건 관측 후 채택(feedback_gate_wiring_signal).
+    step "v0.2.6 신호 섹션 (2폭×2로캘·숨김·escape)" node scripts/verify-signals-sections.js
   fi
 
 fi

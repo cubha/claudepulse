@@ -46,6 +46,9 @@ const PANEL_IDS = [
   'panel-branch-card', 'panel-branch-list',
   'panel-retro-card', 'panel-retro-list',
   'panel-skill-card', 'panel-skill-list', 'panel-subagent-list', 'panel-mcp-list',
+  // v0.2.6 — 신호 섹션(차단 이력·턴/훅·PR 비용·effort). Codex 축에서는 DOM에 있되 비어 있는 것이 정상.
+  'panel-block-card', 'panel-block-list', 'panel-turn-card', 'panel-turn-body',
+  'panel-pr-card', 'panel-pr-list', 'panel-effort-list',
   'chart-longterm', 'longterm-empty',
   'chart-monthly', 'monthly-empty',
   'chart-trend', 'trend-empty',

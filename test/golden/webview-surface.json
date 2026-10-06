@@ -1,6 +1,6 @@
 {
-  "capturedAt": "2026-09-29T02:25:15.479Z",
-  "reason": "v0.2.5b: 비용 귀속 카드에 서브에이전트 타입별 서브섹션(#panel-subagent-list) 추가 — 의도된 DOM 추가",
+  "capturedAt": "2026-10-06T13:30:38.600Z",
+  "reason": "v0.2.6 의도된 DOM 추가: 캐시 카드 미스 원인(+2)·귀속 카드 effort(+2) + 신호 섹션 7개 id 감시 편입(차단·턴/훅·PR·effort)",
   "digests": {
     "panel@700px@ko@claude": {
       "bySelector": {
@@ -136,7 +136,7 @@
         },
         "panel-cache-body": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-cache-spark": {
@@ -201,7 +201,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -217,6 +217,41 @@
         "panel-mcp-list": {
           "tag": "div",
           "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "panel-effort-list": {
+          "tag": "div",
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-longterm": {
@@ -251,7 +286,7 @@
         }
       },
       "counts": {
-        "totalElements": 736,
+        "totalElements": 902,
         "canvases": 7,
         "heatCells": 378
       }
@@ -390,7 +425,7 @@
         },
         "panel-cache-body": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-cache-spark": {
@@ -455,7 +490,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -471,6 +506,41 @@
         "panel-mcp-list": {
           "tag": "div",
           "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "panel-effort-list": {
+          "tag": "div",
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-longterm": {
@@ -505,7 +575,7 @@
         }
       },
       "counts": {
-        "totalElements": 736,
+        "totalElements": 902,
         "canvases": 7,
         "heatCells": 378
       }
@@ -644,7 +714,7 @@
         },
         "panel-cache-body": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-cache-spark": {
@@ -709,7 +779,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -725,6 +795,41 @@
         "panel-mcp-list": {
           "tag": "div",
           "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "panel-effort-list": {
+          "tag": "div",
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-longterm": {
@@ -759,7 +864,7 @@
         }
       },
       "counts": {
-        "totalElements": 736,
+        "totalElements": 902,
         "canvases": 7,
         "heatCells": 378
       }
@@ -898,7 +1003,7 @@
         },
         "panel-cache-body": {
           "tag": "div",
-          "childElementCount": 2,
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-cache-spark": {
@@ -963,7 +1068,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -979,6 +1084,41 @@
         "panel-mcp-list": {
           "tag": "div",
           "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 3,
+          "hasText": true
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 5,
+          "hasText": true
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 4,
+          "hasText": true
+        },
+        "panel-effort-list": {
+          "tag": "div",
+          "childElementCount": 4,
           "hasText": true
         },
         "chart-longterm": {
@@ -1013,7 +1153,7 @@
         }
       },
       "counts": {
-        "totalElements": 736,
+        "totalElements": 902,
         "canvases": 7,
         "heatCells": 378
       }
@@ -1042,7 +1182,7 @@
         }
       },
       "counts": {
-        "totalElements": 222,
+        "totalElements": 226,
         "canvases": 0,
         "heatCells": 93
       }
@@ -1071,7 +1211,7 @@
         }
       },
       "counts": {
-        "totalElements": 222,
+        "totalElements": 226,
         "canvases": 0,
         "heatCells": 93
       }
@@ -1100,7 +1240,7 @@
         }
       },
       "counts": {
-        "totalElements": 222,
+        "totalElements": 226,
         "canvases": 0,
         "heatCells": 93
       }
@@ -1129,7 +1269,7 @@
         }
       },
       "counts": {
-        "totalElements": 222,
+        "totalElements": 226,
         "canvases": 0,
         "heatCells": 93
       }
@@ -1333,7 +1473,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -1347,6 +1487,41 @@
           "hasText": true
         },
         "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-effort-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -1383,7 +1558,7 @@
         }
       },
       "counts": {
-        "totalElements": 642,
+        "totalElements": 663,
         "canvases": 7,
         "heatCells": 378
       }
@@ -1587,7 +1762,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -1601,6 +1776,41 @@
           "hasText": true
         },
         "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-effort-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -1637,7 +1847,7 @@
         }
       },
       "counts": {
-        "totalElements": 642,
+        "totalElements": 663,
         "canvases": 7,
         "heatCells": 378
       }
@@ -1841,7 +2051,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -1855,6 +2065,41 @@
           "hasText": true
         },
         "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-effort-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -1891,7 +2136,7 @@
         }
       },
       "counts": {
-        "totalElements": 642,
+        "totalElements": 663,
         "canvases": 7,
         "heatCells": 378
       }
@@ -2095,7 +2340,7 @@
         },
         "panel-skill-card": {
           "tag": "div",
-          "childElementCount": 7,
+          "childElementCount": 9,
           "hasText": true
         },
         "panel-skill-list": {
@@ -2109,6 +2354,41 @@
           "hasText": true
         },
         "panel-mcp-list": {
+          "tag": "div",
+          "childElementCount": 1,
+          "hasText": true
+        },
+        "panel-block-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-block-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-turn-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-turn-body": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-pr-card": {
+          "tag": "div",
+          "childElementCount": 2,
+          "hasText": true
+        },
+        "panel-pr-list": {
+          "tag": "div",
+          "childElementCount": 0,
+          "hasText": false
+        },
+        "panel-effort-list": {
           "tag": "div",
           "childElementCount": 1,
           "hasText": true
@@ -2145,7 +2425,7 @@
         }
       },
       "counts": {
-        "totalElements": 642,
+        "totalElements": 663,
         "canvases": 7,
         "heatCells": 378
       }

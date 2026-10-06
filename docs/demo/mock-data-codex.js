@@ -67,7 +67,8 @@ window.MOCK_USAGE_CODEX = {
   // → 추정 채움 금지(PLAN §8 불변식6). 실제로 빈 상태로 둔다.
   skillBreakdown: [],
   skillUnattributed: { costUsd: 0, totalTokens: 0 },
-  subagentStats: { mainCostUsd: 0, subagentCostUsd: 0, subagentShare: 0, subagentCount: 0 },
+  // v0.2.6 ST11 — 실 fixture(real-free-subagent-*, gpt-6-luna 미가격)의 서브에이전트 1개.
+  subagentStats: { mainCostUsd: 0, subagentCostUsd: 0, subagentShare: 0, subagentCount: 1, mainHasUnpriced: true, subagentHasUnpriced: true },
   mcpServerBreakdown: [],
   branchBreakdown: [
     { branch: 'feat/codex-fixture-test', costUsd: 0, totalTokens: 12792, sessionCount: 1, lastActive: now.toISOString() },

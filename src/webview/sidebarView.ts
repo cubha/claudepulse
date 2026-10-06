@@ -18,6 +18,8 @@ import { appendCodexBucketHistory, hydrateCodexBucketHistory } from './codexBuck
 import { buildCodexBucketBurnRow } from './codexBandBurn';
 import { THEME_CLASSES } from './themeClass';
 import { codexPlanLabel } from './codexPlan';
+import { blockChipHtml, codexLimitsRowsHtml, compactionChipHtml, thinkingChipHtml } from './signalsView';
+import { hasMeaningfulCodexLimits } from '../sources/codex/codexRollout';
 import { vsApi } from './webviewApi';
 import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
@@ -309,6 +311,9 @@ function buildUsageRowHtml(usage: UsageSummary | null, provider: AgentProvider):
     ? `<span class="sb-chip sb-chip--cache" title="캐시 절약 ${fmtCost(cacheStats.savedUsd)}">⚡ ${(cacheStats.hitRate * 100).toFixed(0)}%</span>`
     : '';
 
+  // thinking 비중 칩(v0.2.6 ST3) — Claude만 값이 있다(Codex는 todayThinking=null, 추론 토큰은 별도 행).
+  const thinkingChip = thinkingChipHtml(usage.todayThinking);
+
   // 브랜치 칩: 활성 브랜치 + 해당 브랜치 누적 비용
   let branchChip = '';
   if (activeBranch) {
@@ -386,7 +391,7 @@ function buildUsageRowHtml(usage: UsageSummary | null, provider: AgentProvider):
     ${costDisplay}
     ${anomalyChip}
   </div>
-  ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}
+  ${(modelChip || cacheChip || thinkingChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}${thinkingChip}</div>` : ''}
   ${toolRow}
   ${branchChip ? `<div class="sb-chip-row sb-branch-row">${branchChip}</div>` : ''}
   ${monthlyChip}`;
@@ -614,6 +619,7 @@ function buildSidebarHtml(
 
       ${buildUsageRowHtml(usage, activeProvider)}
       ${fallbackBanner}
+      ${buildBlockRowHtml(usage)}
 
       <!-- 5h 세션 섹션 — hero(사이드바에서 유일하게 22px로 격상되는 지표) -->
       <div class="sb-section-hdr">
@@ -664,6 +670,12 @@ function buildSidebarHtml(
       </div>
 
     </div>`;
+}
+
+/** 최근 7일 한도 차단 칩 줄(v0.2.6 ST4) — 차단이 없으면 줄 자체를 그리지 않는다. */
+function buildBlockRowHtml(usage: UsageSummary | null): string {
+  const chip = blockChipHtml(usage?.signals?.rateLimitBlocks, Date.now());
+  return chip ? `<div class="sb-chip-row">${chip}</div>` : '';
 }
 
 /**
@@ -719,6 +731,7 @@ function buildContextGaugeHtml(usage: UsageSummary | null): string {
     <div class="sb-chip-row">
       <button class="sb-chip ${repoChipClass} sb-chip--clickable js-open-session-picker" title="${escapeHtml(repoTitle)}">${repoIcon} ${escapeHtml(ctx.repoName)}<span class="chev">▾</span></button>
       <span class="sb-chip${gauge.showRevertLink ? ' sb-chip--warn' : ''}" title="${escapeHtml(ageTitle)}">${gauge.showRevertLink ? '⚠' : '🕐'} ${fmtAge(ageMs)}</span>
+      ${compactionChipHtml(usage?.signals?.compaction)}
     </div>
     ${gauge.showRevertLink
       ? `<div class="sb-context-revert-row"><button class="sb-context-revert-link js-clear-pinned-session" title="${escapeHtml(t('context_revert_tooltip'))}">${escapeHtml(t('context_revert_link'))}</button></div>`
@@ -867,6 +880,7 @@ export function buildCodexSidebarHtml(
       ${header}
       ${buildUsageRowHtml(usage, activeProvider)}
       ${bucketCards}
+      ${hasMeaningfulCodexLimits(snapshot?.extras) ? codexLimitsRowsHtml(snapshot?.extras) : ''}
       ${codexContextRow}
       ${codexReasoningRow}
       ${buildSidebarCalendarHtml(usage)}
