@@ -18,12 +18,23 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ![Scrolling through the dashboard — usage, charts, cost attribution, Git ROI](media/demo-dashboard.gif)
 
-## What's New in v0.2.5
+## What's New in v0.2.6
+
+- **New: why the prompt cache missed.** The cache card lists last week's cache misses by cause (conversation changed, model changed, system prompt changed…) with an estimated extra cost each. Causes that don't record token counts are counted but not costed, so the total is a lower bound (`≥`).
+- **New: rate-limit block history.** Retries rejected by a usage limit are grouped into one block per window and reset time, and listed on the dashboard. The sidebar shows a chip for a block in the last week. Server errors (529/500) are listed separately, because they are not a usage limit.
+- **New: cost by pull request**, from the PR links Claude Code records, including subagent work. A session linked to several PRs is marked **shared**.
+- **New: turn latency and hook overhead.** Median and p90 turn time, a daily median, and the average time each Stop hook adds per turn (script name only, no paths).
+- **New: thinking share, cost by effort level, and context compaction.** A sidebar chip shows today's thinking-token share. The attribution card adds cost by effort level (high / medium / xhigh). The context gauge shows a chip when its session was compacted.
+- **New for Codex:** credit balance, spend limit and block reason when Codex reports them; subagent work counted toward its parent session; readable plan names (**Pro Lite** instead of `PROLITE`).
+
+<details><summary>v0.2.5</summary>
 
 - **Fixed: Claude Fable 5.1 and Opus 5.5 cost was overstated.** Neither had its own price, so each borrowed its predecessor's — and because that counted as a match, no "price unknown" warning appeared. Fable 5.1 reads cache at a quarter of Fable 5's rate, so heavy cache use overstated it by roughly 30–90%. Both now have their own prices, derived from the costs Claude Code records in its logs.
 - **Fixed: subagent usage was missing.** Claude Code writes each subagent's transcript to a separate file under the session folder, which was never read. Subagent cost is now in every total and in the dashboard's subagent breakdown. Responses copied from the parent session are still counted once, and stay attributed to the main session.
 - **New: cost by subagent type.** The cost attribution card now shows what each kind of subagent spent — general-purpose, planner, reviewers and so on — with run counts and tokens on hover, following the 24h / 7d / All toggle. Untyped subagent work gets its own row, so the list always adds up to the subagent total.
 - **New: "⚠ price mismatch" marker.** The dashboard's model breakdown now compares the extension's cost calculation against the cost Claude Code itself records, and flags models where the two disagree (details on hover). It catches a wrong price, not just a missing one.
+
+</details>
 
 <details><summary>v0.2.4</summary>
 
@@ -192,6 +203,7 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 - **Overage section**: Progress bar + status chip for your overage (extra usage) quota — shows the overage rate-limit utilization **only when active** (amber), and a `DISABLED` chip when overage is rejected/disabled instead of a misleading "0%". A help tooltip clarifies this is the overage *rate-limit* usage (consumed after your base 5h/7d quota is exhausted), distinct from the claude.ai "Usage Credits" dollar-spend figure
 - **Fallback banner**: Inline warning when Claude throttles to reduced speed (e.g. 50%)
 - **7d threshold badge**: Red badge on the Weekly card when a usage threshold has been surpassed
+- **Rate-limit block history**: Retries rejected by a usage limit, grouped into one block per window and reset time, on the dashboard, plus a sidebar chip for a block in the last 7 days. Server errors (529/500) are listed separately
 - **Threshold alerts**: Native VS Code warning notification when usage exceeds your configured limit
 - **Auto-polling**: Fetches latest rate limit headers from Anthropic API every 5 minutes
 
@@ -202,6 +214,8 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 - **7-day cost bar chart**: Dashboard panel shows daily spend for the past 7 days
 - **Model breakdown**: Doughnut chart + bar list showing per-model cost share for today
 - **Cache efficiency**: Hit rate KPI, cumulative saved cost, and 7-day sparkline in the dashboard
+- **Cache misses by cause**: Last 7 days of prompt-cache misses grouped by cause, with an estimated extra cost each (a lower bound when a cause doesn't record token counts)
+- **Thinking share chip** (sidebar): Today's thinking tokens as a share of output tokens — already part of output, so no extra cost
 - **Session history**: Up to 20 recent sessions with start time, working directory, token count, and estimated cost
 - **LiteLLM pricing**: Offline cost calculation using embedded model price snapshot (fable-5 / fable-5.1 / opus-5 / opus-5.5 / sonnet-5 / opus-4.5–4.8 / sonnet-4.5–4.6 / haiku-4.5, with legacy fallbacks), cross-checked against the costs Claude Code records
 
@@ -217,12 +231,15 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 ### Action Insights — *what Claude did* (local `.jsonl`)
 - **Tool usage chips** (sidebar): `Edit N · Write N · Bash N · Read N · Grep N · 🔍 N · 🌐 N · MCP N` — today's tool call counts at a glance, with `Read`, `Grep`/`Glob`, `WebFetch`, and `MCP` (`mcp__*`) broken out from the old catch-all bucket
 - **Tool usage histogram** (dashboard): Stacked bar chart of Edit / Write / Bash / Search per day for the last 7 days — spot heavy editing vs. execution sessions
+- **Turn latency & hook overhead** (dashboard): Last 7 days of turns — count, median, p90 and a daily median — plus the average time each Stop hook adds, shown by script name only
+- **Context compaction chip** (sidebar): How many times the gauge's session was compacted, with the last before → after size on hover
 - **Recently edited files** (dashboard): Up to 20 files touched in recent sessions, ordered by last activity — filename + full path
 
 ### Cost Attribution — *where the cost went* (local `.jsonl`)
 - **Cost by Skill** (dashboard): Ranked bar list of cost per `attributionSkill` (sh-dev-loop, ship, plan, research, …) — see which Claude Code skills drive your spend. Because Claude Code only stamps a skill on main-chain turns *while a skill is actively loaded* (~⅓ of cost-bearing turns), everything else — plain requests and work before/after a skill loads — is shown as a first-class **"Outside skills"** bucket rather than hidden, with a `≈ Partial` badge. Subagent-delegated cost is surfaced separately below
 - **Subagent vs. main split** (dashboard): Subagent consumption share, cost, and unique-agent count from `isSidechain`/`agentId` — separate background subagent usage from your main session, broken down by subagent type (`attributionAgent`)
 - **MCP server breakdown** (dashboard): Ranked list of MCP servers by call count, parsed from `mcp__<server>__<tool>` tool names. Share is call-count based on purpose — one assistant turn can mix MCP and non-MCP tools, so a per-server *cost* split would be false precision
+- **Cost by effort level** (dashboard): high / medium / xhigh, with responses that carry no effort level in their own row
 - **24h / 7d / All scope toggle** (dashboard): Re-scope the whole attribution section — skills, subagents, and MCP servers — to the last day or week instead of all time, to see what's driving spend right now
 
 ### Long-term Cost Tracking (local persistence)
@@ -235,5 +252,6 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 
 ### Git Branch ROI (local `.jsonl`)
 - **Branch cost chip** (sidebar): `⎇ main · $0.42` chip showing the active branch and its cumulative cost — parsed directly from `gitBranch` field in every jsonl entry, no Git API dependency
+- **Cost by pull request** (dashboard): Sessions joined to PRs through the PR links Claude Code records, subagents included. Sessions linked to several PRs are marked shared, because adding those PRs together would count them twice
 - **Git ROI table** (dashboard): Full branch breakdown — **Branch · Cost · Tokens · Sessions · Last Active** — sorted by cost so your most expensive branches surface first
 - **Cost by Commit — usage×git retrospective** (dashboard): Extends branch ROI down to individual commits. Because git commits aren't recorded in session logs, cost is *approximately* attributed by `timestamp + cwd + branch` — so the card is explicit about it: an **`≈ Approximate`** badge, per-commit confidence dots, and a first-class **"Other / Uncommitted"** bucket (planning/research/debugging that hasn't been committed yet) instead of hiding it. Attributions persist SHA-keyed so they outlive the 30-day log window.
