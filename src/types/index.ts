@@ -1,11 +1,12 @@
 import type { PricingSource } from '../utils/pricing';
 import type { AgentProvider } from '../sources/recordKey';
 import type { AgentAvailability } from '../sources/AgentSource';
-import type { RateLimitBucket } from '../sources/codex/codexRollout';
+import type { CodexLimitExtras, RateLimitBucket } from '../sources/codex/codexRollout';
 export type { PricingSource };
 export type { AgentProvider };
 export type { AgentAvailability };
 export type { RateLimitBucket };
+export type { CodexLimitExtras };
 
 /**
  * Codex 한도 스냅샷(v0.2.0, ST5/ST7) — `RateLimitSnapshot`(Claude, 고정 fiveHour/sevenDay +
@@ -25,6 +26,8 @@ export interface CodexRateLimitSnapshot {
    * 값이 없는 구버전도 있어 null 허용) — 없으면 UI가 그 행을 숨긴다(빈 값≠0 원칙).
    */
   modelContextWindow: number | null;
+  /** 크레딧·지출통제·차단 사유(v0.2.6 ST9). 구버전 CLI는 미정의. 표시 여부는 hasMeaningfulCodexLimits. */
+  extras?: CodexLimitExtras;
 }
 
 /** 양 프로바이더의 3단 빈 상태 판정 묶음(ST7/ST8) — 스위처가 "이 프로바이더로 전환 가능한가"를 안다. */

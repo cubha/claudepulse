@@ -17,6 +17,7 @@ import { panelPlanBadgeText } from './planBadge';
 import { statusMarkerHtml } from './statusMarker';
 import { buildTrendSeries, type TrendSeries } from './trendSeries';
 import { THEME_CLASSES } from './themeClass';
+import { codexPlanLabel } from './codexPlan';
 import {
   median, THRESHOLD_LOW, THRESHOLD_HIGH, classifyCacheHitRate,
   filterQualifyingCostDays, calcCostAnomalyPct, calcPaceBaseline, sumPeriodCost,
@@ -443,7 +444,7 @@ function updateCodexBandSection(): void {
       rows.push(`<div class="panel-mcp-row"><span>${t('codex_context_window')}</span><span class="mono">${snapshot.modelContextWindow.toLocaleString()}</span></div>`);
     }
     if (snapshot?.planType) {
-      rows.push(`<div class="panel-mcp-row"><span>${t('plan_label')}</span><span class="mono">${escapeHtml(snapshot.planType.toUpperCase())}</span></div>`);
+      rows.push(`<div class="panel-mcp-row"><span>${t('plan_label')}</span><span class="mono">${escapeHtml(codexPlanLabel(snapshot.planType))}</span></div>`);
     }
     extraListEl.innerHTML = rows.length > 0 ? rows.join('') : `<div class="panel-loading">${t('collecting_data')}</div>`;
   }

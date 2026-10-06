@@ -17,6 +17,7 @@ import { filterQualifyingCostDays, calcCostAnomalyPct } from './metricCalc';
 import { appendCodexBucketHistory, hydrateCodexBucketHistory } from './codexBucketHistory';
 import { buildCodexBucketBurnRow } from './codexBandBurn';
 import { THEME_CLASSES } from './themeClass';
+import { codexPlanLabel } from './codexPlan';
 import { vsApi } from './webviewApi';
 import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
@@ -431,7 +432,7 @@ function buildFooterHtml(provider: AgentProvider, planLabel: string | null, gene
   // 다른 대소문자로 같은 planType 값을 렌더하던 버그. Claude는 기존 Title Case를 그대로 유지한다
   // (§8 불변식1 "Claude 경로 행위 변경 금지" — provider 분기만 추가).
   const plan = planLabel
-    ? escapeHtml(provider === 'codex' ? planLabel.toUpperCase() : planLabel.charAt(0).toUpperCase() + planLabel.slice(1))
+    ? escapeHtml(provider === 'codex' ? codexPlanLabel(planLabel) : planLabel.charAt(0).toUpperCase() + planLabel.slice(1))
     : t('plan_unknown');
   const time = generatedAt ? fmtTime(new Date(generatedAt)) : '—';
   return `<div class="sb-footer">
@@ -771,9 +772,9 @@ export function buildCodexSidebarHtml(
   }
 
   // Plan 배지(verify-impl B-V5/B-V6 보완) — Claude의 planBadge(subscriptionType)와 동일 위치·
-  // 클래스 재사용. planType은 원본 문자열 그대로 대문자화만 한다(값별 분기 없음, §8 불변식5).
+  // 클래스 재사용. 표시명은 codexPlanLabel 단일 소유(v0.2.6 ST10, §8 불변식5 개정).
   const codexPlanBadge = snapshot?.planType
-    ? `<span class="plan-badge">${escapeHtml(snapshot.planType.toUpperCase())}</span>`
+    ? `<span class="plan-badge">${escapeHtml(codexPlanLabel(snapshot.planType))}</span>`
     : '';
 
   const header = `

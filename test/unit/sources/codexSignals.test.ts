@@ -133,7 +133,10 @@ describe('ST11 — Codex 서브에이전트(실물 fixture)', () => {
       expect(new Set(recs.map(r => r.sessionId))).toEqual(new Set([PARENT_ID]));
       const s = new UsageAggregator().aggregate(recs);
       expect(s.subagentStats.subagentCount).toBe(1);
-      expect(s.subagentStats.subagentShare).toBeGreaterThan(0);
+      // fixture 모델 gpt-6-luna는 Codex 가격표에 없다(비용 0) — 비중(비용 기준)이 아니라 '미상' 플래그로 확인한다.
+      // (작성 시 비중>0을 단언했으나 fixture 데이터 사실과 어긋난 전제였다 — VERIFY-SPEC ST11 참조)
+      expect(s.subagentStats.subagentHasUnpriced).toBe(true);
+      expect(recs.filter(r => r.isSidechain).reduce((t, r) => t + r.usage.output_tokens, 0)).toBe(51 + 5);
       // agent_role이 null(기본 역할)이면 타입 미상 버킷 — 임의 이름을 만들지 않는다
       expect(s.subagentTypeBreakdown).toEqual([]);
       expect(s.subagentTypeUnattributed.runCount).toBe(1);

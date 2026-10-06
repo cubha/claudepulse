@@ -8,7 +8,7 @@ import { makeRecordKey, synthesizeRecordKey } from '../recordKey';
 import { emptyToolCounts } from '../../services/JsonlParser';
 import type { JournalUsage, SessionRecord } from '../../types';
 import { extractRateLimitBuckets, parseRolloutLines, tokenUsageRecordDedupKey } from './codexRollout';
-import type { RateLimitBucket, TokenUsageTotals } from './codexRollout';
+import type { CodexLimitExtras, RateLimitBucket, TokenUsageTotals } from './codexRollout';
 import { calcCodexCost } from './codexPricing';
 import type { CodexRateLimitSnapshot } from '../../types';
 
@@ -52,6 +52,8 @@ interface RolloutParseState {
   sessionId: string;
   turnModel: Map<string, string>;
   seen: Set<string>;
+  /** 서브에이전트 스레드 id → agent_role(null=기본 역할). 이 파일의 `session_meta.source`에서 모은다(v0.2.6 ST11). */
+  subagentRoles: Map<string, string | null>;
 }
 
 /**
@@ -64,14 +66,17 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
   const lines = parseRolloutLines(rawLines);
 
   let { cwd, branch, sessionId } = state;
-  const { turnModel, seen } = state;
+  const { turnModel, seen, subagentRoles } = state;
   const out: SessionRecord[] = [];
-  // subagent(thread_spawn) 세션 감지는 session_meta.source가 객체 형태일 때 가능하지만(D10-2),
-  // 이번 범위에서는 미구현 — isSidechain은 항상 false. 반쯤 만든 감지보다 정직한 미구현이 낫다
-  // (CODEX_CAPABILITIES.subagentAttribution=false이므로 UI도 이 값을 아직 소비하지 않는다).
+  // 서브에이전트 판별(v0.2.6 ST11) — 레코드 자신의 `session_id`(루트 세션)와 `thread_id`(이 응답을 만든
+  // 스레드)가 다르면 사이드체인이다(실물 0.160.1). 파일 단위 문맥으로 판정하지 않는 이유: 자식 파일은
+  // 부모 이력을 사본으로 품을 수 있어(meta도 두 번 나온다) 파일 소속 ≠ 레코드 소유다. 레코드 기준이면
+  // 크로스파일 dedup에서 어느 사본이 이겨도 판정이 같다(v0.2.5 Claude "메인 원본 우선"과 같은 위험을 구조적으로 제거).
+  // 두 필드가 없는 구버전(<0.160 추정)은 기존처럼 메인 체인이다.
 
   for (const line of lines) {
     if (line.type === 'session_meta') {
+      if (line.subagent && line.sessionId) subagentRoles.set(line.sessionId, line.subagent.agentRole);
       cwd = line.cwd ?? '';
       branch = line.git?.branch ?? '';
       sessionId = line.sessionId ?? '';
@@ -93,13 +98,18 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
       sessionId, turnId: line.turnId, timestamp: line.timestamp, ordinal: line.ordinal,
     });
 
+    const ownerSession = line.sessionId ?? '';
+    const isSidechain = ownerSession !== '' && line.threadId !== '' && line.threadId !== ownerSession;
+    const role = isSidechain ? subagentRoles.get(line.threadId) : undefined;
+
     out.push({
       provider: 'codex',
       messageId,
       // requestId는 스트리밍 중복 제거 키(JsonlParser.byRequestId)와 같은 역할 — 별도 원본이
       // 없으므로 messageId와 동일 값을 쓴다(advisor 지적: 빈 문자열/상수 금지).
       requestId: messageId,
-      sessionId,
+      // 서브에이전트 비용이 부모 세션에 묶이도록 레코드의 루트 session_id를 우선한다(Claude 사이드체인과 같은 모양).
+      sessionId: ownerSession || sessionId,
       model,
       timestamp: line.timestamp,
       cwd,
@@ -111,11 +121,13 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
       costUsd: calcCodexCost(model, line.usage) ?? 0,
       toolCounts: emptyToolCounts(),
       editedFiles: [],
-      isSidechain: false,
+      isSidechain,
+      ...(isSidechain ? { agentId: line.threadId } : {}),
+      ...(role ? { attributionAgent: role } : {}),
     });
   }
 
-  return { records: out, state: { cwd, branch, sessionId, turnModel, seen } };
+  return { records: out, state: { cwd, branch, sessionId, turnModel, seen, subagentRoles } };
 }
 
 /**
@@ -132,7 +144,7 @@ function parseRolloutIntoState(rawLines: string[], state: RolloutParseState): { 
  * 공개해둔다.
  */
 export function rolloutLinesToSessionRecords(rawLines: string[], seen: Set<string> = new Set()): SessionRecord[] {
-  return parseRolloutIntoState(rawLines, { cwd: '', branch: '', sessionId: '', turnModel: new Map(), seen }).records;
+  return parseRolloutIntoState(rawLines, { cwd: '', branch: '', sessionId: '', turnModel: new Map(), seen, subagentRoles: new Map() }).records;
 }
 
 /**
@@ -182,6 +194,8 @@ interface RolloutFileCache {
   /** 파일 내부 dedup(기존 계약) — 증분 청크를 이어 파싱할 때도 이 Set을 이어써야 재생 라인이
    * 다시 카운트되지 않는다. */
   seen: Set<string>;
+  /** 서브에이전트 스레드 → agent_role(v0.2.6 ST11). 자식의 자기 meta는 파일 첫 청크에 오지만 증분에서도 이어쓴다. */
+  subagentRoles: Map<string, string | null>;
 }
 
 /** getFileLines(ST2)의 원시 줄 캐시 엔트리 — SessionRecord 파싱 문맥 없이 누적 줄만 보관한다. */
@@ -310,8 +324,8 @@ export class CodexSource implements AgentSource {
     // 다음 refresh가 그 줄 전체를 처음부터 다시 읽게 한다.
     const { lines: newLines, consumedBytes } = splitCompleteLines(buf);
     const state = canIncrement
-      ? { cwd: cached!.cwd, branch: cached!.branch, sessionId: cached!.sessionId, turnModel: cached!.turnModel, seen: cached!.seen }
-      : { cwd: '', branch: '', sessionId: '', turnModel: new Map<string, string>(), seen: new Set<string>() };
+      ? { cwd: cached!.cwd, branch: cached!.branch, sessionId: cached!.sessionId, turnModel: cached!.turnModel, seen: cached!.seen, subagentRoles: cached!.subagentRoles }
+      : { cwd: '', branch: '', sessionId: '', turnModel: new Map<string, string>(), seen: new Set<string>(), subagentRoles: new Map<string, string | null>() };
 
     const { records: newRecords, state: nextState } = parseRolloutIntoState(newLines, state);
     const records = canIncrement ? [...cached!.records, ...newRecords] : newRecords;
@@ -447,6 +461,9 @@ export class CodexSource implements AgentSource {
     // (verify-impl B-V2/B-V6 보완: 버킷이 없어도 컨텍스트 실측만은 별도로 존재할 수 있다).
     let latestContextWindow: number | null = null;
     let latestContextTimestamp = '';
+    // 크레딧·지출통제(v0.2.6 ST9)도 버킷과 독립 latest-wins — 버킷이 비어 건너뛰는 줄에 실린 값을 잃지 않는다.
+    let latestExtras: CodexLimitExtras | undefined;
+    let latestExtrasTimestamp = '';
     for (const file of files) {
       // ST2 — loadAllSessionRecords와 별개 캐시지만(getFileLines) 같은 mtime+offset 증분 원칙으로
       // 디스크 I/O를 줄인다(ANALYSIS 🔴#2 "매 refresh마다 전체 히스토리 2패스").
@@ -458,6 +475,10 @@ export class CodexSource implements AgentSource {
           latestContextWindow = line.modelContextWindow;
         }
         if (!line.rateLimits) continue;
+        if (line.rateLimits.extras && line.timestamp >= latestExtrasTimestamp) {
+          latestExtrasTimestamp = line.timestamp;
+          latestExtras = line.rateLimits.extras;
+        }
         if (line.timestamp <= latestTimestamp) continue;
         const buckets = extractRateLimitBuckets(line.rateLimits);
         if (buckets.length === 0) continue;
@@ -472,6 +493,7 @@ export class CodexSource implements AgentSource {
       planType: latestPlanType,
       generatedAt: latestTimestamp,
       modelContextWindow: latestContextWindow,
+      ...(latestExtras ? { extras: latestExtras } : {}),
     };
   }
 }
