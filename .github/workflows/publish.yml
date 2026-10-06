@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - run: npm ci
@@ -84,7 +84,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       # step-level `if`는 secrets 컨텍스트를 볼 수 있다 — 한쪽 시크릿만 있는 경우도 지원한다.
       - name: Publish to VS Code Marketplace
