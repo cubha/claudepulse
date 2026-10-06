@@ -209,6 +209,123 @@ export interface QuotaRejection {
   overageDisabledReason?: string;
 }
 
+// ─────────────────────────────────────────────────────────────
+// v0.2.6 신호(Claude 전용) — src/services/signals/*.ts 순수 함수의 산출물
+// ─────────────────────────────────────────────────────────────
+
+/** 캐시 미스 원인 1행. 토큰을 기록하지 않는 원인은 missedTokens·estCostUsd가 null(미상). */
+export interface CacheMissReasonRow {
+  reason: string;
+  count: number;
+  missedTokens: number | null;
+  /** 놓친 토큰이 읽기 대신 쓰기로 과금된 추가분(추정). 토큰 미상이거나 전부 가격 미상이면 null. */
+  estCostUsd: number | null;
+  hasUnpricedRecords: boolean;
+}
+
+export interface CacheMissBreakdown {
+  /** 건수 내림차순 */
+  reasons: CacheMissReasonRow[];
+  missCount: number;
+  /** 분모 — 기간 안 Claude 레코드 수 */
+  recordCount: number;
+  /** 가격·토큰을 아는 미스의 추정 비용 합 */
+  estCostUsd: number;
+  /** 토큰을 기록하지 않는 원인이 하나라도 있으면 true — 합계가 하한값이라는 뜻 */
+  hasUnknownTokens: boolean;
+}
+
+/** 오늘 thinking 비중(v0.2.6 ST3). 분모 = thinking 필드가 있는 레코드의 output. */
+export interface ThinkingShare {
+  thinkingTokens: number;
+  outputTokens: number;
+  share: number;
+}
+
+/** 한도 차단 에피소드 — 같은 (창, 해제시각)의 429 재시도를 한 사건으로 묶는다(v0.2.6 ST4). */
+export interface RateLimitBlockEpisode {
+  rateLimitType: string;
+  /** unix 초 */
+  resetsAt: number;
+  firstAt: string;
+  lastAt: string;
+  rejectedCount: number;
+  overageDisabledReason?: string;
+}
+
+export interface RateLimitBlockHistory {
+  /** firstAt 내림차순 */
+  episodes: RateLimitBlockEpisode[];
+  /** quotaLimits 없는 429 — 어느 창인지 몰라 에피소드로 만들지 않는다 */
+  unclassified429: number;
+  /** 5xx 서버 오류(529 overloaded 등) — 한도 차단이 아니다 */
+  serverErrors: { count: number; lastAt: string | null; byStatus: Record<number, number> };
+}
+
+/** PR 1개의 비용(v0.2.6 ST5) — pr-link로 연결된 세션의 레코드 합(세션 단위 근사). */
+export interface PrCostRow {
+  prRepository: string;
+  prNumber: number;
+  prUrl: string;
+  costUsd: number;
+  totalTokens: number;
+  sessionCount: number;
+  /** 다른 PR에도 연결된 세션 수 — 0이 아니면 PR 간 합계가 이중계산된다 */
+  sharedSessionCount: number;
+  firstLinkedAt: string;
+  hasUnpricedRecords: boolean;
+}
+
+/** 현재 컨텍스트 세션의 압축 이력(v0.2.6 ST6). */
+export interface CompactionInfo {
+  count: number;
+  autoCount: number;
+  last: { at: string; trigger: string; preTokens: number; postTokens: number };
+}
+
+/** 턴 지연·훅 오버헤드(v0.2.6 ST8) — 최근 7일(UTC 일 단위, 오늘 포함). */
+export interface TurnHookStats {
+  turnCount: number;
+  totalTurnMs: number;
+  medianMs: number | null;
+  p90Ms: number | null;
+  maxMs: number | null;
+  /** 오래된 날 → 오늘, 7칸. 턴 없는 날은 medianMs=null */
+  daily: Array<{ date: string; count: number; medianMs: number | null }>;
+  /** 스크립트 표시명별(경로 제거), totalMs 내림차순 */
+  hooks: Array<{ name: string; totalMs: number; count: number; avgMs: number }>;
+  hookTotalMs: number;
+  /** hookTotalMs / totalTurnMs. 턴이 없으면 null */
+  hookShare: number | null;
+  hookErrorCount: number;
+}
+
+/** effort별 사용량(v0.2.6 ST7) — `effort` 기준, 비용 내림차순, share 분모 = 스코프 총비용. */
+export interface EffortUsage {
+  effort: string;
+  costUsd: number;
+  totalTokens: number;
+  share: number;
+  hasUnpricedRecords: boolean;
+}
+
+/** effort 필드가 없는 레코드(구버전 CLI·Codex 등) — 숨기면 거짓 정밀도. */
+export interface EffortUnattributed {
+  costUsd: number;
+  totalTokens: number;
+  share: number;
+  hasUnpricedRecords: boolean;
+}
+
+/** extension이 Claude 요약에 붙이는 신호 묶음(v0.2.6). Codex 요약에는 없다. */
+export interface ClaudeSignals {
+  cacheMiss: CacheMissBreakdown;
+  rateLimitBlocks: RateLimitBlockHistory;
+  prCosts: PrCostRow[];
+  compaction: CompactionInfo | null;
+  turnHooks: TurnHookStats;
+}
+
 /** 하루 집계 (UTC 날짜 기준). */
 export interface DailyUsage {
   date: string;         // YYYY-MM-DD UTC
