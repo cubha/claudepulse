@@ -66,7 +66,19 @@ export interface RateLimitSnapshot {
   primary: RateLimitWindow | null;
   secondary: RateLimitWindow | null;
   planType: string | null;
+  /** 크레딧·지출통제·차단 사유(v0.2.6 ST9). 구버전 CLI는 필드 자체가 없어 미정의. */
+  extras?: CodexLimitExtras;
 }
+
+/** openai/codex `RateLimitSnapshot`의 credits·individual_limit·spend_control_reached·rate_limit_reached_type. */
+export interface CodexLimitExtras {
+  credits: { hasCredits: boolean; unlimited: boolean; balance: string | null } | null;
+  individualLimit: { limit: string; used: string; remainingPercent: number; resetsAt: number } | null;
+  spendControlReached: boolean | null;
+  rateLimitReachedType: string | null;
+}
+
+export function hasMeaningfulCodexLimits(_extras: CodexLimitExtras | undefined | null): boolean { throw new Error('not implemented'); }
 
 export interface GitInfo {
   commitHash?: string;

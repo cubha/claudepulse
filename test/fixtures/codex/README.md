@@ -5,6 +5,7 @@ CodexParser의 I/O 계약 검증용. **각 파일의 성격을 반드시 확인�
 | 파일 | 성격 | 출처·범위 |
 |---|---|---|
 | `real-free-exec-1turn-cli0.155.1.jsonl` | 🟢 **실물** | 2026-09-19 이 프로젝트 개발 머신에서 `codex exec`로 직접 생성. ChatGPT **free** 플랜 · `source:"exec"` · **1턴** · codex-cli **0.155.1**. 개인 경로만 치환(`/home/user/…`), 그 외 구조·숫자 무가공 |
+| `real-free-subagent-parent-cli0.160.1.jsonl` · `real-free-subagent-child-cli0.160.1.jsonl` | 🟢 **실물(축약)** | 2026-10-06 이 머신에서 codex-cli **0.160.1** `codex exec`(free 플랜)로 `spawn_agent` 1회를 강제해 생성한 부모·자식 rollout 쌍(v0.2.6 ST11). **축약**: `session_meta`(식별·source 필드만)·`turn_context`(turn_id·model·effort)·`token_usage_record`·`token_count`만 남기고 대화 본문(response_item 등)은 제거, cwd는 `/home/user/codex-sub-demo`로 치환. 숫자·id·`source.subagent.thread_spawn` 구조는 무가공. 핵심 사실: 자식 파일엔 자기 meta 뒤에 **부모 meta 사본**이 한 번 더 나오고, `token_usage_record.session_id`=루트 세션·`thread_id`=소유 스레드 |
 | `synth-plus-2turn-replay.jsonl` | 🟡 **합성** | `openai/codex` 소스(`protocol.rs` · `state/session.rs` · `rollout/policy.rs`) 확정 규칙으로 생성. 실물이 커버 못 하는 **유료 2버킷 · 2턴 · `turn_token_usage` 리셋 · replay 중복 1건** |
 | `synth-legacy-tokencount-only.jsonl` | 🟡 **합성** | `token_usage_record` 도입(0.154, 2026-09-08) **이전** 세션 모사. `token_count` 단독 경로 폴백 검증용 |
 
