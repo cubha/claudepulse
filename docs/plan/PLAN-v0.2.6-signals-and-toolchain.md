@@ -65,7 +65,7 @@
 | ID | 태그 | 내용 | 파일 |
 |---|---|---|---|
 | ST0a | — | ESLint 10 + typescript-eslint 8 flat config | `eslint.config.mjs`(신규), `.eslintrc.cjs`(삭제), `package.json`, `verify.sh`, `.vscodeignore` |
-| ST0b | — | vitest 1 → 5 | `package.json`, `vitest.config.ts` |
+| ST0b | — | vitest 1 → 5 | `package.json`, `vitest.config.ts`→`.mts`, `@types/node` 20→22(vitest 5 peer) |
 | ST0c | — | esbuild 0.20 → 0.28 | `package.json`, `esbuild.config.mjs` |
 | ST0d | — | vsce 2 → 4 · ovsx 0.9 → 1.2 · CI Node 22 | `package.json`, `.github/workflows/publish.yml` |
 | ST0e | — | `test:integration` 복구 + verify 배선 + 2f 예외 제거 + 의도적 RED | `.vscode-test.mjs`(신규), `package.json`, `verify.sh`, `test/integration/*` |
