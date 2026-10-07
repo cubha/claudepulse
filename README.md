@@ -23,9 +23,10 @@ Stop switching to your browser to check rate limits. See your **5-hour session**
 - **New: why the prompt cache missed.** The cache card lists last week's cache misses by cause (conversation changed, model changed, system prompt changed…) with an estimated extra cost each. Causes that don't record token counts are counted but not costed, so the total is a lower bound (`≥`).
 - **New: rate-limit block history.** Retries rejected by a usage limit are grouped into one block per window and reset time, and listed on the dashboard. The sidebar shows a chip for a block in the last week. Server errors (529/500) are listed separately, because they are not a usage limit.
 - **New: cost by pull request**, from the PR links Claude Code records, including subagent work. A session linked to several PRs is marked **shared**.
-- **New: turn latency and hook overhead.** Median and p90 turn time, a daily median, and the average time each Stop hook adds per turn (script name only, no paths).
+- **New: turn latency and hook overhead.** Median, p90 and longest turn time, a daily median, and the average time each Stop hook adds per turn (script name only, no paths).
 - **New: thinking share, cost by effort level, and context compaction.** A sidebar chip shows today's thinking-token share. The attribution card adds cost by effort level (high / medium / xhigh). The context gauge shows a chip when its session was compacted.
 - **New for Codex:** credit balance, spend limit and block reason when Codex reports them; subagent work counted toward its parent session; readable plan names (**Pro Lite** instead of `PROLITE`).
+- **Easier to read: red status markers** now use a lighter red on dark themes, so a rate-limit block marker is as legible as the other markers.
 
 <details><summary>v0.2.5</summary>
 
