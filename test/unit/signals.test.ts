@@ -237,13 +237,18 @@ describe('ST8 — 훅 표시명은 경로를 드러내지 않는다', () => {
     ['node $HOME/.claude/hooks/session-metrics.js', 'session-metrics.js'],
     ['node "/mnt/d/workspace/geobuke-code/dist/cli.js" hook stop', 'cli.js hook stop'],
     ['bash "${CLAUDE_PLUGIN_ROOT}/hooks/stop-hook.sh"', 'stop-hook.sh'],
-    ['python3 /home/u/x/check.py --dir /home/u/secret', 'check.py --dir secret'],
+    // (ship 보안검토 적발로 명세 변경: 경로 인자는 basename조차 남기지 않는다 — 마지막 세그먼트가 사용자명일 수 있다)
+    ['python3 /home/u/x/check.py --dir /home/u/secret', 'check.py --dir'],
     ['my-hook', 'my-hook'],
     // scope-critic 적발(v0.2.6 VERIFY): 공백 든 따옴표 경로·환경변수 할당이 사용자 이름을 흘렸다
     ['node "C:\\Users\\Jane Doe\\.claude\\hooks\\stop.js"', 'stop.js'],
     ['HOME=/home/jdoe node a.js', 'a.js'],
     ["bash '/path/To My Code/stop.sh' --flag", 'stop.sh --flag'],
     ['FOO=1 BAR=/x/y python3 /opt/h/run.py', 'run.py'],
+    // ship 보안검토 적발(v0.2.6): 경로의 마지막 세그먼트가 사용자명 자체인 경우·KEY="공백 값"
+    ['cd /home/jane && node h.js', 'cd node h.js'],
+    ['node h.js --cwd=C:\\Users\\Jane', 'h.js'],
+    ['HOME="/home/jane doe" node x.js', 'x.js'],
   ])('%s → %s', (cmd, want) => {
     expect(hookDisplayName(cmd)).toBe(want);
   });
