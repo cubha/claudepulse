@@ -17,6 +17,9 @@ import { filterQualifyingCostDays, calcCostAnomalyPct } from './metricCalc';
 import { appendCodexBucketHistory, hydrateCodexBucketHistory } from './codexBucketHistory';
 import { buildCodexBucketBurnRow } from './codexBandBurn';
 import { THEME_CLASSES } from './themeClass';
+import { codexPlanLabel } from './codexPlan';
+import { blockChipHtml, codexLimitsRowsHtml, compactionChipHtml, thinkingChipHtml } from './signalsView';
+import { hasMeaningfulCodexLimits } from '../sources/codex/codexRollout';
 import { vsApi } from './webviewApi';
 import {
   createCalendarScrollState, captureCalendarScroll, applyCalendarScroll,
@@ -308,6 +311,9 @@ function buildUsageRowHtml(usage: UsageSummary | null, provider: AgentProvider):
     ? `<span class="sb-chip sb-chip--cache" title="캐시 절약 ${fmtCost(cacheStats.savedUsd)}">⚡ ${(cacheStats.hitRate * 100).toFixed(0)}%</span>`
     : '';
 
+  // thinking 비중 칩(v0.2.6 ST3) — Claude만 값이 있다(Codex는 todayThinking=null, 추론 토큰은 별도 행).
+  const thinkingChip = thinkingChipHtml(usage.todayThinking);
+
   // 브랜치 칩: 활성 브랜치 + 해당 브랜치 누적 비용
   let branchChip = '';
   if (activeBranch) {
@@ -385,7 +391,7 @@ function buildUsageRowHtml(usage: UsageSummary | null, provider: AgentProvider):
     ${costDisplay}
     ${anomalyChip}
   </div>
-  ${(modelChip || cacheChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}</div>` : ''}
+  ${(modelChip || cacheChip || thinkingChip) ? `<div class="sb-chip-row">${modelChip}${cacheChip}${thinkingChip}</div>` : ''}
   ${toolRow}
   ${branchChip ? `<div class="sb-chip-row sb-branch-row">${branchChip}</div>` : ''}
   ${monthlyChip}`;
@@ -431,7 +437,7 @@ function buildFooterHtml(provider: AgentProvider, planLabel: string | null, gene
   // 다른 대소문자로 같은 planType 값을 렌더하던 버그. Claude는 기존 Title Case를 그대로 유지한다
   // (§8 불변식1 "Claude 경로 행위 변경 금지" — provider 분기만 추가).
   const plan = planLabel
-    ? escapeHtml(provider === 'codex' ? planLabel.toUpperCase() : planLabel.charAt(0).toUpperCase() + planLabel.slice(1))
+    ? escapeHtml(provider === 'codex' ? codexPlanLabel(planLabel) : planLabel.charAt(0).toUpperCase() + planLabel.slice(1))
     : t('plan_unknown');
   const time = generatedAt ? fmtTime(new Date(generatedAt)) : '—';
   return `<div class="sb-footer">
@@ -613,6 +619,7 @@ function buildSidebarHtml(
 
       ${buildUsageRowHtml(usage, activeProvider)}
       ${fallbackBanner}
+      ${buildBlockRowHtml(usage)}
 
       <!-- 5h 세션 섹션 — hero(사이드바에서 유일하게 22px로 격상되는 지표) -->
       <div class="sb-section-hdr">
@@ -663,6 +670,12 @@ function buildSidebarHtml(
       </div>
 
     </div>`;
+}
+
+/** 최근 7일 한도 차단 칩 줄(v0.2.6 ST4) — 차단이 없으면 줄 자체를 그리지 않는다. */
+function buildBlockRowHtml(usage: UsageSummary | null): string {
+  const chip = blockChipHtml(usage?.signals?.rateLimitBlocks, Date.now());
+  return chip ? `<div class="sb-chip-row">${chip}</div>` : '';
 }
 
 /**
@@ -718,6 +731,7 @@ function buildContextGaugeHtml(usage: UsageSummary | null): string {
     <div class="sb-chip-row">
       <button class="sb-chip ${repoChipClass} sb-chip--clickable js-open-session-picker" title="${escapeHtml(repoTitle)}">${repoIcon} ${escapeHtml(ctx.repoName)}<span class="chev">▾</span></button>
       <span class="sb-chip${gauge.showRevertLink ? ' sb-chip--warn' : ''}" title="${escapeHtml(ageTitle)}">${gauge.showRevertLink ? '⚠' : '🕐'} ${fmtAge(ageMs)}</span>
+      ${compactionChipHtml(usage?.signals?.compaction)}
     </div>
     ${gauge.showRevertLink
       ? `<div class="sb-context-revert-row"><button class="sb-context-revert-link js-clear-pinned-session" title="${escapeHtml(t('context_revert_tooltip'))}">${escapeHtml(t('context_revert_link'))}</button></div>`
@@ -771,9 +785,9 @@ export function buildCodexSidebarHtml(
   }
 
   // Plan 배지(verify-impl B-V5/B-V6 보완) — Claude의 planBadge(subscriptionType)와 동일 위치·
-  // 클래스 재사용. planType은 원본 문자열 그대로 대문자화만 한다(값별 분기 없음, §8 불변식5).
+  // 클래스 재사용. 표시명은 codexPlanLabel 단일 소유(v0.2.6 ST10, §8 불변식5 개정).
   const codexPlanBadge = snapshot?.planType
-    ? `<span class="plan-badge">${escapeHtml(snapshot.planType.toUpperCase())}</span>`
+    ? `<span class="plan-badge">${escapeHtml(codexPlanLabel(snapshot.planType))}</span>`
     : '';
 
   const header = `
@@ -866,6 +880,7 @@ export function buildCodexSidebarHtml(
       ${header}
       ${buildUsageRowHtml(usage, activeProvider)}
       ${bucketCards}
+      ${hasMeaningfulCodexLimits(snapshot?.extras) ? codexLimitsRowsHtml(snapshot?.extras, buckets, Date.now()) : ''}
       ${codexContextRow}
       ${codexReasoningRow}
       ${buildSidebarCalendarHtml(usage)}

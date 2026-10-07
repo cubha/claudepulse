@@ -1,11 +1,12 @@
 import type { PricingSource } from '../utils/pricing';
 import type { AgentProvider } from '../sources/recordKey';
 import type { AgentAvailability } from '../sources/AgentSource';
-import type { RateLimitBucket } from '../sources/codex/codexRollout';
+import type { CodexLimitExtras, RateLimitBucket } from '../sources/codex/codexRollout';
 export type { PricingSource };
 export type { AgentProvider };
 export type { AgentAvailability };
 export type { RateLimitBucket };
+export type { CodexLimitExtras };
 
 /**
  * Codex 한도 스냅샷(v0.2.0, ST5/ST7) — `RateLimitSnapshot`(Claude, 고정 fiveHour/sevenDay +
@@ -25,6 +26,8 @@ export interface CodexRateLimitSnapshot {
    * 값이 없는 구버전도 있어 null 허용) — 없으면 UI가 그 행을 숨긴다(빈 값≠0 원칙).
    */
   modelContextWindow: number | null;
+  /** 크레딧·지출통제·차단 사유(v0.2.6 ST9). 구버전 CLI는 미정의. 표시 여부는 hasMeaningfulCodexLimits. */
+  extras?: CodexLimitExtras;
 }
 
 /** 양 프로바이더의 3단 빈 상태 판정 묶음(ST7/ST8) — 스위처가 "이 프로바이더로 전환 가능한가"를 안다. */
@@ -169,6 +172,169 @@ export interface SessionRecord {
    * usage 합계로 폴백(UsageAggregator 소비부)한다 — 기존 테스트 파일 대량 수정 회피.
    */
   contextTokens?: number;
+  /**
+   * 프롬프트 캐시 미스 원인(v0.2.6) — `message.diagnostics.cache_miss_reason`. `missedTokens`는
+   * messages/model/system_changed에만 기록되고 previous_message_not_found·unavailable에는 없다
+   * (실측 78%) — 그때는 **null(미상)**이지 0이 아니다(v0.1.55 거짓초록).
+   */
+  cacheMiss?: CacheMissInfo;
+  /** `usage.output_tokens_details.thinking_tokens`(v0.2.6) — output_tokens에 **포함된** 값. 별도 과금 금지. */
+  thinkingTokens?: number;
+  /** top-level `effort`(v0.2.6) — 유효 effort. `perTurnEffort`는 턴 오버라이드라 대부분 null이어서 쓰지 않는다. */
+  effort?: string;
+}
+
+/** 캐시 미스 원인 1건(v0.2.6). */
+export interface CacheMissInfo {
+  reason: string;
+  /** 놓친 캐시 토큰. 원인이 토큰을 기록하지 않으면 null(미상). */
+  missedTokens: number | null;
+}
+
+/**
+ * jsonl의 비-assistant 이벤트(v0.2.6 ST1) — 사용량 레코드(SessionRecord)와 별개 채널.
+ * `eventKey`는 파일 간 dedup 키: uuid가 있으면 uuid, pr-link는 uuid가 없어 `pr:<repo>#<n>@<session>`.
+ */
+export type JournalEvent =
+  | { kind: 'turn_duration'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; durationMs: number; messageCount: number }
+  | { kind: 'stop_hooks'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; hooks: Array<{ command: string; durationMs: number }>; errorCount: number; preventedContinuation: boolean }
+  | { kind: 'compact'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; trigger: string; preTokens: number; postTokens: number; durationMs: number }
+  | { kind: 'pr_link'; eventKey: string; sessionId: string; timestamp: string; prNumber: number; prUrl: string; prRepository: string }
+  | { kind: 'api_error'; eventKey: string; sessionId: string; timestamp: string; isSidechain: boolean; status: number; error: string; quota?: QuotaRejection };
+
+/** 429 레코드의 `quotaLimits`(v0.2.6) — 어떤 창이 언제 풀리는지. */
+export interface QuotaRejection {
+  status: string;
+  rateLimitType: string;
+  /** unix 초 */
+  resetsAt: number;
+  overageStatus?: string;
+  overageDisabledReason?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// v0.2.6 신호(Claude 전용) — src/services/signals/*.ts 순수 함수의 산출물
+// ─────────────────────────────────────────────────────────────
+
+/** 캐시 미스 원인 1행. 토큰을 기록하지 않는 원인은 missedTokens·estCostUsd가 null(미상). */
+export interface CacheMissReasonRow {
+  reason: string;
+  count: number;
+  missedTokens: number | null;
+  /** 놓친 토큰이 읽기 대신 쓰기로 과금된 추가분(추정). 토큰 미상이거나 전부 가격 미상이면 null. */
+  estCostUsd: number | null;
+  hasUnpricedRecords: boolean;
+}
+
+export interface CacheMissBreakdown {
+  /** 건수 내림차순 */
+  reasons: CacheMissReasonRow[];
+  missCount: number;
+  /** 분모 — 기간 안 Claude 레코드 수 */
+  recordCount: number;
+  /** 가격·토큰을 아는 미스의 추정 비용 합 */
+  estCostUsd: number;
+  /** 토큰을 기록하지 않는 원인이 하나라도 있으면 true — 합계가 하한값이라는 뜻 */
+  hasUnknownTokens: boolean;
+  /** 토큰은 아는데 가격표에 없는 모델의 미스가 하나라도 있으면 true — estCostUsd가 그만큼 빠져 있다 */
+  hasUnpricedRecords: boolean;
+}
+
+/** 오늘 thinking 비중(v0.2.6 ST3). 분모 = thinking 필드가 있는 레코드의 output. */
+export interface ThinkingShare {
+  thinkingTokens: number;
+  outputTokens: number;
+  share: number;
+}
+
+/** 한도 차단 에피소드 — 같은 (창, 해제시각)의 429 재시도를 한 사건으로 묶는다(v0.2.6 ST4). */
+export interface RateLimitBlockEpisode {
+  rateLimitType: string;
+  /** unix 초 */
+  resetsAt: number;
+  firstAt: string;
+  lastAt: string;
+  rejectedCount: number;
+  overageDisabledReason?: string;
+}
+
+export interface RateLimitBlockHistory {
+  /** firstAt 내림차순 */
+  episodes: RateLimitBlockEpisode[];
+  /** quotaLimits 없는 429 — 어느 창인지 몰라 에피소드로 만들지 않는다 */
+  unclassified429: number;
+  /** 5xx 서버 오류(529 overloaded 등) — 한도 차단이 아니다 */
+  serverErrors: { count: number; lastAt: string | null; byStatus: Record<number, number> };
+}
+
+/** PR 1개의 비용(v0.2.6 ST5) — pr-link로 연결된 세션의 레코드 합(세션 단위 근사). */
+export interface PrCostRow {
+  prRepository: string;
+  prNumber: number;
+  prUrl: string;
+  costUsd: number;
+  totalTokens: number;
+  sessionCount: number;
+  /** 다른 PR에도 연결된 세션 수 — 0이 아니면 PR 간 합계가 이중계산된다 */
+  sharedSessionCount: number;
+  firstLinkedAt: string;
+  hasUnpricedRecords: boolean;
+}
+
+/** 현재 컨텍스트 세션의 압축 이력(v0.2.6 ST6). */
+export interface CompactionInfo {
+  count: number;
+  autoCount: number;
+  last: { at: string; trigger: string; preTokens: number; postTokens: number };
+}
+
+/** 턴 지연·훅 오버헤드(v0.2.6 ST8) — 최근 7일(UTC 일 단위, 오늘 포함). */
+export interface TurnHookStats {
+  turnCount: number;
+  totalTurnMs: number;
+  medianMs: number | null;
+  p90Ms: number | null;
+  maxMs: number | null;
+  /** 오래된 날 → 오늘, 7칸. 턴 없는 날은 medianMs=null */
+  daily: Array<{ date: string; count: number; medianMs: number | null }>;
+  /** 스크립트 표시명별(경로 제거), totalMs 내림차순 */
+  hooks: Array<{ name: string; totalMs: number; count: number; avgMs: number }>;
+  hookTotalMs: number;
+  /** 턴(Stop 훅 실행) 1회당 평균 훅 시간. 훅 실행이 없으면 null */
+  avgHookMsPerTurn: number | null;
+  /**
+   * avgHookMsPerTurn / medianMs — "보통 턴"에서 훅이 차지하는 비율. 벽시계 합계 대비(hookTotalMs/
+   * totalTurnMs)로 재지 않는 이유: 턴 시간은 승인 대기 등을 포함한 벽시계라 33시간짜리 이상치가 있다
+   * (30일 실측 — 합계 대비 0.21%, 중앙값 기준 1.5%). 둘 중 하나라도 없으면 null.
+   */
+  hookShare: number | null;
+  hookErrorCount: number;
+}
+
+/** effort별 사용량(v0.2.6 ST7) — `effort` 기준, 비용 내림차순, share 분모 = 스코프 총비용. */
+export interface EffortUsage {
+  effort: string;
+  costUsd: number;
+  totalTokens: number;
+  share: number;
+  hasUnpricedRecords: boolean;
+}
+
+/** effort 필드가 없는 레코드(구버전 CLI·Codex 등) — 숨기면 거짓 정밀도. */
+export interface EffortUnattributed {
+  costUsd: number;
+  totalTokens: number;
+  share: number;
+  hasUnpricedRecords: boolean;
+}
+
+/** extension이 Claude 요약에 붙이는 신호 묶음(v0.2.6). Codex 요약에는 없다. */
+export interface ClaudeSignals {
+  cacheMiss: CacheMissBreakdown;
+  rateLimitBlocks: RateLimitBlockHistory;
+  prCosts: PrCostRow[];
+  compaction: CompactionInfo | null;
+  turnHooks: TurnHookStats;
 }
 
 /** 하루 집계 (UTC 날짜 기준). */
@@ -336,6 +502,8 @@ export interface AttributionScope {
   subagentTypeBreakdown: SubagentTypeUsage[];
   subagentTypeUnattributed: SubagentTypeUnattributed;
   mcpServerBreakdown: McpServerUsage[];
+  effortBreakdown: EffortUsage[];
+  effortUnattributed: EffortUnattributed;
 }
 
 /**
@@ -402,6 +570,8 @@ export interface UsageSummary {
    * 0으로 합산돼 기존 Claude 화면에는 영향이 없다(그 필드를 렌더하는 곳이 아직 없다).
    */
   todayReasoningTokens: number;
+  /** 오늘 Claude thinking 비중(v0.2.6 ST3). thinking 필드가 하나도 없으면 null. */
+  todayThinking: ThinkingShare | null;
   cacheStats: CacheStats;            // 오늘 캐시 효율
   todayToolCounts: ToolUseCounts;    // 오늘 도구 사용 집계
   last7DaysTools: DailyToolStats[];  // 7일 도구 트렌드
@@ -413,6 +583,8 @@ export interface UsageSummary {
   subagentTypeBreakdown: SubagentTypeUsage[];          // 서브에이전트 타입별 (전체 스코프, v0.2.5b)
   subagentTypeUnattributed: SubagentTypeUnattributed;  // 타입 미상 사이드체인 버킷
   mcpServerBreakdown: McpServerUsage[];  // MCP 서버별 호출수 집계 (전체 스코프)
+  effortBreakdown: EffortUsage[];        // effort별 비용 (전체 스코프, v0.2.6 ST7)
+  effortUnattributed: EffortUnattributed;  // effort 필드 없는 레코드 버킷
   attributionScopes: {
     last24h: AttributionScope;
     last7d: AttributionScope;
@@ -428,6 +600,8 @@ export interface UsageSummary {
   contextSessions: ContextSessionSummary[];
   historicalDays: DailyUsage[];      // CacheStore 전체 이력 (날짜 오름차순)
   generatedAt: string;               // ISO8601
+  /** Claude 전용 신호 묶음(v0.2.6) — extension이 refresh마다 붙인다. Codex 요약·구버전 픽스처는 없다. */
+  signals?: ClaudeSignals;
 }
 
 // ─────────────────────────────────────────────────────────────

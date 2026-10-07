@@ -99,6 +99,7 @@
   --fg-haiku:  #5EEAD4;
   --fg-slate:  #94A3B8;
   --fg-warn:   #F7DA90;
+  --fg-danger: #FDA4AF;
 
   /* 크롬 — 그림자·트랙·3D 버튼 표면 (D-EFFECT-02: shadow는 var(--shadow-*) 참조) */
   --shadow-tooltip: 0 4px 16px rgba(0,0,0,0.35);
@@ -166,6 +167,7 @@
   --fg-haiku:  #0F766E;
   --fg-slate:  #475569;
   --fg-warn:   #BF921F;
+  --fg-danger: #812335;
 
   /* 크롬 — 다크와 같은 역할, 라이트 값 */
   --shadow-tooltip: 0 4px 16px rgba(0,0,0,0.10);
@@ -213,6 +215,7 @@
   --outline-danger: rgba(214,69,91,0.65);
   --fg-sonnet: #29F0BF;
   --fg-warn:   #F6C678;
+  --fg-danger: #F9A8B4;
   --fg-fable:  #B7C6FF;
   --fg-haiku:  #F4A8E0;
 }
@@ -237,6 +240,7 @@
   --outline-danger: rgba(178,39,60,0.65);
   --fg-sonnet: #0F9574;
   --fg-warn:   #A7731F;
+  --fg-danger: #B2273C;
   --fg-fable:  #24399B;
   --fg-haiku:  #7A2569;
 }
@@ -2057,5 +2061,5 @@ body[data-mode="sidebar"] #root { height: 100%; }
 .status-marker:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
 .status-marker.ok     { color: var(--c-success); }
 .status-marker.warn   { color: var(--c-warn); }
-.status-marker.danger { color: var(--c-danger); }
+.status-marker.danger { color: var(--fg-danger); }  /* 솔리드 --c-danger는 다크 카드 위 2.73:1 — verify-impl v0.2.6 */
 .status-marker.muted  { color: var(--vscode-descriptionForeground); }

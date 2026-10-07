@@ -66,6 +66,28 @@ export interface RateLimitSnapshot {
   primary: RateLimitWindow | null;
   secondary: RateLimitWindow | null;
   planType: string | null;
+  /** 크레딧·지출통제·차단 사유(v0.2.6 ST9). 구버전 CLI는 필드 자체가 없어 미정의. */
+  extras?: CodexLimitExtras;
+}
+
+/** openai/codex `RateLimitSnapshot`의 credits·individual_limit·spend_control_reached·rate_limit_reached_type. */
+export interface CodexLimitExtras {
+  credits: { hasCredits: boolean; unlimited: boolean; balance: string | null } | null;
+  individualLimit: { limit: string; used: string; remainingPercent: number; resetsAt: number } | null;
+  spendControlReached: boolean | null;
+  rateLimitReachedType: string | null;
+}
+
+/**
+ * extras에 사용자에게 보여줄 값이 있는가(v0.2.6 ST9). free 실물은 `credits{has_credits:false,
+ * unlimited:false,balance:null}`처럼 **객체는 있지만 비어 있다** — 이걸 그대로 그리면 "크레딧 0"이라는
+ * 거짓 정보가 된다. `spend_control_reached:false`도 단독으로는 "막히지 않음"뿐이라 숨긴다.
+ */
+export function hasMeaningfulCodexLimits(extras: CodexLimitExtras | undefined | null): boolean {
+  if (!extras) return false;
+  const c = extras.credits;
+  if (c && (c.hasCredits || c.unlimited || c.balance !== null)) return true;
+  return extras.individualLimit !== null || extras.spendControlReached === true || extras.rateLimitReachedType !== null;
 }
 
 export interface GitInfo {
@@ -74,8 +96,40 @@ export interface GitInfo {
   repositoryUrl?: string;
 }
 
-/** `session_meta.source`가 문자열 또는 객체(서브에이전트)일 수 있다(D10-2). */
-export type RolloutSource = string | { subagent?: { threadSpawn?: { parentThreadId?: string; depth?: number } } };
+/**
+ * `session_meta.source`가 문자열 또는 객체(서브에이전트)일 수 있다(D10-2). 직렬화는 **snake_case**다
+ * (v0.2.6 실물: `{"subagent":{"thread_spawn":{"parent_thread_id",…}}}`) — v0.2.0의 camelCase 선언은
+ * 한 번도 소비되지 않아 틀린 채로 남아 있었다.
+ */
+export type RolloutSource = string | { subagent?: unknown };
+
+/** `source.subagent.thread_spawn`(v0.2.6 ST11). agent_role은 기본 역할이면 null. */
+export interface SubagentSpawnInfo {
+  parentThreadId: string;
+  depth: number;
+  agentRole: string | null;
+  agentPath: string | null;
+  agentNickname: string | null;
+}
+
+function parseSubagentSource(source: unknown): SubagentSpawnInfo | null {
+  if (!source || typeof source !== 'object') return null;
+  const sub = (source as Record<string, unknown>)['subagent'];
+  if (!sub || typeof sub !== 'object') return null;
+  const ts = (sub as Record<string, unknown>)['thread_spawn'];
+  if (!ts || typeof ts !== 'object') return null;
+  const t = ts as Record<string, unknown>;
+  if (typeof t['parent_thread_id'] !== 'string') return null;
+  const strOrNull = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null);
+  return {
+    parentThreadId: t['parent_thread_id'],
+    depth: typeof t['depth'] === 'number' ? t['depth'] : 0,
+    // 소스의 serde alias("agent_type")도 받는다(SubAgentSource::ThreadSpawn.agent_role).
+    agentRole: strOrNull(t['agent_role']) ?? strOrNull(t['agent_type']),
+    agentPath: strOrNull(t['agent_path']),
+    agentNickname: strOrNull(t['agent_nickname']),
+  };
+}
 
 /** 모든 라인 변형이 공유하는 envelope — top-level `timestamp`/`ordinal`(합성키·시계열 정렬용). */
 interface LineEnvelope {
@@ -84,12 +138,14 @@ interface LineEnvelope {
 }
 
 export type RolloutLine =
-  | (LineEnvelope & { type: 'session_meta'; cwd?: string; git: GitInfo | null; source: RolloutSource | null; cliVersion?: string; sessionId?: string })
+  | (LineEnvelope & { type: 'session_meta'; cwd?: string; git: GitInfo | null; source: RolloutSource | null; cliVersion?: string; sessionId?: string; subagent: SubagentSpawnInfo | null })
   | (LineEnvelope & { type: 'turn_context'; turnId: string; model?: string })
   | (LineEnvelope & {
       type: 'token_usage_record';
       turnId: string;
       threadId: string;
+      /** 루트 세션 id(v0.2.6 실물 0.160.1). 서브에이전트 레코드도 부모(루트) 세션을 가리킨다. 구버전은 ''/미정의. */
+      sessionId?: string;
       responseId: string;
       usage: TokenUsageTotals;
       turnTokenUsage: TokenUsageTotals;
@@ -123,15 +179,42 @@ function parseRateLimitWindow(raw: unknown): RateLimitWindow | null {
   };
 }
 
+function parseExtras(r: Record<string, unknown>): CodexLimitExtras | undefined {
+  // 네 필드가 전부 키 자체로 없으면 구버전 CLI — extras를 만들지 않는다("값 없음"과 "필드 없음" 구분).
+  if (!('credits' in r) && !('individual_limit' in r) && !('spend_control_reached' in r) && !('rate_limit_reached_type' in r)) return undefined;
+  const c = r['credits'];
+  const credits = c && typeof c === 'object'
+    ? (() => {
+        const o = c as Record<string, unknown>;
+        return { hasCredits: o['has_credits'] === true, unlimited: o['unlimited'] === true, balance: typeof o['balance'] === 'string' ? o['balance'] : null };
+      })()
+    : null;
+  const il = r['individual_limit'];
+  const individualLimit = il && typeof il === 'object'
+    ? (() => {
+        const o = il as Record<string, unknown>;
+        return { limit: String(o['limit'] ?? ''), used: String(o['used'] ?? ''), remainingPercent: Number(o['remaining_percent'] ?? 0), resetsAt: Number(o['resets_at'] ?? 0) };
+      })()
+    : null;
+  return {
+    credits,
+    individualLimit,
+    spendControlReached: typeof r['spend_control_reached'] === 'boolean' ? r['spend_control_reached'] : null,
+    rateLimitReachedType: typeof r['rate_limit_reached_type'] === 'string' && r['rate_limit_reached_type'] !== '' ? r['rate_limit_reached_type'] : null,
+  };
+}
+
 function parseRateLimits(raw: unknown): RateLimitSnapshot | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
+  const extras = parseExtras(r);
   return {
     limitId: typeof r['limit_id'] === 'string' ? r['limit_id'] : null,
     limitName: typeof r['limit_name'] === 'string' ? r['limit_name'] : null,
     primary: parseRateLimitWindow(r['primary']),
     secondary: parseRateLimitWindow(r['secondary']),
     planType: typeof r['plan_type'] === 'string' ? r['plan_type'] : null,
+    ...(extras ? { extras } : {}),
   };
 }
 
@@ -165,6 +248,7 @@ export function parseRolloutLines(lines: string[]): RolloutLine[] {
         cliVersion: typeof payload['cli_version'] === 'string' ? payload['cli_version'] : undefined,
         sessionId: typeof payload['session_id'] === 'string' ? payload['session_id']
           : typeof payload['id'] === 'string' ? payload['id'] : undefined,
+        subagent: parseSubagentSource(payload['source']),
       });
     } else if (type === 'turn_context') {
       out.push({
@@ -179,6 +263,7 @@ export function parseRolloutLines(lines: string[]): RolloutLine[] {
         type: 'token_usage_record',
         turnId: typeof payload['turn_id'] === 'string' ? payload['turn_id'] : '',
         threadId: typeof payload['thread_id'] === 'string' ? payload['thread_id'] : '',
+        sessionId: typeof payload['session_id'] === 'string' ? payload['session_id'] : '',
         responseId: typeof payload['response_id'] === 'string' ? payload['response_id'] : '',
         usage: parseUsage(payload['usage']),
         turnTokenUsage: parseUsage(payload['turn_token_usage']),

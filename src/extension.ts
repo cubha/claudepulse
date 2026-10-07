@@ -21,7 +21,8 @@ import { CredentialsReader } from './services/CredentialsReader';
 import { RateLimitPoller } from './services/RateLimitPoller';
 import { CredentialsWatcher } from './services/CredentialsWatcher';
 import { CLAUDE_WATCH_DEPTH, FileWatcher } from './services/FileWatcher';
-import { JsonlParser, mergeRecordsAcrossFiles } from './services/JsonlParser';
+import { JsonlParser, mergeEventsAcrossFiles, mergeRecordsAcrossFiles } from './services/JsonlParser';
+import { buildClaudeSignals } from './services/signals';
 import { detectPriceDrift } from './utils/vendorCostCheck';
 import { UsageAggregator } from './services/UsageAggregator';
 import { WorkspaceMapper } from './services/WorkspaceMapper';
@@ -242,6 +243,14 @@ export function activate(context: vscode.ExtensionContext): void {
     // 값이 틀린 부류라 unpricedModels로는 안 잡힌다(D-A: fable-5-1 과대계상이 화면상 정상이었다).
     lastUsageSummary.priceDriftModels = detectPriceDrift(files.flatMap(f => jsonlParser.getCostSnapshots(f)))
       .map(d => d.model);
+    // v0.2.6 신호 — 비-assistant 이벤트(턴·훅·압축·PR 링크·429/5xx)는 레코드와 별개 채널이라
+    // 집계기 밖에서 붙인다. compaction은 컨텍스트 게이지가 가리키는 세션 기준.
+    lastUsageSummary.signals = buildClaudeSignals(
+      allRecords,
+      mergeEventsAcrossFiles(files.map(f => jsonlParser.getEvents(f))),
+      lastUsageSummary.sessionContext?.sessionId,
+      new Date(),
+    );
     // 고정한 세션이 후보 풀에서 사라졌다(세션 종료·워크스페이스 밖) — 죽은 pin을 정리해 다음
     // refresh부터 자동 모드로 조용히 복귀한다(SessionContextUsage.pinMissing, UsageAggregator).
     if (lastUsageSummary.sessionContext?.pinMissing) {

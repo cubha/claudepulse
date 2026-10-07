@@ -93,6 +93,13 @@ window.MOCK_USAGE = {
   subagentTypeUnattributed: { costUsd: 0.16, totalTokens: 240000, runCount: 1, hasUnpricedRecords: false },
   // 24h/7d 스코프 — 실제 확장(UsageAggregator)은 항상 채운다. 목업에 없으면 데모에서 스코프 토글이
   // 예외를 던져 비용 귀속 카드가 무갱신으로 굳는다(v0.2.5b /verify-impl 축B V1).
+  // v0.2.6 ST7 — effort별 비용(전체 스코프). 실데이터 분포(high 84%·medium 15%·xhigh 1%) 근사.
+  effortBreakdown: [
+    { effort: 'high', costUsd: 8.61, totalTokens: 9100000, share: 0.82, hasUnpricedRecords: false },
+    { effort: 'medium', costUsd: 1.58, totalTokens: 2300000, share: 0.15, hasUnpricedRecords: false },
+    { effort: 'xhigh', costUsd: 0.21, totalTokens: 180000, share: 0.02, hasUnpricedRecords: false },
+  ],
+  effortUnattributed: { costUsd: 0.10, totalTokens: 260000, share: 0.01, hasUnpricedRecords: false },
   attributionScopes: {
     last24h: {
       skillBreakdown: [{ skill: 'sh-dev-loop', costUsd: 1.20, totalTokens: 240000, share: 0.6 }],
@@ -104,6 +111,8 @@ window.MOCK_USAGE = {
       ],
       subagentTypeUnattributed: { costUsd: 0, totalTokens: 0, runCount: 0, hasUnpricedRecords: false },
       mcpServerBreakdown: [],
+      effortBreakdown: [{ effort: 'high', costUsd: 1.50, totalTokens: 300000, share: 0.75, hasUnpricedRecords: false }, { effort: 'medium', costUsd: 0.50, totalTokens: 100000, share: 0.25, hasUnpricedRecords: false }],
+      effortUnattributed: { costUsd: 0, totalTokens: 0, share: 0, hasUnpricedRecords: false },
     },
     last7d: {
       skillBreakdown: [{ skill: 'sh-dev-loop', costUsd: 6.10, totalTokens: 1220000, share: 0.5 }],
@@ -116,6 +125,8 @@ window.MOCK_USAGE = {
       ],
       subagentTypeUnattributed: { costUsd: 0, totalTokens: 0, runCount: 0, hasUnpricedRecords: false },
       mcpServerBreakdown: [],
+      effortBreakdown: [{ effort: 'high', costUsd: 1.50, totalTokens: 300000, share: 0.75, hasUnpricedRecords: false }, { effort: 'medium', costUsd: 0.50, totalTokens: 100000, share: 0.25, hasUnpricedRecords: false }],
+      effortUnattributed: { costUsd: 0, totalTokens: 0, share: 0, hasUnpricedRecords: false },
     },
   },
   branchBreakdown: [],
@@ -131,6 +142,48 @@ window.MOCK_USAGE = {
       totalTokens: 46000, costUsd: 0.5 + (i % 5) * 0.7, cacheHitRate: 0.9,
     };
   }),
+  // v0.2.6 — thinking 비중(ST3) + Claude 신호 묶음(ST2·4·5·6·8). 값은 2026-10-06 로컬 실측 근사, PR repo는 가명.
+  todayThinking: { thinkingTokens: 434057, outputTokens: 1463016, share: 0.2967 },
+  signals: {
+    cacheMiss: {
+      reasons: [
+        { reason: 'previous_message_not_found', count: 75, missedTokens: null, estCostUsd: null, hasUnpricedRecords: false },
+        { reason: 'messages_changed', count: 7, missedTokens: 479862, estCostUsd: 4.61, hasUnpricedRecords: false },
+        { reason: 'model_changed', count: 2, missedTokens: 185207, estCostUsd: 3.66, hasUnpricedRecords: false },
+        { reason: 'unavailable', count: 2, missedTokens: null, estCostUsd: null, hasUnpricedRecords: false },
+      ],
+      missCount: 86, recordCount: 7962, estCostUsd: 8.27, hasUnknownTokens: true, hasUnpricedRecords: false,
+    },
+    rateLimitBlocks: {
+      episodes: [
+        { rateLimitType: 'five_hour', resetsAt: Math.floor(now.getTime() / 1000) - 86400, firstAt: new Date(now.getTime() - 2 * 86400000).toISOString(), lastAt: new Date(now.getTime() - 2 * 86400000 + 180000).toISOString(), rejectedCount: 4, overageDisabledReason: 'out_of_credits' },
+        { rateLimitType: 'five_hour', resetsAt: Math.floor(now.getTime() / 1000) - 9 * 86400, firstAt: new Date(now.getTime() - 10 * 86400000).toISOString(), lastAt: new Date(now.getTime() - 10 * 86400000 + 110000).toISOString(), rejectedCount: 11, overageDisabledReason: 'out_of_credits' },
+      ],
+      unclassified429: 0,
+      serverErrors: { count: 4, lastAt: new Date(now.getTime() - 26 * 86400000).toISOString(), byStatus: { 500: 1, 529: 3 } },
+    },
+    prCosts: [
+      { prRepository: 'acme/web', prNumber: 48, prUrl: 'https://github.com/acme/web/pull/48', costUsd: 15.58, totalTokens: 21400000, sessionCount: 2, sharedSessionCount: 2, firstLinkedAt: new Date(now.getTime() - 3 * 86400000).toISOString(), hasUnpricedRecords: false },
+      { prRepository: 'acme/web', prNumber: 52, prUrl: 'https://github.com/acme/web/pull/52', costUsd: 6.12, totalTokens: 8800000, sessionCount: 1, sharedSessionCount: 0, firstLinkedAt: new Date(now.getTime() - 1 * 86400000).toISOString(), hasUnpricedRecords: false },
+      { prRepository: 'acme/api', prNumber: 9, prUrl: 'https://github.com/acme/api/pull/9', costUsd: 2.40, totalTokens: 3100000, sessionCount: 1, sharedSessionCount: 0, firstLinkedAt: new Date(now.getTime() - 5 * 86400000).toISOString(), hasUnpricedRecords: false },
+    ],
+    compaction: { count: 2, autoCount: 1, last: { at: new Date(now.getTime() - 3600000).toISOString(), trigger: 'auto', preTokens: 786256, postTokens: 34714 } },
+    turnHooks: {
+      turnCount: 242, totalTurnMs: 0, medianMs: 91487, p90Ms: 1753996, maxMs: 7200000,
+      daily: Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now); d.setDate(d.getDate() - (6 - i));
+        const med = [153854, 213862, 88885, 185740, 49275, 41618, 71737][i];
+        return { date: d.toISOString().slice(0, 10), count: [31, 73, 38, 8, 6, 22, 64][i], medianMs: med };
+      }),
+      hooks: [
+        { name: 'session-metrics.js', totalMs: 107753, count: 241, avgMs: 447 },
+        { name: 'cli.js hook stop', totalMs: 107275, count: 60, avgMs: 1788 },
+        { name: 'analyze-sessions.js', totalMs: 46610, count: 241, avgMs: 193 },
+        { name: 'stop-hook.sh', totalMs: 12100, count: 241, avgMs: 50 },
+      ],
+      hookTotalMs: 273738, avgHookMsPerTurn: 1136, hookShare: 0.0124, hookErrorCount: 0,
+    },
+  },
   sessionContext: {
     tokens: 84000, model: 'claude-sonnet-4-5-20251022', maxWindow: 200000, ratio: 0.42,
     cwd: '/mnt/d/workspace/claudepulse', repoName: 'claudepulse',

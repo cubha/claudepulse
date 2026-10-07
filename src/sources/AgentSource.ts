@@ -29,9 +29,10 @@ export const CLAUDE_CAPABILITIES: AgentSourceCapabilities = {
 export const CODEX_CAPABILITIES: AgentSourceCapabilities = {
   rateLimit: true,
   usdCost: true,
-  // attributionSkill/isSidechain/agentId는 Claude jsonl 고유 필드다 — Codex는 데이터 자체가 없다.
+  // attributionSkill은 Claude jsonl 고유 필드다 — Codex는 데이터 자체가 없다.
   skillAttribution: false,
-  subagentAttribution: false,
+  // v0.2.6 ST11 — token_usage_record의 session_id≠thread_id로 서브에이전트 레코드를 가린다(실물 0.160.1).
+  subagentAttribution: true,
   mcpAttribution: false,
 };
 

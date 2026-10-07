@@ -20,7 +20,9 @@ const codex = { planType: 'plus' };
 
 describe('panelPlanBadgeText (v0.2.3 ⑩)', () => {
   it('Codex 활성이면 Claude 스냅샷이 있어도 Codex planType을 낸다 (덮어쓰기 결함)', () => {
-    expect(panelPlanBadgeText('codex', claude, codex)).toBe('PLUS');
+    // v0.2.6 ST10 명세 변경(사용자 승인 #8): 'PLUS'(원문 대문자) → 'Plus'(codexPlanLabel 표시명).
+    // 이 테스트의 대상인 "어느 프로바이더 배지를 고르나"는 그대로다.
+    expect(panelPlanBadgeText('codex', claude, codex)).toBe('Plus');
   });
 
   it('Claude 활성이면 Codex 스냅샷이 있어도 Claude 티어를 낸다 (전환 후 잔존 결함)', () => {
@@ -37,7 +39,9 @@ describe('panelPlanBadgeText (v0.2.3 ⑩)', () => {
     expect(panelPlanBadgeText('claude', null, codex)).toBe('');
   });
 
-  it('Codex planType은 값별 분기 없이 대문자화만 한다 (§8 불변식5 — 사이드바와 동일 규칙)', () => {
+  // v0.2.6 ST10에서 §8 불변식5는 "표시명은 codexPlanLabel 단일 소유, 모르는 값은 원문 대문자"로 개정됐다.
+  // 아래는 그 폴백 절반을 계속 잠근다(맵 절반은 codexPlan.test.ts).
+  it('모르는 Codex planType은 원문 대문자로 폴백한다 (§8 불변식5 개정판 — 사이드바와 동일 규칙)', () => {
     expect(panelPlanBadgeText('codex', null, { planType: 'team_enterprise' })).toBe('TEAM_ENTERPRISE');
   });
 });

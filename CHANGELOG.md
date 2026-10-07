@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.6] - 2026-10-07
+
+### Added
+- **Why the prompt cache missed.** The dashboard's cache card now lists the last seven days of cache
+  misses by cause — the conversation changed, the model changed, the system prompt changed, and so
+  on — with an estimated extra cost for each. The estimate is the missed tokens priced at the
+  cache-write rate instead of the cache-read rate. Two causes don't record how many tokens were
+  missed; they are counted but not costed, and the total is shown as a lower bound (`≥`).
+- **Thinking share.** A sidebar chip shows what fraction of today's output tokens were thinking
+  tokens. Thinking tokens are already part of output tokens, so this adds no cost of its own.
+- **Rate-limit block history.** When Claude Code hits a usage limit it logs every rejected retry.
+  The extension groups those retries into one block per window and reset time, and lists the blocks
+  on the dashboard. The sidebar shows a chip for a block in the last seven days. Anthropic server
+  errors (529 overloaded, 500) are listed on their own row, because they are not a usage limit.
+- **Cost by pull request.** Claude Code records which pull request a session created or worked on.
+  The dashboard now totals each PR's sessions, including their subagents. Cost is attributed per
+  session, so a session linked to several PRs counts toward each of them; those PRs carry a
+  **shared** marker, and PR rows should not be added together.
+- **Cost by effort level** (high, medium, xhigh) in the cost attribution card, following its
+  24h / 7d / All toggle. Responses without an effort level get their own row.
+- **Turn latency and hook overhead.** A dashboard section shows the last seven days of turns: count,
+  median, 90th-percentile and longest duration, a daily median, and the average time each Stop hook
+  adds.
+  Hook commands are shown by script name only, without their paths. The hook share compares the
+  average hook time per turn with the median turn rather than with total turn time. Turn time is
+  wall-clock and includes approval waits, so a single 30-hour turn would otherwise swamp the total.
+- **Context compaction on the sidebar gauge.** When the session the gauge tracks has been compacted,
+  a chip shows how many times, with the last compaction's before and after size on hover.
+- **Codex credits, spend limits and block reasons.** When Codex reports a credit balance, a
+  workspace spend limit or why a request was blocked, the sidebar shows it. Free plans report an
+  empty credits object; it is hidden rather than shown as zero.
+- **Codex subagents.** Codex responses produced by a spawned subagent are now recognized as subagent
+  work and counted toward the parent session. The Codex panel shows how many subagents ran.
+
+### Changed
+- **Codex plan names are readable.** The plan badge showed Codex's internal plan IDs in upper case
+  (`PROLITE`, `ENT26`); it now shows names such as **Pro Lite** and **Enterprise**. Plan IDs it does
+  not recognize are still shown as-is.
+- **Red status markers are easier to read.** Danger markers such as a rate-limit block used the solid
+  danger accent as text color, which was hard to read on dark themes (2.7:1 contrast). They now use
+  a lighter shade of the same red (8.8:1 on dark, 9.4:1 on light).
+
+### Internal
+- Toolchain update: ESLint 10 with a flat config, Vitest 5, esbuild 0.28, vsce 4, ovsx 1.2. The
+  release workflow now runs on Node 22.
+- `npm run test:integration` works for the first time since it was added. It starts VS Code, checks
+  that the extension activates and that every contributed command is registered, and runs as part of
+  `verify.sh --full`.
+
 ## [0.2.5] - 2026-09-29
 
 ### Fixed

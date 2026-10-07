@@ -10,6 +10,7 @@ scratch.md
 scratch.md.*
 .vscode/**
 .vscode-test/**
+.vscode-test.*
 dist-test/**
 scripts/**
 .github/**

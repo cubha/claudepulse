@@ -106,7 +106,7 @@ step "검증 자산 게이트 커버리지 (미배선 0건)" test -z "$UNWIRED"
 #     대신 각 스크립트의 **첫 명령어가 해석 가능한지**(node_modules/.bin 또는 PATH)만 본다.
 #     알려진 실행불가는 사유와 함께 등재하되 **매번 화면에 뜨게** 한다 — 조용히 늘어나는 것이
 #     이 게이트가 막으려는 것이므로, 예외를 금지하는 대신 비싸고 보이게 만든다.
-DEAD_ALLOW="test:integration"  # @vscode/test-cli 미설치+.vscode-test 설정 부재+extension ID 오류 3겹, v0.1.55 범위 밖(별건)
+DEAD_ALLOW=""  # v0.2.6 R4: test:integration 복구로 등재 예외 0 — 새 예외는 사유와 함께만 추가
 DEAD=""
 DEAD_KNOWN=""
 while IFS=$'\t' read -r name cmd; do
@@ -138,8 +138,8 @@ step "검증 자산 실행가능 스모크" test -z "$DEAD"
 
 [[ "$VERIFY_MODE" == "ts-only" ]] && finish
 
-# 3. ESLint — .eslintrc.cjs의 src/webview/** ignore를 해제(v0.1.54 ST2b)해 이 한 스텝이 webview도 포함한다
-step "ESLint" npx eslint src --ext ts
+# 3. ESLint — (구 .eslintrc.cjs, v0.2.6부터 eslint.config.mjs)의 src/webview/** ignore를 해제(v0.1.54 ST2b)해 이 한 스텝이 webview도 포함한다
+step "ESLint" npx eslint src
 
 # 4~5. esbuild 빌드 + dist 산출물 확인 (--no-build 시 스킵)
 if [[ "$VERIFY_MODE" == "no-build" ]]; then
@@ -158,6 +158,10 @@ else
     # test:e2e(vscode-messenger 0.6.1 라운드트립, v0.1.54 ST6) — VS Code 테스트 바이너리가
     # 캐시돼 있으면 ~5s. 미설치 환경(최초 실행)은 다운로드로 오래 걸릴 수 있어 120s 타임아웃.
     step "test:e2e (vscode-messenger 라운드트립)" bash -c "timeout 120 npm run test:e2e >/tmp/verify-e2e-cpulse.log 2>&1 || { tail -20 /tmp/verify-e2e-cpulse.log; exit 1; }"
+    # test:integration(v0.2.6 R4 복구) — @vscode/test-cli + mocha로 확장 호스트에서 활성화·명령 등록
+    # 스모크. 도입(2026-05-10) 이래 한 번도 통과한 적 없던 자산이라 배선이 곧 완료 조건이다
+    # (feedback_gate_wiring_signal). extension ID 리터럴은 branding.invariants가 마켓 ID로 잠근다.
+    step "test:integration (확장 활성화·명령 등록)" bash -c "timeout 240 npm run test:integration >/tmp/verify-integ-cpulse.log 2>&1 || { tail -20 /tmp/verify-integ-cpulse.log; exit 1; }"
     # v0.1.55에서 배선 — 미배선이던 hermetic 하네스 3종. calendar-clip은 요일의존 결함(B)과
     # 제품 결함(A)이 모두 해소돼 상시 그린이 됐고, sidebar 2종은 애초에 그린이었는데 잊혀 있었다.
     step "Usage Calendar 고정폭·스크롤 (7-seed)" node scripts/verify-calendar-clip.js
@@ -167,6 +171,9 @@ else
     step "기간별 비용 탭 전환 (2폭×2로캘×3탭)" node scripts/verify-cost-period-tabs.mjs
     step "Codex 버킷 소모율·Trend N시리즈 (2폭)" node scripts/verify-codex-panel-burn.mjs
     step "테마 클래스 부착 (다크⇄라이트)" node scripts/verify-theme-attach.mjs
+    # v0.2.6 — 신호 섹션 실렌더(차단·PR·턴/훅·캐시미스·effort·사이드바 칩·Codex extras), 2폭×2로캘.
+    # 오배선(항상 표시) 주입으로 RED 12건 관측 후 채택(feedback_gate_wiring_signal).
+    step "v0.2.6 신호 섹션 (2폭×2로캘·숨김·escape)" node scripts/verify-signals-sections.js
   fi
 
 fi

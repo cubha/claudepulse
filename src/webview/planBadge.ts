@@ -7,6 +7,7 @@
 // 호출측은 결과를 **무조건** 쓴다(빈 문자열 = 지움).
 import type { AgentProvider, CodexRateLimitSnapshot, RateLimitSnapshot } from '../types';
 import { fmtPlanTier } from './webviewShared';
+import { codexPlanLabel } from './codexPlan';
 
 export function panelPlanBadgeText(
   provider: AgentProvider,
@@ -14,8 +15,8 @@ export function panelPlanBadgeText(
   codex: Pick<CodexRateLimitSnapshot, 'planType'> | null,
 ): string {
   if (provider === 'codex') {
-    // planType은 원본 문자열 대문자화만 — 값별 분기 없음(§8 불변식5, sidebarView.ts와 동일 규칙).
-    return codex?.planType ? codex.planType.toUpperCase() : '';
+    // 표시명은 codexPlanLabel 단일 소유(v0.2.6 ST10 — §8 불변식5 개정, 모르는 값은 원문 대문자).
+    return codexPlanLabel(codex?.planType);
   }
   const plan = claude?.plan;
   return plan?.subscriptionType ? fmtPlanTier(plan.subscriptionType, plan.rateLimitTier) : '';

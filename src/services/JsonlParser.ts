@@ -1,5 +1,5 @@
 import * as fs from 'node:fs';
-import type { JournalUsage, SessionRecord, ToolUseCounts, VendorCostSnapshot } from '../types';
+import type { CacheMissInfo, JournalEvent, JournalUsage, QuotaRejection, SessionRecord, ToolUseCounts, VendorCostSnapshot } from '../types';
 import { calcCost } from '../utils/pricing';
 
 /** mtime+offset 캐시 엔트리 */
@@ -9,6 +9,8 @@ interface ParseCache {
   records: SessionRecord[];
   /** 파일의 마지막 cost-state 행(v0.2.5 D-C). 세션 도중 누적 갱신되므로 마지막 것만 의미가 있다. */
   costSnapshots: VendorCostSnapshot[];
+  /** 비-assistant 이벤트(v0.2.6 ST1). costSnapshots와 달리 **누적**(append)이다 — 이벤트는 각각이 사건이다. */
+  events: JournalEvent[];
 }
 
 /** cost-state.modelUsage → 스냅샷 행. 형식이 어긋난 행은 버린다(외부 입력). */
@@ -33,6 +35,103 @@ function toCostSnapshots(modelUsage: unknown): VendorCostSnapshot[] {
   return out;
 }
 
+/** 유한 숫자면 그 값, 아니면 fallback — 외부 입력(jsonl)이라 타입을 믿지 않는다. */
+function num(v: unknown, fallback = 0): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+/** `quotaLimits` → QuotaRejection. 형식이 어긋나면 undefined. */
+function toQuota(raw: unknown): QuotaRejection | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const q = raw as Record<string, unknown>;
+  if (typeof q['rateLimitType'] !== 'string') return undefined;
+  return {
+    status: str(q['status']),
+    rateLimitType: q['rateLimitType'],
+    resetsAt: num(q['resetsAt']),
+    overageStatus: typeof q['overageStatus'] === 'string' ? q['overageStatus'] : undefined,
+    overageDisabledReason: typeof q['overageDisabledReason'] === 'string' ? q['overageDisabledReason'] : undefined,
+  };
+}
+
+/**
+ * 한 줄 → 비-assistant 이벤트(v0.2.6 ST1). 해당 없으면 null. API 오류(429·5xx)는 assistant 줄에
+ * 실리므로 type이 아니라 `apiErrorStatus`로 고른다 — 그 줄은 호출측에서 사용량 레코드로도 계속 처리된다.
+ */
+export function toJournalEvent(entry: Record<string, unknown>): JournalEvent | null {
+  const type = entry['type'];
+  const sessionId = str(entry['sessionId']);
+  const timestamp = str(entry['timestamp']);
+  const uuid = str(entry['uuid']);
+  const isSidechain = entry['isSidechain'] === true;
+
+  if (type === 'pr-link') {
+    const prNumber = num(entry['prNumber'], NaN);
+    const prRepository = str(entry['prRepository']);
+    if (!Number.isFinite(prNumber) || !prRepository) return null;
+    return {
+      kind: 'pr_link', eventKey: `pr:${prRepository}#${prNumber}@${sessionId}`, sessionId, timestamp,
+      prNumber, prUrl: str(entry['prUrl']), prRepository,
+    };
+  }
+  if (!uuid) return null;
+
+  if (type === 'system') {
+    const subtype = entry['subtype'];
+    if (subtype === 'turn_duration') {
+      return { kind: 'turn_duration', eventKey: uuid, sessionId, timestamp, isSidechain, durationMs: num(entry['durationMs']), messageCount: num(entry['messageCount']) };
+    }
+    if (subtype === 'stop_hook_summary') {
+      const infos = Array.isArray(entry['hookInfos']) ? entry['hookInfos'] as Array<Record<string, unknown>> : [];
+      return {
+        kind: 'stop_hooks', eventKey: uuid, sessionId, timestamp, isSidechain,
+        hooks: infos.filter(h => h && typeof h['command'] === 'string').map(h => ({ command: String(h['command']), durationMs: num(h['durationMs']) })),
+        errorCount: Array.isArray(entry['hookErrors']) ? entry['hookErrors'].length : 0,
+        preventedContinuation: entry['preventedContinuation'] === true,
+      };
+    }
+    if (subtype === 'compact_boundary') {
+      const m = (entry['compactMetadata'] ?? {}) as Record<string, unknown>;
+      return {
+        kind: 'compact', eventKey: uuid, sessionId, timestamp, isSidechain,
+        trigger: str(m['trigger']), preTokens: num(m['preTokens']), postTokens: num(m['postTokens']), durationMs: num(m['durationMs']),
+      };
+    }
+    return null;
+  }
+
+  if (type === 'assistant' && entry['apiErrorStatus'] !== undefined) {
+    const status = num(entry['apiErrorStatus'], NaN);
+    if (!Number.isFinite(status)) return null;
+    return { kind: 'api_error', eventKey: uuid, sessionId, timestamp, isSidechain, status, error: str(entry['error']), quota: toQuota(entry['quotaLimits']) };
+  }
+  return null;
+}
+
+/** `usage.output_tokens_details.thinking_tokens`. 필드가 없으면 미정의(0과 구분). */
+function thinkingTokensOf(usage: Record<string, unknown>): number | undefined {
+  const d = usage['output_tokens_details'];
+  if (!d || typeof d !== 'object') return undefined;
+  const t = (d as Record<string, unknown>)['thinking_tokens'];
+  return t === undefined || t === null ? undefined : num(t);
+}
+
+/** `message.diagnostics.cache_miss_reason` → CacheMissInfo. 토큰 미기록 원인은 null(미상). */
+function toCacheMiss(diagnostics: unknown): CacheMissInfo | undefined {
+  if (!diagnostics || typeof diagnostics !== 'object') return undefined;
+  const reason = (diagnostics as Record<string, unknown>)['cache_miss_reason'];
+  if (!reason || typeof reason !== 'object') return undefined;
+  const r = reason as Record<string, unknown>;
+  if (typeof r['type'] !== 'string' || r['type'] === '') return undefined;
+  const t = r['cache_missed_input_tokens'];
+  return { reason: r['type'], missedTokens: t === undefined || t === null ? null : num(t, 0) };
+}
+
 const SKIP_TYPES = new Set(['progress', 'file-history-snapshot', 'attachment', 'permission-mode']);
 
 /** 모든 도구 카테고리를 0으로 초기화. */
@@ -51,6 +150,22 @@ export function classifyToolName(name: string): keyof ToolUseCounts {
   if (name === 'WebFetch' || name === 'web_fetch') return 'webFetch';
   if (name.startsWith('mcp__')) return 'mcp';
   return 'other';
+}
+
+/**
+ * 파일별 이벤트를 합치며 `eventKey`로 파일 간 중복을 제거하고 시간순 정렬한다(v0.2.6 ST1).
+ * system 이벤트는 실측상 파일 간 중복이 없지만(uuid 기준) subagents 사본 구조상 생길 수 있어 막아둔다.
+ * pr-link는 같은 PR이 세션 안에서 반복 기록된다(실측 178키) — 첫 기록만 남긴다.
+ */
+export function mergeEventsAcrossFiles(perFile: JournalEvent[][]): JournalEvent[] {
+  const seen = new Map<string, JournalEvent>();
+  for (const events of perFile) {
+    for (const e of events) {
+      const existing = seen.get(e.eventKey);
+      if (!existing || e.timestamp < existing.timestamp) seen.set(e.eventKey, e);
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 }
 
 /** mcp__<server>__<tool> → 서버명. mcp__ 접두사가 아니면 undefined. */
@@ -114,7 +229,7 @@ export class JsonlParser {
     const startOffset = canIncrement ? cached.offset : 0;
     const existingRecords: SessionRecord[] = canIncrement ? [...cached.records] : [];
 
-    const { records: newRecords, lastCostSnapshots, consumedBytes } = await this.readFrom(filePath, startOffset);
+    const { records: newRecords, lastCostSnapshots, events: newEvents, consumedBytes } = await this.readFrom(filePath, startOffset);
     const merged = this.dedup([...existingRecords, ...newRecords]);
 
     this.cache.set(filePath, {
@@ -124,6 +239,8 @@ export class JsonlParser {
       records: merged,
       // 이번 구간에 cost-state가 없으면 이전 스냅샷을 유지한다(증분 파싱).
       costSnapshots: lastCostSnapshots ?? (canIncrement ? cached.costSnapshots : []),
+      // 증분이면 이어붙이고, 잘림·교체로 전체 재파싱이면 새로 시작한다(중복 누적 금지).
+      events: canIncrement ? [...cached.events, ...newEvents] : newEvents,
     });
 
     return merged;
@@ -132,8 +249,9 @@ export class JsonlParser {
   private async readFrom(
     filePath: string,
     offset: number,
-  ): Promise<{ records: SessionRecord[]; lastCostSnapshots: VendorCostSnapshot[] | null; consumedBytes: number }> {
+  ): Promise<{ records: SessionRecord[]; lastCostSnapshots: VendorCostSnapshot[] | null; events: JournalEvent[]; consumedBytes: number }> {
     const records: SessionRecord[] = [];
+    const events: JournalEvent[] = [];
     let lastCostSnapshots: VendorCostSnapshot[] | null = null;
 
     // requestId 기준 마지막 엔트리만 보존 (스트리밍 중복)
@@ -144,7 +262,7 @@ export class JsonlParser {
       try {
         stream = fs.createReadStream(filePath, { start: offset });
       } catch {
-        resolve({ records: [], lastCostSnapshots: null, consumedBytes: 0 });
+        resolve({ records: [], lastCostSnapshots: null, events: [], consumedBytes: 0 });
         return;
       }
 
@@ -159,9 +277,9 @@ export class JsonlParser {
       const finish = (ok: boolean) => {
         if (settled) return;
         settled = true;
-        if (!ok) { resolve({ records: [], lastCostSnapshots: null, consumedBytes: 0 }); return; }
+        if (!ok) { resolve({ records: [], lastCostSnapshots: null, events: [], consumedBytes: 0 }); return; }
         records.push(...byRequestId.values());
-        resolve({ records, lastCostSnapshots, consumedBytes });
+        resolve({ records, lastCostSnapshots, events, consumedBytes });
       };
       stream.on('data', (chunk: string | Buffer) => {
         const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
@@ -191,6 +309,9 @@ export class JsonlParser {
         }
 
         if (SKIP_TYPES.has(String(entry['type'] ?? ''))) return;
+        // 비-assistant 이벤트(v0.2.6 ST1). API 오류 줄은 assistant라 아래 사용량 처리도 계속 탄다.
+        const event = toJournalEvent(entry);
+        if (event) events.push(event);
         if (entry['type'] === 'cost-state') {
           lastCostSnapshots = toCostSnapshots(entry['modelUsage']);
           return;
@@ -295,6 +416,9 @@ export class JsonlParser {
           attributionAgent: typeof entry['attributionAgent'] === 'string' && entry['attributionAgent'] !== '' ? entry['attributionAgent'] : undefined,
           mcpServerCounts: Object.keys(mcpServerCounts).length > 0 ? mcpServerCounts : undefined,
           contextTokens,
+          cacheMiss: toCacheMiss(msg['diagnostics']),
+          thinkingTokens: thinkingTokensOf(usage),
+          effort: typeof entry['effort'] === 'string' && entry['effort'] !== '' ? entry['effort'] : undefined,
         };
 
         // 같은 requestId → 마지막 엔트리로 교체 (스트리밍 중복 처리)
@@ -314,6 +438,11 @@ export class JsonlParser {
       }
     }
     return [...seen.values()].sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+  }
+
+  /** 파일의 비-assistant 이벤트(parseFile 이후 유효, v0.2.6 ST1). 없으면 빈 배열. */
+  getEvents(filePath: string): JournalEvent[] {
+    return this.cache.get(filePath)?.events ?? [];
   }
 
   /** 파일의 마지막 cost-state 스냅샷(parseFile 이후 유효). 없으면 빈 배열. */

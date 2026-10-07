@@ -17,6 +17,8 @@ import { panelPlanBadgeText } from './planBadge';
 import { statusMarkerHtml } from './statusMarker';
 import { buildTrendSeries, type TrendSeries } from './trendSeries';
 import { THEME_CLASSES } from './themeClass';
+import { codexPlanLabel } from './codexPlan';
+import { blockHistoryRows, cacheMissHtml, codexSubagentRowHtml, effortRows, prCostRows, turnHooksHtml } from './signalsView';
 import {
   median, THRESHOLD_LOW, THRESHOLD_HIGH, classifyCacheHitRate,
   filterQualifyingCostDays, calcCostAnomalyPct, calcPaceBaseline, sumPeriodCost,
@@ -442,8 +444,10 @@ function updateCodexBandSection(): void {
     if (snapshot?.modelContextWindow != null) {
       rows.push(`<div class="panel-mcp-row"><span>${t('codex_context_window')}</span><span class="mono">${snapshot.modelContextWindow.toLocaleString()}</span></div>`);
     }
+    const subRow = codexSubagentRowHtml(panelUsage?.subagentStats);
+    if (subRow) rows.push(subRow);
     if (snapshot?.planType) {
-      rows.push(`<div class="panel-mcp-row"><span>${t('plan_label')}</span><span class="mono">${escapeHtml(snapshot.planType.toUpperCase())}</span></div>`);
+      rows.push(`<div class="panel-mcp-row"><span>${t('plan_label')}</span><span class="mono">${escapeHtml(codexPlanLabel(snapshot.planType))}</span></div>`);
     }
     extraListEl.innerHTML = rows.length > 0 ? rows.join('') : `<div class="panel-loading">${t('collecting_data')}</div>`;
   }
@@ -537,6 +541,12 @@ function buildPanelShell(): string {
         <div class="pace-caption" id="pace-caption"></div>
       </div>
 
+      <!-- 한도 차단 이력(v0.2.6 ST4) — jsonl 429 레코드. 차단·서버오류가 없으면 섹션째 숨긴다. -->
+      <div class="panel-files-card panel-flush" id="panel-block-card" style="display:none;">
+        <div class="panel-chart-header">${t('block_history_header')}</div>
+        <div id="panel-block-list"></div>
+      </div>
+
       <!-- 기간별 비용 (v0.2.2) — 일별(7일)·장기(30/90/180일)·월별 3개 섹션을 탭 1개로 통합.
            같은 지표(비용)를 기간 단위만 달리해 화면 세 곳에 흩어 놓았던 것이라, 비교하려면
            스크롤을 오가야 했다. 카드 슬롯은 기존 일별 카드의 것을 그대로 승계한다(카드 6개 불변).
@@ -627,10 +637,25 @@ function buildPanelShell(): string {
         <div id="panel-session-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
 
+      <!-- 턴 지연·훅 오버헤드(v0.2.6 ST8) — 최근 7일. 턴 기록이 없으면 섹션째 숨긴다. -->
+      <div class="panel-files-card panel-flush" id="panel-turn-card" style="display:none;">
+        <div class="panel-chart-header">${t('turn_hooks_header')}</div>
+        <div id="panel-turn-body"></div>
+      </div>
+
       <!-- Git ROI — 브랜치별 비용 -->
       <div class="panel-branch-card panel-flush" id="panel-branch-card">
         <div class="panel-chart-header">${t('git_roi')}</div>
         <div id="panel-branch-list"><div class="panel-loading">${t('collecting_data')}</div></div>
+      </div>
+
+      <!-- PR별 비용(v0.2.6 ST5) — Claude Code의 pr-link로 세션↔PR 정확 조인(세션 단위 근사). -->
+      <div class="panel-branch-card panel-flush" id="panel-pr-card" style="display:none;">
+        <div class="panel-chart-header">
+          <span>${t('pr_cost_header')}</span>
+          <span class="retro-approx-badge" title="${t('pr_cost_badge_tip')}">${t('retro_approx_badge')}</span>
+        </div>
+        <div id="panel-pr-list"></div>
       </div>
 
       <!-- usage×git 회고 — 커밋별 비용 귀속 (근사치·미귀속 버킷 1급) -->
@@ -657,6 +682,8 @@ function buildPanelShell(): string {
         <div id="panel-skill-list"><div class="panel-loading">${t('collecting_data')}</div></div>
         <div class="panel-mcp-header">${t('subagent_type_attribution')}</div>
         <div id="panel-subagent-list"><div class="panel-loading">${t('collecting_data')}</div></div>
+        <div class="panel-mcp-header">${t('effort_header')}</div>
+        <div id="panel-effort-list"><div class="panel-loading">${t('collecting_data')}</div></div>
         <div class="panel-mcp-header">${t('mcp_attribution')}</div>
         <div id="panel-mcp-list"><div class="panel-loading">${t('collecting_data')}</div></div>
       </div>
@@ -788,6 +815,47 @@ function updateUsageSection(): void {
   updateSkillSection();
   updateRetroSection();
   updateCodexBandSection();
+  updateBlockSection();
+  updatePrSection();
+  updateTurnSection();
+}
+
+/** 내용이 없으면 섹션째 숨긴다 — Codex 요약에는 signals가 없어 자동으로 숨는다(v0.2.6). */
+function setSectionVisible(cardId: string, visible: boolean): void {
+  const el = document.getElementById(cardId);
+  if (el) el.style.display = visible ? '' : 'none';
+}
+
+function updateBlockSection(): void {
+  const listEl = document.getElementById('panel-block-list');
+  if (!listEl) return;
+  const rows = blockHistoryRows(panelUsage?.signals?.rateLimitBlocks);
+  setSectionVisible('panel-block-card', rows.length > 0);
+  listEl.innerHTML = cappedListHtml(rows, 'blocks');
+}
+
+function updatePrSection(): void {
+  const listEl = document.getElementById('panel-pr-list');
+  if (!listEl) return;
+  const rows = prCostRows(panelUsage?.signals?.prCosts);
+  setSectionVisible('panel-pr-card', rows.length > 0);
+  if (rows.length === 0) { listEl.innerHTML = ''; return; }
+  const headerRow = `<div class="branch-row branch-header">
+    <span class="branch-name">PR</span>
+    <span class="branch-cost mono">${t('pr_col_cost')}</span>
+    <span class="branch-tokens mono">${t('tokens')}</span>
+    <span class="branch-sessions mono">${t('sessions_label')}</span>
+    <span class="branch-last mono">${t('pr_col_linked')}</span>
+  </div>`;
+  listEl.innerHTML = headerRow + cappedListHtml(rows, 'prs');
+}
+
+function updateTurnSection(): void {
+  const bodyEl = document.getElementById('panel-turn-body');
+  if (!bodyEl) return;
+  const html = turnHooksHtml(panelUsage?.signals?.turnHooks);
+  setSectionVisible('panel-turn-card', html !== '');
+  bodyEl.innerHTML = html;
 }
 
 /**
@@ -1090,7 +1158,8 @@ function updateCacheSection(): void {
       <div style="height:76px;position:relative;">
         <canvas id="chart-cache-spark"></canvas>
       </div>
-    </div>` : ''}`;
+    </div>` : ''}
+    ${cacheMissHtml(panelUsage?.signals?.cacheMiss)}`;
 
   if (hasSparkData) {
     const canvas = document.getElementById('chart-cache-spark') as HTMLCanvasElement | null;
@@ -1341,6 +1410,9 @@ function updateBranchSection(): void {
   listEl.innerHTML = headerRow + cappedListHtml(rows, 'branches');
 }
 LIST_UPDATERS['branches'] = updateBranchSection;
+LIST_UPDATERS['blocks'] = updateBlockSection;
+LIST_UPDATERS['prs'] = updatePrSection;
+LIST_UPDATERS['effort'] = updateSkillSection;
 LIST_UPDATERS['subagentTypes'] = updateSkillSection;
 
 function updateSkillSection(): void {
@@ -1404,6 +1476,13 @@ function updateSkillSection(): void {
         </div>` : '';
       subListEl.innerHTML = cappedListHtml(typeRows, 'subagentTypes') + typeBucketRow;
     }
+  }
+
+  // effort별 비용(v0.2.6 ST7) — 스코프 토글을 따른다. 미상 버킷은 1급(마지막·muted).
+  const effortListEl = document.getElementById('panel-effort-list');
+  if (effortListEl) {
+    const eRows = effortRows(scoped?.effortBreakdown ?? panelUsage?.effortBreakdown, scoped?.effortUnattributed ?? panelUsage?.effortUnattributed);
+    effortListEl.innerHTML = eRows.length > 0 ? cappedListHtml(eRows, 'effort') : `<div class="panel-empty">${t('no_effort_data')}</div>`;
   }
 
   // 서브에이전트 소비 요약 라인 (#8) — 비용이 미상(unpriced)이라 0으로 찍혀도 서브에이전트가
